@@ -57,11 +57,14 @@ export default function ConsultationForm() {
     setTimeout(() => setFormState("idle"), 4000);
   }
 
+  const inputClass =
+    "w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900";
+
   return (
     <section
       ref={sectionRef}
       id="consultation"
-      className="relative w-full bg-[var(--color-cream)] py-24 md:py-32"
+      className="relative w-full bg-slate-900 py-24 md:py-32"
     >
       <div className="mx-auto max-w-6xl px-6 md:px-12 lg:px-20">
         <div className="grid gap-16 md:grid-cols-2 md:gap-20">
@@ -72,13 +75,13 @@ export default function ConsultationForm() {
             transition={{ duration: 0.7 }}
             className="flex flex-col justify-center"
           >
-            <p className="mb-6 text-xs font-semibold tracking-[0.25em] uppercase text-slate-400">
-              Consultation
+            <p className="mb-6 text-xs font-semibold tracking-[0.25em] uppercase text-slate-500">
+              Private Consultation
             </p>
-            <h2 className="mb-6 text-3xl font-extrabold leading-snug tracking-tight text-slate-900 md:text-4xl">
-              무료 상담 신청
+            <h2 className="mb-6 text-3xl font-extrabold leading-snug tracking-tight text-white md:text-4xl">
+              프라이빗 상담 예약
             </h2>
-            <p className="mb-8 text-[15px] font-medium leading-relaxed text-slate-600">
+            <p className="mb-8 text-[15px] font-medium leading-relaxed text-slate-400">
               24년간 쌓아온 전문성으로 고객님의 상황에 맞는
               <br className="hidden md:block" />
               최적의 보장 설계를 제안해 드립니다.
@@ -86,11 +89,11 @@ export default function ConsultationForm() {
               부담 없이 문의해 주세요.
             </p>
 
-            <div className="space-y-4 border-t border-slate-200 pt-8">
+            <div className="space-y-4 border-t border-slate-700 pt-8">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800">
                   <svg
-                    className="h-4 w-4 text-slate-500"
+                    className="h-4 w-4 text-[var(--color-gold)]"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -104,16 +107,16 @@ export default function ConsultationForm() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">전화 상담</p>
-                  <p className="text-sm font-bold text-slate-900">
+                  <p className="text-xs text-slate-500">전화 상담</p>
+                  <p className="text-sm font-bold text-white">
                     010-XXXX-XXXX
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800">
                   <svg
-                    className="h-4 w-4 text-slate-500"
+                    className="h-4 w-4 text-[var(--color-gold)]"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -127,8 +130,8 @@ export default function ConsultationForm() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-400">상담 가능 시간</p>
-                  <p className="text-sm font-bold text-slate-900">
+                  <p className="text-xs text-slate-500">상담 가능 시간</p>
+                  <p className="text-sm font-bold text-white">
                     평일 09:00 – 18:00
                   </p>
                 </div>
@@ -144,13 +147,13 @@ export default function ConsultationForm() {
           >
             <form
               onSubmit={handleSubmit}
-              className="rounded-2xl border border-slate-100 bg-white p-8 shadow-lg shadow-slate-200/50 md:p-10"
+              className="rounded-2xl border border-slate-700 bg-slate-800 p-8 md:p-10"
             >
               {/* Name */}
               <div className="mb-5">
                 <label
                   htmlFor="name"
-                  className="mb-1.5 block text-xs font-semibold text-slate-500"
+                  className="mb-1.5 block text-xs font-semibold text-slate-400"
                 >
                   이름 *
                 </label>
@@ -161,7 +164,7 @@ export default function ConsultationForm() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="홍길동"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-300 focus:border-slate-400 focus:bg-white"
+                  className={inputClass}
                 />
               </div>
 
@@ -169,7 +172,7 @@ export default function ConsultationForm() {
               <div className="mb-5">
                 <label
                   htmlFor="phone"
-                  className="mb-1.5 block text-xs font-semibold text-slate-500"
+                  className="mb-1.5 block text-xs font-semibold text-slate-400"
                 >
                   연락처 *
                 </label>
@@ -180,7 +183,7 @@ export default function ConsultationForm() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="010-0000-0000"
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-300 focus:border-slate-400 focus:bg-white"
+                  className={inputClass}
                 />
               </div>
 
@@ -188,7 +191,7 @@ export default function ConsultationForm() {
               <div className="mb-5">
                 <label
                   htmlFor="category"
-                  className="mb-1.5 block text-xs font-semibold text-slate-500"
+                  className="mb-1.5 block text-xs font-semibold text-slate-400"
                 >
                   상담 분야 *
                 </label>
@@ -197,7 +200,7 @@ export default function ConsultationForm() {
                   required
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition-colors focus:border-slate-400 focus:bg-white"
+                  className={`${inputClass} appearance-none`}
                 >
                   <option value="" disabled>
                     선택해 주세요
@@ -214,7 +217,7 @@ export default function ConsultationForm() {
               <div className="mb-5">
                 <label
                   htmlFor="message"
-                  className="mb-1.5 block text-xs font-semibold text-slate-500"
+                  className="mb-1.5 block text-xs font-semibold text-slate-400"
                 >
                   상담 내용 (선택)
                 </label>
@@ -224,7 +227,7 @@ export default function ConsultationForm() {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="궁금하신 사항을 자유롭게 적어주세요"
-                  className="w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-900 outline-none transition-colors placeholder:text-slate-300 focus:border-slate-400 focus:bg-white"
+                  className={`${inputClass} resize-none`}
                 />
               </div>
 
@@ -235,7 +238,7 @@ export default function ConsultationForm() {
                     type="checkbox"
                     checked={privacyAgreed}
                     onChange={(e) => setPrivacyAgreed(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-slate-900"
+                    className="mt-0.5 h-4 w-4 rounded border-slate-500 accent-[var(--color-gold)]"
                   />
                   <span className="text-xs leading-relaxed text-slate-500">
                     개인정보 수집 및 이용에 동의합니다. 수집된 정보(이름,
@@ -249,7 +252,7 @@ export default function ConsultationForm() {
               <button
                 type="submit"
                 disabled={!isValid || formState === "submitting"}
-                className="w-full rounded-full bg-slate-900 py-4 text-sm font-semibold tracking-wide text-white transition-all duration-300 hover:bg-slate-800 hover:shadow-lg hover:shadow-slate-900/10 disabled:cursor-not-allowed disabled:opacity-40"
+                className="w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold tracking-wide text-white transition-all duration-300 hover:bg-[var(--color-gold-light)] hover:shadow-lg hover:shadow-[var(--color-gold)]/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {formState === "submitting" ? (
                   <span className="inline-flex items-center gap-2">
