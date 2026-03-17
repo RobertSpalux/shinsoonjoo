@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion } from "framer-motion";
 import CountUp from "./CountUp";
 
@@ -103,30 +104,15 @@ export default function HeroSection() {
           className="mt-12 flex w-full items-center justify-center md:mt-0 md:w-2/5"
         >
           <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-2xl bg-slate-200">
-            {/* Placeholder inner content */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-300/80">
-                <svg
-                  className="h-6 w-6 text-slate-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={1.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
-                  />
-                </svg>
-              </div>
-              <span className="text-xs font-medium text-slate-400">
-                프로필 사진
-              </span>
-            </div>
-
-            {/* Subtle gold accent border */}
-            <div className="absolute inset-0 rounded-2xl ring-1 ring-slate-200" />
+            <Image
+              src="/soonjoo.jpg"
+              alt="신순주 지사장 프로필"
+              fill
+              className="object-cover object-top"
+              priority
+              sizes="(max-width: 768px) 100vw, 40vw"
+            />
+            <div className="absolute inset-0 rounded-2xl ring-1 ring-slate-200/50" />
           </div>
         </motion.div>
       </div>
