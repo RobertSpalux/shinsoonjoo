@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +12,20 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // Supabase 클라이언트 (서버 런타임에서 환경변수 직접 사용)
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Missing Supabase env vars");
+      return NextResponse.json(
+        { error: "서버 설정 오류" },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // 1. Supabase에 저장
     const { error: dbError } = await supabase.from("consultations").insert({
@@ -56,7 +70,8 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (err) {
+    console.error("API error:", err);
     return NextResponse.json(
       { error: "서버 오류가 발생했습니다." },
       { status: 500 }
