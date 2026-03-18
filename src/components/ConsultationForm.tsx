@@ -2,7 +2,6 @@
 
 import { useRef, useState } from "react";
 import { motion, useInView, AnimatePresence } from "framer-motion";
-import { supabase } from "@/lib/supabase";
 
 const categories = [
   "종신보험·사망보장",
@@ -34,15 +33,19 @@ export default function ConsultationForm() {
 
     setFormState("submitting");
 
-    const { error } = await supabase.from("consultations").insert({
-      name: name.trim(),
-      phone: phone.trim(),
-      category,
-      message: message.trim() || null,
-      privacy_agreed: privacyAgreed,
+    const res = await fetch("/api/consultation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name.trim(),
+        phone: phone.trim(),
+        category,
+        message: message.trim() || null,
+        privacy_agreed: privacyAgreed,
+      }),
     });
 
-    if (error) {
+    if (!res.ok) {
       setFormState("error");
       setTimeout(() => setFormState("idle"), 3000);
       return;
