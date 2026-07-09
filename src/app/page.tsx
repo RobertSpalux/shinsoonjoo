@@ -7,7 +7,7 @@ import ClientStories from "@/components/ClientStories";
 import ConsultationForm from "@/components/ConsultationForm";
 import ArticleCard from "@/components/news/ArticleCard";
 import { getPublishedArticles } from "@/lib/articles";
-import { personSchema, localBusinessSchema, jsonLdString } from "@/lib/jsonld";
+import { personSchema, organizationSchema, jsonLdString } from "@/lib/jsonld";
 
 export const revalidate = 300;
 
@@ -16,14 +16,14 @@ export default async function Home() {
 
   return (
     <main>
-      {/* E-E-A-T: 홈에 Person + InsuranceAgency 스키마 상시 주입 */}
+      {/* E-E-A-T: 홈에 Person + Organization 스키마 상시 주입 (전국구 — 지역 스키마 미사용) */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: jsonLdString(personSchema()) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: jsonLdString(localBusinessSchema()) }}
+        dangerouslySetInnerHTML={{ __html: jsonLdString(organizationSchema()) }}
       />
 
       <HeroSection />

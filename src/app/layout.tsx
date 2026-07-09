@@ -12,13 +12,13 @@ export const metadata: Metadata = {
     default: `${BRAND.siteName} | ${years}년 차 GA명장 신순주`,
     template: `%s | ${BRAND.siteName}`,
   },
-  description: `${years}년 경력 우수인증설계사 · GA명장 신순주. 생활경제, 금융뉴스, 보험 보상 꿀팁까지 — 당신의 위기보다 한 발 앞서는 가장 선한 금융 파트너.`,
+  description: `${years}년 경력 우수인증설계사 · GA명장 신순주. 보험료 절약, 청구·보상, 실손·보장성, 연금·노후, 보험 리모델링까지 — 관계가 아니라 분석으로 다시 설계하는 가장 선한 금융 파트너.`,
   verification: {
     google: "WTI52aUJD8W-Io7DJLV-vNDSMwOdUIrBQSX8fY95hgc",
   },
   openGraph: {
     title: `${BRAND.siteName} | ${years}년 차 GA명장 신순주`,
-    description: `우수인증설계사 8년 연속 · GA명장. 보험과 생활경제의 모든 것, ${BRAND.siteName}.`,
+    description: `우수인증설계사 8년 연속 · GA명장. 관계가 아니라 분석으로 다시 설계하는 보험 리모델링, ${BRAND.siteName}.`,
     type: "website",
     locale: "ko_KR",
     siteName: BRAND.siteName,

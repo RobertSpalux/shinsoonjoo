@@ -3,8 +3,9 @@ import type { Article } from "./articles";
 
 /**
  * JSON-LD 구조화 데이터 빌더.
- * 보험은 구글 YMYL 카테고리 — 실명 저자(Person) + 지역 실체(LocalBusiness/InsuranceAgency)
+ * 보험은 구글 YMYL 카테고리 — 실명 저자(Person) + 전국 조직(Organization)
  * 스키마가 E-E-A-T 신호의 핵심이므로 모든 글에 저자 스키마를 동적 주입한다.
+ * (전국구 방침에 따라 지역 고정 LocalBusiness 스키마는 사용하지 않는다.)
  */
 
 export function personSchema() {
@@ -34,15 +35,21 @@ export function personSchema() {
   };
 }
 
-export function localBusinessSchema() {
+/**
+ * 전국구 방침: 지역 고정 스키마(LocalBusiness/InsuranceAgency + areaServed)는 쓰지 않는다.
+ * 전국 서비스 조직으로서 Organization 스키마만 주입한다 (CLAUDE.md 2·7절).
+ */
+export function organizationSchema() {
   return {
     "@context": "https://schema.org",
-    "@type": "InsuranceAgency",
-    name: `${BRAND.siteName} — ${BRAND.company}`,
+    "@type": "Organization",
+    name: BRAND.siteName,
+    alternateName: BRAND.siteNameEn,
     url: BRAND.siteUrl,
-    areaServed: ["천안시", "충청남도", "전라남도"],
     founder: { "@type": "Person", name: BRAND.personName },
     parentOrganization: { "@type": "Organization", name: "프라임에셋" },
+    sameAs: [BRAND.social.instagram, BRAND.pressUrl],
+    areaServed: { "@type": "Country", name: "대한민국" },
   };
 }
 

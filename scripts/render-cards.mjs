@@ -76,7 +76,7 @@ function cardHtml({ heading, body, index, total, category, isHook, isCta }) {
   </div>
   <div class="bottom">
     <div class="footer">
-      <div class="brand">프라임에셋 140본부 · 천안<small>보험은 약속입니다</small></div>
+      <div class="brand">프라임에셋 140본부<small>보험은 약속입니다</small></div>
       <div class="seal">GA명장 · ${years}년 경력<br>신순주</div>
     </div>
   </div>

@@ -8,8 +8,8 @@ export const BRAND = {
   siteNameEn: "SHIN SOON JOO GOOD FINANCE",
   personName: "신순주",
   title: "지사장",
-  company: "프라임에셋 140본부 천안3지점",
-  region: "천안 · 충남 · 전남",
+  company: "프라임에셋 140본부 천안3지점", // 사실값 — 푸터/프로필 하단에만 노출
+  region: "전국 (비대면 상담 · 대면 상담 가능)", // 전국구 — 지역명은 헤드라인·SEO·스키마에 넣지 않음
   phone: "041-572-0372",
   address: "충남 천안시 서북구 월봉7길 18 202호 프라임에셋",
   social: {
