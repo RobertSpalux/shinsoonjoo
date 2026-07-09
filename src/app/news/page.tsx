@@ -9,8 +9,8 @@ export const revalidate = 300; // ISR: 5분마다 갱신 — 새벽 자동 발�
 const { years } = getCareer();
 
 export const metadata: Metadata = {
-  title: "금융소식 — 생활경제·보험·보상 인사이트",
-  description: `금융감독원 보도자료, 생활경제 뉴스, 보험금 분쟁 판례를 ${years}년 차 GA명장이 소비자의 언어로 해설합니다. 매일 아침 업데이트.`,
+  title: "금융소식 — 절약·청구·실손·리모델링 인사이트",
+  description: `보험료 절약 꿀팁부터 보험금 청구·보상, 실손·보장성 가이드, 보험 리모델링, 금융·경제 뉴스까지 — ${years}년 차 GA명장이 소비자의 언어로 해설합니다. 매일 아침 업데이트.`,
   alternates: { canonical: "/news" },
 };
 
@@ -28,30 +28,34 @@ export default async function NewsPage({
       <section className="mx-auto max-w-7xl px-6 py-16 md:px-12 md:py-24">
         {/* 헤더 */}
         <div className="mb-12 max-w-2xl md:mb-16">
-          <p className="mb-4 text-xs font-semibold tracking-[0.25em] uppercase text-[var(--color-gold)]">
-            Daily Financial Insight
+          <p className="mb-4 text-xs font-semibold tracking-[0.08em] text-[var(--color-text-muted)]">
+            DAILY FINANCIAL INSIGHT
           </p>
-          <h1 className="mb-5 text-3xl font-extrabold leading-tight tracking-tight text-slate-900 md:text-5xl">
-            어려운 금융 뉴스,
+          <h1 className="mb-5 font-serif text-3xl font-semibold leading-[1.22] tracking-[-0.015em] text-[var(--color-text-strong)] md:text-5xl">
+            어려운 금융,
             <br />
-            <span className="text-[var(--color-gold)]">전문가의 언어</span>로 다시 씁니다
+            <span className="text-[var(--color-forest)]">전문가의 언어</span>로 다시 씁니다
           </h1>
-          <p className="text-[15px] leading-relaxed text-slate-600">
-            금융감독원 보도자료·경제 뉴스·보험금 분쟁 판례를 {years}년 현장 경험으로 해설합니다.
+          <p className="text-[15px] leading-relaxed text-[var(--color-text-body)]">
+            보험료 절약·청구/보상·실손 가이드·리모델링·금융 뉴스를 {years}년 현장 경험으로 해설합니다.
             플랫폼의 익명 콘텐츠가 아닌, 이름을 걸고 쓰는 글입니다.
           </p>
         </div>
 
         {/* 카테고리 탭 */}
-        <nav className="mb-10 flex flex-wrap gap-2.5" aria-label="카테고리">
+        <nav
+          className="mb-10 flex flex-wrap gap-x-6 gap-y-3 border-b border-[var(--color-line)] pb-1"
+          aria-label="카테고리"
+        >
           {CATEGORIES.map((cat) => (
             <Link
               key={cat}
               href={cat === "전체" ? "/news" : `/news?category=${encodeURIComponent(cat)}`}
-              className={`rounded-full border px-5 py-2 text-sm font-medium transition-all duration-300 ${
+              aria-current={active === cat ? "page" : undefined}
+              className={`-mb-px border-b-2 pb-2.5 text-sm transition-colors duration-200 ${
                 active === cat
-                  ? "border-[var(--color-gold)] bg-[var(--color-gold)] text-white"
-                  : "border-[var(--color-line)] text-slate-600 hover:border-[var(--color-gold-dim)] hover:text-[var(--color-gold-light)]"
+                  ? "border-[var(--color-gold)] font-semibold text-[var(--color-text-strong)]"
+                  : "border-transparent font-medium text-[var(--color-text-muted)] hover:text-[var(--color-text-strong)]"
               }`}
             >
               {cat}
@@ -61,12 +65,12 @@ export default async function NewsPage({
 
         {/* 글 목록 */}
         {articles.length === 0 ? (
-          <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] px-8 py-20 text-center">
-            <p className="text-lg font-semibold text-slate-700">
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-8 py-20 text-center">
+            <p className="font-serif text-lg font-semibold text-[var(--color-text-strong)]">
               콘텐츠 발행을 준비하고 있습니다
             </p>
-            <p className="mt-2 text-sm text-slate-500">
-              매일 아침, 금융감독원 소식과 보상 판례 해설이 이곳에 자동 발행됩니다.
+            <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+              매일 아침, 금융 소식과 보험 인사이트가 이곳에 자동 발행됩니다.
             </p>
           </div>
         ) : (
