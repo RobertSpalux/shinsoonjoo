@@ -34,7 +34,7 @@ export const BRAND = {
   siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://soonjoo.vercel.app",
 } as const;
 
-/** 입사일 기준 경력 계산: { years: 23, days: 8395 } */
+/** 입사일 기준 경력 계산 → { years, days } (하드코딩 금지, 항상 이 함수로 파생) */
 export function getCareer(now: Date = new Date()) {
   const ms = now.getTime() - BRAND.careerStart.getTime();
   const days = Math.floor(ms / 86_400_000);
@@ -42,7 +42,7 @@ export function getCareer(now: Date = new Date()) {
   return { years, days };
 }
 
-/** "23년 (8,395일)" 형태 표기 */
+/** "N년 (N,NNN일)" 형태 표기 */
 export function careerLabel(now?: Date) {
   const { years, days } = getCareer(now);
   return `${years}년 (${days.toLocaleString("ko-KR")}일)`;

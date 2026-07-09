@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import DiagnosisQuiz from "@/components/diagnosis/DiagnosisQuiz";
 import { getCareer } from "@/lib/brand";
 
+const { years } = getCareer();
+
 export const metadata: Metadata = {
   title: "자산 방어력 진단 — 3분 무료 진단",
-  description:
-    "내 보험, 제대로 되어 있을까? 4개 질문으로 자산 방어력을 진단하고 23년 차 GA명장의 맞춤 리포트를 무료로 받아보세요. 상담 강요 없음.",
+  description: `내 보험, 제대로 되어 있을까? 4개 질문으로 자산 방어력을 진단하고 ${years}년 차 GA명장의 맞춤 리포트를 무료로 받아보세요. 상담 강요 없음.`,
   alternates: { canonical: "/diagnosis" },
 };
 
 export default function DiagnosisPage() {
-  const { years } = getCareer();
 
   return (
     <main className="min-h-screen bg-[var(--color-ink)] pt-16">
