@@ -49,22 +49,16 @@ export default function HeroSection() {
             설계합니다.
           </motion.p>
 
-          {/* 창세기 45:5 — 시그니처 서사 */}
+          {/* 시그니처 서사(선한 금융의 통로) */}
           <motion.div {...fadeUp(0.35)} className="mb-8 max-w-lg">
             <span
               aria-hidden
               className="mb-4 block h-px w-6 bg-[var(--color-gold)]"
             />
-            <blockquote
+            <p
               className="text-[15px] italic leading-relaxed text-[var(--color-text-body)]"
               style={{ fontFamily: "var(--font-serif)" }}
             >
-              &ldquo;{BRAND.verse.text}&rdquo;
-              <span className="mt-1 block not-italic text-xs text-[var(--color-text-muted)]">
-                — {BRAND.verse.ref}
-              </span>
-            </blockquote>
-            <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-body)]">
               {BRAND.verse.tagline}
             </p>
           </motion.div>
