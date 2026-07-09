@@ -1,5 +1,24 @@
 import Link from "next/link";
+import { Instagram } from "lucide-react";
 import { BRAND, getCareer } from "@/lib/brand";
+
+/** 카카오톡 채널 — 심플 말풍선 라인 마크 */
+function KakaoIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 4c-4.97 0-9 3.13-9 7 0 2.48 1.66 4.66 4.17 5.9L6.5 20.5l4.13-2.3c.45.05.9.08 1.37.08 4.97 0 9-3.13 9-7s-4.03-7-9-7z" />
+    </svg>
+  );
+}
 
 export default function Footer() {
   const { years } = getCareer();
@@ -16,6 +35,26 @@ export default function Footer() {
             <p className="mt-5 max-w-sm text-sm leading-relaxed text-[var(--color-text-body)]">
               {BRAND.verse.tagline}
             </p>
+            <div className="mt-6 flex items-center gap-4">
+              <a
+                href={BRAND.social.instagram}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="인스타그램"
+                className="text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-strong)]"
+              >
+                <Instagram className="h-4 w-4" strokeWidth={1.8} />
+              </a>
+              <a
+                href={BRAND.social.kakao}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="카카오톡 채널"
+                className="text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-strong)]"
+              >
+                <KakaoIcon className="h-4 w-4" />
+              </a>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-10 text-sm md:gap-16">
@@ -36,6 +75,12 @@ export default function Footer() {
               </p>
               <ul className="space-y-2.5 text-[var(--color-text-body)]">
                 <li className="text-[var(--color-text-muted)]">{BRAND.company}</li>
+                <li className="text-[var(--color-text-muted)]">
+                  <a href={`tel:${BRAND.phone}`} className="tabular-nums transition-colors hover:text-[var(--color-text-body)]">
+                    {BRAND.phone}
+                  </a>
+                </li>
+                <li className="text-[var(--color-text-muted)]">{BRAND.address}</li>
                 <li>{BRAND.personName} {BRAND.title} · {years}년 차</li>
                 <li>우수인증설계사 8년 연속</li>
                 <li>
