@@ -1,14 +1,20 @@
 "use client";
 
 import { useRef } from "react";
-import { motion, useInView } from "framer-motion";
+import { motion, useInView, useReducedMotion } from "framer-motion";
+
+/**
+ * 고객 사례 섹션 — 보험업법 광고 기준 준수:
+ * 과장·보장성 표현 금지, 별점 등 평점 연출 지양,
+ * 재구성 사례임을 하단에 명시 (실명·실데이터 노출 없음).
+ */
 
 const stories = [
   {
     id: 1,
     clientLabel: "3대 가족 고객",
     quote:
-      "종신보험을 '사랑의 바통'이라 부르시는 지사장님. 저희 3대의 미래를 완벽하게 설계해 주셨습니다.",
+      "종신보험을 '사랑의 바통'이라 부르시는 지사장님. 저희 3대의 미래를 든든하게 설계해 주셨습니다.",
     tags: ["종신보험", "3대 설계", "가족신뢰"],
   },
   {
@@ -27,23 +33,6 @@ const stories = [
   },
 ];
 
-function StarRating() {
-  return (
-    <div className="flex gap-0.5">
-      {[...Array(5)].map((_, i) => (
-        <svg
-          key={i}
-          className="h-4 w-4 text-[var(--color-gold)]"
-          fill="currentColor"
-          viewBox="0 0 20 20"
-        >
-          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-        </svg>
-      ))}
-    </div>
-  );
-}
-
 function StoryCard({
   story,
   index,
@@ -53,27 +42,28 @@ function StoryCard({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-60px" });
+  const reduceMotion = useReducedMotion();
 
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 24 }}
+      initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.6, delay: index * 0.12, ease: "easeOut" }}
       className="min-w-[300px] flex-shrink-0 snap-center md:min-w-0 md:flex-shrink"
     >
-      <article className="group flex h-full flex-col rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-8 shadow-lg shadow-slate-300/60 transition-all duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-10">
-        <StarRating />
+      <article className="group flex h-full flex-col rounded-lg border border-[var(--color-line)] bg-[var(--color-ink-card)] p-8 transition-colors duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-10">
+        <span aria-hidden className="block h-px w-6 bg-[var(--color-gold)]" />
 
         <blockquote className="mt-6 flex-1">
-          <p className="text-[15px] font-medium leading-relaxed text-slate-700">
+          <p className="text-[15px] leading-relaxed text-[var(--color-text-body)]">
             &ldquo;{story.quote}&rdquo;
           </p>
         </blockquote>
 
         <div className="my-6 h-px w-8 bg-[var(--color-line)]" />
 
-        <p className="mb-4 text-sm font-bold text-slate-900">
+        <p className="mb-4 text-sm font-semibold text-[var(--color-text-strong)]">
           {story.clientLabel}
         </p>
 
@@ -81,7 +71,7 @@ function StoryCard({
           {story.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full border border-[var(--color-line)] bg-[var(--color-ink-soft)] px-3 py-1 text-xs font-medium text-slate-600"
+              className="rounded-sm border border-[var(--color-line)] bg-[var(--color-ink-soft)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-muted)]"
             >
               {tag}
             </span>
@@ -95,6 +85,7 @@ function StoryCard({
 export default function ClientStories() {
   const sectionRef = useRef<HTMLElement>(null);
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
+  const reduceMotion = useReducedMotion();
 
   return (
     <section
@@ -103,16 +94,19 @@ export default function ClientStories() {
     >
       <div className="mx-auto max-w-6xl px-6 md:px-12 lg:px-20">
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
+          initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7 }}
           className="mb-16 text-center md:mb-20"
         >
-          <p className="mb-6 text-xs font-semibold tracking-[0.25em] uppercase text-slate-500">
+          <p className="mb-6 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--color-text-muted)]">
             Client Stories
           </p>
-          <h2 className="text-3xl font-extrabold leading-snug tracking-tight text-slate-900 md:text-4xl">
-            고객이 직접 전하는
+          <h2
+            className="text-3xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-text-strong)] md:text-4xl"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
+            현장에서 쌓인
             <br />
             신뢰의 이야기
           </h2>
@@ -125,13 +119,18 @@ export default function ClientStories() {
         </div>
 
         <motion.p
-          initial={{ opacity: 0 }}
+          initial={reduceMotion ? { opacity: 1 } : { opacity: 0 }}
           animate={isInView ? { opacity: 1 } : {}}
           transition={{ delay: 0.8 }}
-          className="mt-6 text-center text-[11px] font-medium tracking-wider text-slate-500 md:hidden"
+          className="mt-6 text-center text-[11px] font-medium text-[var(--color-text-muted)] md:hidden"
         >
           ← 스와이프하여 더 보기 →
         </motion.p>
+
+        <p className="mt-8 text-center text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+          위 사례는 실제 상담 경험을 바탕으로 재구성했으며, 개인정보 보호를 위해
+          세부 내용을 각색했습니다.
+        </p>
       </div>
     </section>
   );
