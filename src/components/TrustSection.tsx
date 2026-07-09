@@ -50,7 +50,7 @@ export default function TrustSection() {
             Verified Trust
           </p>
           <h2
-            className="mb-5 text-3xl font-semibold leading-[1.3] tracking-[-0.01em] text-[var(--color-text-strong)] md:text-4xl"
+            className="mb-5 text-3xl font-semibold leading-[1.3] tracking-[-0.01em] text-[var(--color-forest)] md:text-4xl"
             style={{ fontFamily: "var(--font-serif)" }}
           >
             말이 아니라,

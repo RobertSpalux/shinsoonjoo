@@ -86,7 +86,7 @@ export default function ConsultationForm() {
               Private Consultation
             </p>
             <h2
-              className="mb-6 text-3xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-text-strong)] md:text-4xl"
+              className="mb-6 text-3xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-forest)] md:text-4xl"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               프라이빗 상담 예약
@@ -269,7 +269,7 @@ export default function ConsultationForm() {
               <button
                 type="submit"
                 disabled={!isValid || formState === "submitting"}
-                className="w-full rounded-sm bg-[var(--color-text-strong)] py-4 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-text-strong-hover)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
+                className="w-full rounded-sm bg-[var(--color-forest)] py-4 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0"
               >
                 {formState === "submitting" ? (
                   <span className="inline-flex items-center gap-2">

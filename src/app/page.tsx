@@ -37,16 +37,19 @@ export default async function Home() {
           <div className="mx-auto max-w-7xl px-6 md:px-12">
             <div className="mb-12 flex items-end justify-between">
               <div>
-                <p className="mb-4 text-xs font-semibold tracking-[0.25em] uppercase text-[var(--color-gold)]">
+                <p className="mb-4 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--color-text-muted)]">
                   Daily Insight
                 </p>
-                <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl">
+                <h2
+                  className="text-3xl font-semibold tracking-[-0.01em] text-[var(--color-forest)] md:text-4xl"
+                  style={{ fontFamily: "var(--font-serif)" }}
+                >
                   오늘의 금융소식
                 </h2>
               </div>
               <Link
                 href="/news"
-                className="hidden text-sm font-semibold text-slate-600 transition-colors hover:text-[var(--color-gold-light)] md:block"
+                className="hidden text-sm font-medium text-[var(--color-text-body)] transition-colors hover:text-[var(--color-text-strong)] md:block"
               >
                 전체 보기 →
               </Link>
@@ -67,7 +70,7 @@ export default async function Home() {
             </div>
             <Link
               href="/news"
-              className="mt-8 block text-center text-sm font-semibold text-slate-600 md:hidden"
+              className="mt-8 block text-center text-sm font-medium text-[var(--color-text-body)] md:hidden"
             >
               전체 보기 →
             </Link>

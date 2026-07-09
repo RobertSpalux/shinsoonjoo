@@ -120,7 +120,7 @@ export default function Timeline() {
           <blockquote className="mx-auto max-w-2xl">
             <div className="mx-auto mb-6 h-px w-10 bg-[var(--color-line)]" />
             <p
-              className="text-2xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-text-strong)] md:text-3xl lg:text-[2.5rem]"
+              className="text-2xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-forest)] md:text-3xl lg:text-[2.5rem]"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               보험영업은 단순한 판매가 아니라

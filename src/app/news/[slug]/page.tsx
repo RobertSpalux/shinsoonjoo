@@ -118,7 +118,7 @@ export default async function ArticlePage({
 
         <header className="mb-8">
           <h1
-            className="mb-6 text-3xl font-semibold leading-[1.25] tracking-[-0.015em] text-[var(--color-text-strong)] md:text-4xl"
+            className="mb-6 text-3xl font-semibold leading-[1.25] tracking-[-0.015em] text-[var(--color-forest)] md:text-4xl"
             style={{ fontFamily: "var(--font-serif)" }}
           >
             {article.title}
@@ -235,7 +235,7 @@ export default async function ArticlePage({
         {faqs.length > 0 && (
           <section className="mt-14">
             <h2
-              className="mb-6 text-xl font-semibold text-[var(--color-text-strong)]"
+              className="mb-6 text-xl font-semibold text-[var(--color-forest)]"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               자주 묻는 질문
@@ -256,7 +256,7 @@ export default async function ArticlePage({
         {/* 상담 CTA */}
         <aside className="mt-16 rounded-lg border border-[var(--color-gold-dim)] bg-gradient-to-br from-white to-[#f7f2e6] p-8 text-center md:p-10">
           <p
-            className="text-lg font-semibold text-[var(--color-text-strong)] md:text-xl"
+            className="text-lg font-semibold text-[var(--color-forest)] md:text-xl"
             style={{ fontFamily: "var(--font-serif)" }}
           >
             내 상황에는 어떻게 적용될까요?
@@ -266,7 +266,7 @@ export default async function ArticlePage({
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-7 gap-y-4">
             <Link href="/diagnosis"
-              className="rounded-sm bg-[var(--color-text-strong)] px-7 py-3.5 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-text-strong-hover)]">
+              className="rounded-sm bg-[var(--color-forest)] px-7 py-3.5 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)]">
               내 보험 진단받기
             </Link>
             <Link href="/#consultation"
@@ -280,7 +280,7 @@ export default async function ArticlePage({
         {related.length > 0 && (
           <section className="mt-16 border-t border-[var(--color-line)] pt-10">
             <h2
-              className="mb-6 text-lg font-semibold text-[var(--color-text-strong)]"
+              className="mb-6 text-lg font-semibold text-[var(--color-forest)]"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               함께 보면 좋은 글

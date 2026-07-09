@@ -103,7 +103,7 @@ export default function ClientStories() {
             Client Stories
           </p>
           <h2
-            className="text-3xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-text-strong)] md:text-4xl"
+            className="text-3xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-forest)] md:text-4xl"
             style={{ fontFamily: "var(--font-serif)" }}
           >
             현장에서 쌓인

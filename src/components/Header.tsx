@@ -40,7 +40,7 @@ export default function Header() {
           ))}
           <Link
             href="/#consultation"
-            className="rounded-sm border border-[var(--color-text-strong)] px-5 py-2 text-sm font-semibold text-[var(--color-text-strong)] transition-colors duration-300 hover:bg-[var(--color-text-strong)] hover:text-[var(--color-ink)]"
+            className="rounded-sm border border-[var(--color-forest)] px-5 py-2 text-sm font-semibold text-[var(--color-forest)] transition-colors duration-300 hover:bg-[var(--color-forest)] hover:text-[var(--color-ink)]"
           >
             상담 예약
           </Link>
@@ -87,7 +87,7 @@ export default function Header() {
               <Link
                 href="/#consultation"
                 onClick={() => setOpen(false)}
-                className="mt-4 rounded-sm bg-[var(--color-text-strong)] py-3 text-center text-sm font-semibold text-[var(--color-ink)]"
+                className="mt-4 rounded-sm bg-[var(--color-forest)] py-3 text-center text-sm font-semibold text-[var(--color-ink)]"
               >
                 상담 예약
               </Link>

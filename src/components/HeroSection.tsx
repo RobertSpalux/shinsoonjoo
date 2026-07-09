@@ -32,7 +32,7 @@ export default function HeroSection() {
 
           <motion.h1
             {...fadeUp(0.15)}
-            className="mb-6 font-serif text-[2.25rem] font-semibold leading-[1.22] tracking-[-0.015em] text-[var(--color-text-strong)] md:text-[3.25rem]"
+            className="mb-6 font-serif text-[2.25rem] font-semibold leading-[1.22] tracking-[-0.015em] text-[var(--color-forest)] md:text-[3.25rem]"
             style={{ fontFamily: "var(--font-serif)" }}
           >
             당신도 모르게,
@@ -77,7 +77,7 @@ export default function HeroSection() {
             <div className="flex flex-wrap items-center gap-x-7 gap-y-4">
               <Link
                 href="/diagnosis"
-                className="inline-flex items-center rounded-sm bg-[var(--color-text-strong)] px-7 py-3.5 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-text-strong-hover)]"
+                className="inline-flex items-center rounded-sm bg-[var(--color-forest)] px-7 py-3.5 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)]"
               >
                 내 보험 진단받기
               </Link>

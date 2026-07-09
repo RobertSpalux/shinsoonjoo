@@ -42,7 +42,7 @@
 
 ### 1-3. 액센트
 
-**액센트는 하나 = 딥 잉크(`--color-text-strong`).** 헤딩과 주 CTA 버튼 배경이 이 색이다. 골드는 액센트가 아니라 "속삭임"이다.
+**액센트는 하나 = 딥 파인(`--color-forest`).** 섹션 헤딩과 주 CTA 버튼 배경이 이 색이다 (2026-07 딥 잉크에서 전환 — 3-4 대비 밴드와 같은 계열로 색 깊이 부여). `--color-text-strong`은 본문 강조·카드 제목·소형 UI의 잉크로 유지. 골드는 액센트가 아니라 "속삭임"이다.
 
 | 토큰 | hex | 용도 (⚠️ 주석으로 강제) |
 |---|---|---|
@@ -149,8 +149,8 @@ outline-offset: 2px;
 
 ### 4-1. 주 CTA 버튼 (화면당 1개)
 
-- 배경 `--color-text-strong`(딥 잉크) / 텍스트 `--color-ink`(아이보리) / 반경 `--radius-sm` / 패딩 `px-7 py-3.5`
-- hover: 배경 `--color-text-strong-hover` + `translateY(-1px)`, transition은 `transform`/`opacity`/`background`만
+- 배경 `--color-forest`(딥 파인) / 텍스트 `--color-ink`(아이보리) / 반경 `--radius-sm` / 패딩 `px-7 py-3.5`
+- hover: 배경 `--color-forest-soft` + `translateY(-1px)`, transition은 `transform`/`opacity`/`background`만
 - focus-visible: 4-0 공통 규칙(골드 2px 링)
 - **골드 채움 금지. 채움+외곽선 버튼 2개 나란히 금지** — 보조 액션은 4-2 텍스트 링크로.
 - 문구는 방법론 CTA로 통일: "내 보험 진단받기" 계열.
