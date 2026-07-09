@@ -8,6 +8,7 @@ import { getCareer } from "@/lib/brand";
  * 4단계 자산 방어력 진단 퀴즈.
  * 무거운 개인정보 없이 가볍게 시작 → 결과 리포트 직전에 리드 폼.
  * 카카오싱크 도입 시 LeadForm 부분만 교체하면 되는 구조.
+ * (데이터 흐름은 유지, 시각은 라이트/에디토리얼 + 딥그린 밴드)
  */
 
 const STEPS = [
@@ -109,20 +110,21 @@ export default function DiagnosisQuiz() {
   };
 
   const current = step < 4 ? STEPS[step] : null;
+  const pct = Math.min(Math.round(((step + 1) / 5) * 100), 100);
 
   return (
     <div className="mx-auto w-full max-w-xl">
       {/* 진행 바 */}
       {step < 5 && (
         <div className="mb-10">
-          <div className="mb-2 flex justify-between text-[11px] font-medium tracking-wider text-slate-500">
+          <div className="mb-2 flex justify-between text-[11px] font-medium tracking-wider text-[var(--color-text-muted)]">
             <span>{step < 4 ? `STEP ${step + 1} / 4` : "리포트 준비 완료"}</span>
-            <span>{Math.min(Math.round(((step + 1) / 5) * 100), 100)}%</span>
+            <span className="tabular-nums">{pct}%</span>
           </div>
           <div className="h-1 overflow-hidden rounded-full bg-[var(--color-line)]">
             <motion.div
-              className="h-full rounded-full bg-[var(--color-gold)]"
-              animate={{ width: `${((step + 1) / 5) * 100}%` }}
+              className="h-full rounded-full bg-[var(--color-forest)]"
+              animate={{ width: `${pct}%` }}
               transition={{ duration: 0.5, ease: "easeOut" }}
             />
           </div>
@@ -139,8 +141,10 @@ export default function DiagnosisQuiz() {
             exit={{ opacity: 0, x: -32 }}
             transition={{ duration: 0.35 }}
           >
-            <h2 className="mb-2 text-xl font-bold text-slate-900 md:text-2xl">{current.question}</h2>
-            <p className="mb-8 text-sm text-slate-500">{current.hint}</p>
+            <h2 className="mb-2 font-serif text-xl font-semibold tracking-[-0.01em] text-[var(--color-text-strong)] md:text-2xl">
+              {current.question}
+            </h2>
+            <p className="mb-8 text-sm text-[var(--color-text-muted)]">{current.hint}</p>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {current.options.map((opt) => {
@@ -153,10 +157,11 @@ export default function DiagnosisQuiz() {
                     onClick={() =>
                       current.multi ? toggleMulti("coverages", opt) : selectSingle(current.key, opt)
                     }
-                    className={`rounded-xl border px-5 py-4 text-left text-sm font-medium transition-all duration-300 ${
+                    aria-pressed={selected}
+                    className={`rounded-[var(--radius-sm)] border px-5 py-4 text-left text-sm transition-[background-color,border-color,color] duration-200 ${
                       selected
-                        ? "border-[var(--color-gold)] bg-[var(--color-gold)]/10 text-[var(--color-gold-light)]"
-                        : "border-[var(--color-line)] bg-[var(--color-ink-card)] text-slate-700 hover:border-[var(--color-gold-dim)]/60"
+                        ? "border-[var(--color-forest)] bg-[var(--color-forest)]/[0.06] font-semibold text-[var(--color-forest)]"
+                        : "border-[var(--color-line)] bg-[var(--color-ink-card)] font-medium text-[var(--color-text-body)] hover:border-[var(--color-gold-dim)]"
                     }`}
                   >
                     {opt}
@@ -169,7 +174,7 @@ export default function DiagnosisQuiz() {
               <button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={(answers.coverages ?? []).length === 0}
-                className="mt-8 w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold text-white transition-all duration-300 hover:bg-[var(--color-gold-light)] disabled:cursor-not-allowed disabled:opacity-30"
+                className="mt-8 w-full rounded-[var(--radius-sm)] bg-[var(--color-forest)] py-3.5 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:translate-y-0"
               >
                 다음 단계로
               </button>
@@ -178,7 +183,7 @@ export default function DiagnosisQuiz() {
             {step > 0 && (
               <button
                 onClick={() => setStep((s) => s - 1)}
-                className="mt-4 w-full text-center text-xs text-slate-400 hover:text-slate-600"
+                className="mt-4 w-full text-center text-xs text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-body)]"
               >
                 ← 이전 질문으로
               </button>
@@ -195,18 +200,25 @@ export default function DiagnosisQuiz() {
             exit={{ opacity: 0, y: -24 }}
             transition={{ duration: 0.4 }}
           >
-            {/* 점수 티저 — 블러 처리로 궁금증 유발 */}
-            <div className="relative mb-8 overflow-hidden rounded-2xl border border-[var(--color-gold-dim)]/40 bg-[var(--color-ink-card)] p-8 text-center">
-              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+            {/* 점수 티저 — 딥그린 밴드 + 블러로 궁금증 유발 */}
+            <div className="relative mb-8 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-8 text-center">
+              <span aria-hidden className="mx-auto mb-4 block h-px w-6 bg-[var(--color-gold)]" />
+              <p className="text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]/70">
                 나의 자산 방어력
               </p>
-              <p className="mt-3 text-5xl font-extrabold text-[var(--color-gold)] blur-md select-none" aria-hidden>
+              <p
+                className="mt-3 font-serif text-5xl font-semibold tabular-nums text-[var(--color-ink)] blur-md select-none"
+                aria-hidden
+              >
                 {score}점
               </p>
-              <p className="mt-3 text-sm text-slate-600">
+              <p className="mt-3 text-sm leading-relaxed text-[var(--color-ink)]/80">
                 진단이 완료되었습니다. 아래 정보를 남기시면
                 <br />
-                <strong className="text-slate-900">{years}년 차 GA명장의 맞춤 해설 리포트</strong>를 보내드립니다.
+                <strong className="font-semibold text-[var(--color-ink)]">
+                  {years}년 차 GA명장의 맞춤 해설 리포트
+                </strong>
+                를 보내드립니다.
               </p>
             </div>
 
@@ -216,21 +228,21 @@ export default function DiagnosisQuiz() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="성함"
-                className="w-full rounded-xl border border-[var(--color-line)] bg-white px-4 py-3.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[var(--color-gold)] focus:ring-1 focus:ring-[var(--color-gold)]"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-sm text-[var(--color-text-strong)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-forest)]"
               />
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="연락처 (010-0000-0000)"
-                className="w-full rounded-xl border border-[var(--color-line)] bg-white px-4 py-3.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[var(--color-gold)] focus:ring-1 focus:ring-[var(--color-gold)]"
+                className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-sm text-[var(--color-text-strong)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-forest)]"
               />
-              <label className="flex items-start gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-xs leading-relaxed text-slate-600">
+              <label className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
                 <input
                   type="checkbox"
                   checked={agreed}
                   onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-[var(--color-gold)]"
+                  className="mt-0.5 h-4 w-4 accent-[var(--color-forest)]"
                 />
                 <span>
                   개인정보 수집·이용에 동의합니다. 수집 항목(성함, 연락처, 진단 응답)은 진단
@@ -238,23 +250,23 @@ export default function DiagnosisQuiz() {
                 </span>
               </label>
 
-              {error && <p className="text-xs text-red-400">{error}</p>}
+              {error && <p className="text-xs text-red-600">{error}</p>}
 
               <button
                 onClick={submit}
                 disabled={submitting}
-                className="w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold text-white transition-all duration-300 hover:bg-[var(--color-gold-light)] hover:shadow-lg hover:shadow-[var(--color-gold)]/20 disabled:opacity-40"
+                className="w-full rounded-[var(--radius-sm)] bg-[var(--color-forest)] py-4 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)] disabled:opacity-40 disabled:hover:translate-y-0"
               >
                 {submitting ? "전송 중..." : "무료 리포트 받고 결과 확인하기"}
               </button>
-              <p className="text-center text-[11px] text-slate-400">
+              <p className="text-center text-[11px] text-[var(--color-text-muted)]">
                 상담 강요는 없습니다. 리포트만 받아보셔도 됩니다.
               </p>
             </div>
           </motion.div>
         )}
 
-        {/* 완료 — 점수 공개 */}
+        {/* 완료 — 점수 공개 (딥그린 밴드) */}
         {step === 5 && (
           <motion.div
             key="done"
@@ -263,19 +275,21 @@ export default function DiagnosisQuiz() {
             transition={{ duration: 0.5 }}
             className="text-center"
           >
-            <div className="mb-8 rounded-2xl border border-[var(--color-gold-dim)]/40 bg-[var(--color-ink-card)] p-10">
-              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
+            <div className="mb-8 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-10">
+              <span aria-hidden className="mx-auto mb-4 block h-px w-6 bg-[var(--color-gold)]" />
+              <p className="text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]/70">
                 나의 자산 방어력
               </p>
               <motion.p
                 initial={{ scale: 0.6, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.3, type: "spring", stiffness: 120 }}
-                className="mt-3 text-6xl font-extrabold text-[var(--color-gold)]"
+                className="mt-3 font-serif text-6xl font-semibold tabular-nums text-[var(--color-ink)]"
               >
-                {score}<span className="text-2xl">점</span>
+                {score}
+                <span className="text-2xl">점</span>
               </motion.p>
-              <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-slate-600">
+              <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--color-ink)]/85">
                 {score >= 70
                   ? "기본기가 탄탄하시네요. 다만 선택하신 리스크 영역은 정밀 점검이 필요합니다."
                   : score >= 45
@@ -283,8 +297,9 @@ export default function DiagnosisQuiz() {
                     : "지금 구조로는 큰 위기 한 번에 자산이 흔들릴 수 있습니다. 빠른 점검을 권합니다."}
               </p>
             </div>
-            <p className="text-sm leading-relaxed text-slate-600">
-              접수가 완료되었습니다. <strong className="text-slate-900">24시간 이내</strong>에
+            <p className="text-sm leading-relaxed text-[var(--color-text-body)]">
+              접수가 완료되었습니다.{" "}
+              <strong className="font-semibold text-[var(--color-text-strong)]">24시간 이내</strong>에
               {years}년 차 GA명장 신순주 지사장이 직접 맞춤 리포트와 함께 연락드립니다.
             </p>
           </motion.div>
