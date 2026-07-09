@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HeroSection from "@/components/HeroSection";
+import StatsBand from "@/components/StatsBand";
 import TrustSection from "@/components/TrustSection";
 import Timeline from "@/components/Timeline";
 import ClientStories from "@/components/ClientStories";
@@ -26,6 +27,7 @@ export default async function Home() {
       />
 
       <HeroSection />
+      <StatsBand />
       <TrustSection />
       <Timeline />
 

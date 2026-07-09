@@ -8,6 +8,8 @@ interface CountUpProps {
   duration?: number;
   suffix?: string;
   label: string;
+  /** cream = 딥그린 대비 밴드 위 (DESIGN-SPEC 3-4) */
+  variant?: "ink" | "cream";
 }
 
 export default function CountUp({
@@ -15,6 +17,7 @@ export default function CountUp({
   duration = 2,
   suffix = "",
   label,
+  variant = "ink",
 }: CountUpProps) {
   const [count, setCount] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
@@ -55,11 +58,19 @@ export default function CountUp({
       transition={{ duration: 0.5, ease: "easeOut" }}
       className="flex flex-col"
     >
-      <span className="text-3xl font-bold tracking-tight tabular-nums text-[var(--color-text-strong)] md:text-4xl">
+      <span
+        className={`text-3xl font-bold tracking-tight tabular-nums md:text-4xl ${
+          variant === "cream" ? "text-[var(--color-ink)]" : "text-[var(--color-text-strong)]"
+        }`}
+      >
         {count.toLocaleString("ko-KR")}
         <span className="text-xl font-semibold md:text-2xl">{suffix}</span>
       </span>
-      <span className="mt-1.5 text-xs font-medium text-[var(--color-text-muted)]">
+      <span
+        className={`mt-1.5 text-xs font-medium ${
+          variant === "cream" ? "text-[var(--color-ink)]/70" : "text-[var(--color-text-muted)]"
+        }`}
+      >
         {label}
       </span>
     </motion.div>

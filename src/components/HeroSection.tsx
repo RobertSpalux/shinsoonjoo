@@ -3,11 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
-import CountUp from "./CountUp";
 import { BRAND, getCareer } from "@/lib/brand";
 
 export default function HeroSection() {
-  const { years, days } = getCareer();
+  const { years } = getCareer();
   const reduceMotion = useReducedMotion();
 
   const fadeUp = (delay: number) =>
@@ -91,23 +90,13 @@ export default function HeroSection() {
             </div>
           </motion.div>
 
-          {/* Metrics */}
-          <motion.div
-            {...fadeUp(0.55)}
-            className="grid grid-cols-3 gap-6 border-t border-[var(--color-line)] pt-8 md:max-w-lg md:gap-10"
-          >
-            <CountUp end={days} duration={2.8} label="고객과 함께한 날" suffix="일" />
-            <CountUp end={8} duration={2} label="우수인증설계사 연속" suffix="년" />
-            <CountUp end={years} duration={2} label="현장 경력" suffix="년차" />
-          </motion.div>
-
           {/* 언론·자격 마크 */}
           <motion.a
-            {...fadeUp(0.65)}
+            {...fadeUp(0.55)}
             href={BRAND.pressUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-6 w-fit text-xs text-[var(--color-text-muted)] underline-offset-4 transition-colors duration-300 hover:text-[var(--color-text-body)] hover:underline"
+            className="w-fit border-t border-[var(--color-line)] pt-6 text-xs text-[var(--color-text-muted)] underline-offset-4 transition-colors duration-300 hover:text-[var(--color-text-body)] hover:underline"
           >
             {BRAND.pressMarks.join(" · ")}
           </motion.a>
