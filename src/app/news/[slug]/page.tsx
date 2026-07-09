@@ -10,7 +10,6 @@ import { getArticleBySlug, getPublishedArticles, incrementViewCount } from "@/li
 import { articleSchema, faqSchema, personSchema, jsonLdString } from "@/lib/jsonld";
 import { BRAND, getCareer } from "@/lib/brand";
 import ReadingProgress from "@/components/news/ReadingProgress";
-import CardGallery from "@/components/news/CardGallery";
 import ArticleCard from "@/components/news/ArticleCard";
 
 export const revalidate = 300;
@@ -53,13 +52,6 @@ function extractToc(markdown: string) {
   });
 }
 
-/** 두 번째 ## 직전에서 분할 — 첫 h2 섹션 끝에 카드 갤러리를 끼워 텍스트를 끊는다 */
-function splitAtSecondH2(markdown: string): [string, string] {
-  const matches = [...markdown.matchAll(/^##\s+.+$/gm)];
-  if (matches.length < 2 || matches[1].index === undefined) return [markdown, ""];
-  return [markdown.slice(0, matches[1].index), markdown.slice(matches[1].index)];
-}
-
 export default async function ArticlePage({
   params,
 }: {
@@ -82,14 +74,6 @@ export default async function ArticlePage({
   const keyPoints = article.key_points ?? [];
   const toc = extractToc(markdown);
   const readMinutes = Math.max(1, Math.round(markdown.length / 600));
-
-  // 리드 이미지 = og(항상 카드 1번) → 갤러리는 카드 2번부터 (중복 방지)
-  const imagePaths = article.image_paths ?? [];
-  const leadImage = article.og_image_path ?? imagePaths[0] ?? null;
-  const galleryImages =
-    leadImage && leadImage === imagePaths[0] ? imagePaths.slice(1) : imagePaths;
-  const [mdPart1, mdPart2] =
-    galleryImages.length > 0 ? splitAtSecondH2(markdown) : [markdown, ""];
 
   const related = (await getPublishedArticles(article.category, 4))
     .filter((a) => a.slug !== article.slug)
@@ -182,24 +166,12 @@ export default async function ArticlePage({
           </nav>
         )}
 
-        {/* 본문 — 갤러리가 있으면 첫 h2 섹션 직후에 삽입해 텍스트를 끊는다 */}
+        {/* 본문 */}
         <div className="article-body">
           <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
-            {mdPart1}
+            {markdown}
           </ReactMarkdown>
         </div>
-
-        {galleryImages.length > 0 && (
-          <CardGallery images={galleryImages} title={article.title} />
-        )}
-
-        {mdPart2 && (
-          <div className="article-body">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
-              {mdPart2}
-            </ReactMarkdown>
-          </div>
-        )}
 
         {/* 원문 출처 — 신뢰 신호 */}
         {article.raw_source_url && (
