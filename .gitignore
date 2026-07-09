@@ -24,6 +24,9 @@
 .DS_Store
 *.pem
 
+# exports
+SHIN_export.zip
+
 # debug
 npm-debug.log*
 yarn-debug.log*
