@@ -21,11 +21,12 @@ export interface Article {
 
 export const CATEGORIES = [
   "전체",
-  "금융뉴스",
-  "생활경제",
-  "보상꿀팁",
-  "판례해설",
-  "천안소식",
+  "보험료 절약·꿀팁",
+  "보험금 청구·보상",
+  "실손·보장성 가이드",
+  "연금·노후·세테크",
+  "보험 리모델링",
+  "금융·경제 뉴스",
 ] as const;
 
 const ARTICLE_COLUMNS =

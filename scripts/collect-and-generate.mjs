@@ -25,9 +25,9 @@ const DAILY_LIMIT = Number(process.env.DAILY_ARTICLE_LIMIT ?? 2);
 
 /** 원천 소스 — 실패해도 다음 소스로 넘어감 */
 const SOURCES = [
-  { name: "금융감독원 보도자료", url: "https://www.fss.or.kr/fss/kr/rss/fss_news.xml", category: "금융뉴스" },
-  { name: "연합뉴스 경제", url: "https://www.yna.co.kr/rss/economy.xml", category: "생활경제" },
-  { name: "연합뉴스 금융", url: "https://www.yna.co.kr/rss/market.xml", category: "금융뉴스" },
+  { name: "금융감독원 보도자료", url: "https://www.fss.or.kr/fss/kr/rss/fss_news.xml", category: "금융·경제 뉴스" },
+  { name: "연합뉴스 경제", url: "https://www.yna.co.kr/rss/economy.xml", category: "금융·경제 뉴스" },
+  { name: "연합뉴스 금융", url: "https://www.yna.co.kr/rss/market.xml", category: "금융·경제 뉴스" },
 ];
 
 const supabase = createClient(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
