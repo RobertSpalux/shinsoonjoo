@@ -1,15 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 /** 기사 내 카드뉴스 가로 스크롤 갤러리 — 텍스트 피로를 끊고 체류시간을 늘리는 시각 블록 */
 export default function CardGallery({ images, title }: { images: string[]; title: string }) {
+  const reduceMotion = useReducedMotion();
+
   if (!images?.length) return null;
 
   return (
     <motion.figure
-      initial={{ opacity: 0, y: 20 }}
+      initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: 0.6 }}
@@ -19,7 +21,7 @@ export default function CardGallery({ images, title }: { images: string[]; title
         {images.map((src, i) => (
           <div
             key={src}
-            className="relative aspect-[4/5] w-64 flex-none snap-center overflow-hidden rounded-xl border border-[var(--color-line)] shadow-sm md:w-72"
+            className="relative aspect-[4/5] w-64 flex-none snap-center overflow-hidden rounded-lg border border-[var(--color-line)] md:w-72"
           >
             <Image
               src={src}
@@ -31,7 +33,7 @@ export default function CardGallery({ images, title }: { images: string[]; title
           </div>
         ))}
       </div>
-      <figcaption className="mt-1 text-center text-xs text-slate-400">
+      <figcaption className="mt-1 text-center text-xs text-[var(--color-text-muted)]">
         ← 옆으로 넘겨보세요 · 저장해두고 필요할 때 꺼내보세요
       </figcaption>
     </motion.figure>

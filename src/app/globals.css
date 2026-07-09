@@ -68,8 +68,10 @@ html {
 }
 .article-body h2 {
   color: var(--color-text-strong);
+  font-family: var(--font-serif);
   font-size: 1.5rem;
-  font-weight: 700;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 2.5rem 0 1rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--color-line);
@@ -81,7 +83,7 @@ html {
   margin: 2rem 0 0.75rem;
 }
 .article-body p {
-  margin: 1rem 0;
+  margin: 1.25rem 0;
 }
 .article-body ul,
 .article-body ol {
@@ -101,12 +103,23 @@ html {
   color: var(--color-text-strong);
   font-weight: 700;
 }
+/* 풀아웃 인용 ("신순주의 한 줄 조언") — 골드 헤어라인 + 세리프 이탤릭 */
 .article-body blockquote {
-  border-left: 2px solid var(--color-gold);
-  padding: 0.25rem 0 0.25rem 1.25rem;
-  margin: 1.75rem 0;
-  color: var(--color-text-muted);
+  margin: 2.5rem 0;
+  padding: 0;
+  font-family: var(--font-serif);
   font-style: italic;
+  font-size: 1.125rem;
+  line-height: 1.7;
+  color: var(--color-text-strong);
+}
+.article-body blockquote::before {
+  content: "";
+  display: block;
+  width: 40px;
+  height: 1px;
+  background: var(--color-gold);
+  margin-bottom: 1rem;
 }
 .article-body a {
   color: var(--color-gold);
