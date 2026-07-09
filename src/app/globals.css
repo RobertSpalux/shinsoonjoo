@@ -2,24 +2,41 @@
 
 @theme inline {
   --color-background: #faf9f6;
-  --color-foreground: #1e293b;
-  /* 라이트 테마 전환 — 변수명은 유지하고 값만 교체 (컴포넌트 호환) */
+  --color-foreground: #221e18;
+  /* 라이트 테마 — 변수명은 유지하고 값만 교체 (컴포넌트 호환) */
   --color-ink: #faf9f6;        /* 페이지 배경: 웜 아이보리 */
   --color-ink-soft: #f3efe7;   /* 교차 섹션 배경 */
   --color-ink-card: #ffffff;   /* 카드 배경 */
   --color-line: #e8e2d6;       /* 보더 */
-  --color-gold: #a8842c;       /* 딥 샴페인 (라이트 배경 가독) */
-  --color-gold-light: #c09b3a; /* 호버 */
-  --color-gold-dim: #d9c893;   /* 은은한 보더/포인트 */
+  /* 텍스트 — 웜 차콜 (DESIGN-SPEC 1-2, B안) */
+  --color-text-strong: #221e18;       /* 헤딩·주CTA 배경 = '확신에 찬 액센트' */
+  --color-text-strong-hover: #3a342b; /* 주CTA hover 배경 */
+  --color-text-body: #48423a;         /* 본문. 이보다 연한 본문 금지 (가독성) */
+  --color-text-muted: #6b6457;        /* 캡션·라벨·메타 전용 */
+  --color-gold: #a8842c;      /* ⚠️ 얇은 선·작은 마크 전용. 면 채움(버튼·배경·헤딩 단어색) 금지 */
+  --color-gold-light: #c09b3a; /* 골드 선·마크의 hover 전용 */
+  --color-gold-dim: #d9c893;   /* 은은한 보더·언더라인 */
   --font-sans: "Pretendard Variable", "Pretendard", system-ui, -apple-system, sans-serif;
   --font-serif: "Noto Serif KR", "Nanum Myeongjo", serif;
+  /* 반경 — 2단계 위계 (DESIGN-SPEC 3-2) */
+  --radius-lg: 16px; /* 카드·이미지 프레임·모달 */
+  --radius-sm: 8px;  /* 버튼·입력·태그 */
+  /* 그림자 — 기본은 1px 보더, 그림자는 최소 사용 (DESIGN-SPEC 3-3) */
+  --shadow-card: 0 2px 12px rgba(34, 30, 24, 0.06);
+  --shadow-lift: 0 10px 30px rgba(34, 30, 24, 0.1);
 }
 
 body {
   background: var(--color-ink);
-  color: #1e293b;
+  color: var(--color-text-strong);
   font-family: var(--font-sans);
   letter-spacing: -0.02em;
+}
+
+/* 키보드 포커스 링 (DESIGN-SPEC 4-0) — hover와 별개, 마우스 클릭엔 미표시 */
+:where(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
 }
 
 html {
@@ -39,18 +56,18 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #d6d0c4;
   border-radius: 3px;
 }
 
 /* 블로그 본문 (마크다운 렌더링) 타이포그래피 */
 .article-body {
-  color: #334155;
+  color: var(--color-text-body);
   line-height: 1.85;
   font-size: 1.0625rem;
 }
 .article-body h2 {
-  color: #0f172a;
+  color: var(--color-text-strong);
   font-size: 1.5rem;
   font-weight: 700;
   margin: 2.5rem 0 1rem;
@@ -58,7 +75,7 @@ html {
   border-top: 1px solid var(--color-line);
 }
 .article-body h3 {
-  color: #0f172a;
+  color: var(--color-text-strong);
   font-size: 1.2rem;
   font-weight: 700;
   margin: 2rem 0 0.75rem;
@@ -81,14 +98,14 @@ html {
   margin: 0.4rem 0;
 }
 .article-body strong {
-  color: var(--color-gold);
+  color: var(--color-text-strong);
   font-weight: 700;
 }
 .article-body blockquote {
   border-left: 2px solid var(--color-gold);
   padding: 0.25rem 0 0.25rem 1.25rem;
   margin: 1.75rem 0;
-  color: #64748b;
+  color: var(--color-text-muted);
   font-style: italic;
 }
 .article-body a {
@@ -110,5 +127,5 @@ html {
 }
 .article-body th {
   background: var(--color-ink-soft);
-  color: #0f172a;
+  color: var(--color-text-strong);
 }
