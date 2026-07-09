@@ -72,11 +72,11 @@ function TimelineItem({
         initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: isLeft ? -30 : 30 }}
         animate={isInView ? { opacity: 1, x: 0 } : {}}
         transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
-        className={`ml-14 w-full md:ml-0 md:w-[calc(50%-2.5rem)] ${
-          isLeft ? "md:mr-auto md:pr-8" : "md:ml-auto md:pl-8"
+        className={`ml-14 w-full md:ml-0 md:w-[calc(50%-1.5rem)] ${
+          isLeft ? "md:mr-auto md:pr-6" : "md:ml-auto md:pl-6"
         }`}
       >
-        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-ink-card)] p-7 transition-colors duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-8">
+        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-ink-card)] p-6 transition-colors duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-7">
           <span className="mb-1 block text-2xl font-semibold tracking-tight tabular-nums text-[var(--color-text-strong)]">
             {milestone.year}
           </span>
@@ -103,7 +103,7 @@ export default function Timeline() {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full bg-[var(--color-ink)] py-24 md:py-32"
+      className="relative w-full bg-[var(--color-ink)] py-20 md:py-24"
     >
       <div className="mx-auto max-w-6xl px-6 md:px-12 lg:px-20">
         {/* Section header */}
@@ -111,7 +111,7 @@ export default function Timeline() {
           initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7 }}
-          className="mb-20 text-center md:mb-28"
+          className="mb-12 text-center md:mb-16"
         >
           <p className="mb-8 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--color-text-muted)]">
             Philosophy & History
@@ -147,7 +147,7 @@ export default function Timeline() {
           {/* Mobile line */}
           <div className="absolute left-6 top-0 h-full w-px -translate-x-1/2 bg-[var(--color-line)] md:hidden" />
 
-          <div className="space-y-8 md:space-y-14">
+          <div className="space-y-4 md:space-y-7">
             {milestones.map((milestone, index) => (
               <TimelineItem
                 key={milestone.year}
