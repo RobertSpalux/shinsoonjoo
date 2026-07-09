@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { BRAND, getCareer } from "@/lib/brand";
 
 export const metadata: Metadata = {
@@ -27,27 +26,56 @@ const VALUES = [
 export default function RecruitPage() {
   const { years } = getCareer();
 
+  const proof = [
+    [`${years}년`, "보험 현장 경력"],
+    ["8년 연속", "우수인증설계사 · 2018년부터"],
+    ["0건", "불완전판매 · 인증 필수 요건"],
+    ["GA명장", "보험GA협회 인증 · 언론보도"],
+  ];
+
   return (
     <main className="min-h-screen bg-[var(--color-ink)] pt-16">
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-28">
-        <div className="max-w-2xl">
-          <p className="mb-4 text-xs font-semibold tracking-[0.08em] text-[var(--color-text-muted)]">
-            JOIN US — {BRAND.company}
-          </p>
-          <h1 className="mb-6 font-serif text-3xl font-semibold leading-[1.22] tracking-[-0.015em] text-[var(--color-text-strong)] md:text-5xl">
-            수수료가 아니라
-            <br />
-            <span className="text-[var(--color-forest)]">사람을 남기는 일</span>을
-            배우고 싶다면
-          </h1>
-          <p className="max-w-lg text-[15px] leading-relaxed text-[var(--color-text-body)]">
-            보험영업은 &ldquo;약속이자 누군가의 삶을 지키는 사명&rdquo;입니다.
-            {years}년을 그렇게 일해온 GA명장의 팀에서, 오래 가는 설계사의 길을
-            시작하세요. 경력·신입 모두 환영합니다.
-          </p>
+        {/* 히어로 — 좌 선언 텍스트 / 우 딥그린 증거 카드 */}
+        <div className="grid grid-cols-1 gap-12 md:grid-cols-2 md:items-center md:gap-16">
+          <div>
+            <p className="mb-4 text-xs font-semibold tracking-[0.08em] text-[var(--color-text-muted)]">
+              경력·신입 설계사 상시 채용 · GA명장 직속
+            </p>
+            <h1 className="mb-6 font-serif text-3xl font-semibold leading-[1.22] tracking-[-0.015em] text-[var(--color-text-strong)] md:text-5xl">
+              보험 한 건이,
+              <br />
+              <span className="text-[var(--color-forest)]">한 가족의 위기</span>를 막습니다
+            </h1>
+            <p className="max-w-lg text-[15px] leading-relaxed text-[var(--color-text-body)]">
+              그래서 이 일은 영업이 아니라 사명입니다. {years}년간 그 최전선을
+              지켜온 GA명장의 팀에서, 오래 가는 설계사의 길을 함께 시작하세요.
+              경력·신입 모두 환영합니다.
+            </p>
+          </div>
+
+          <div className="overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] px-8 py-9 md:px-10 md:py-10">
+            <span aria-hidden className="mb-5 block h-px w-6 bg-[var(--color-gold)]" />
+            <p className="mb-5 text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]/70">
+              검증된 신뢰
+            </p>
+            <div className="divide-y divide-[rgba(250,249,246,0.14)]">
+              {proof.map(([big, small]) => (
+                <div key={small} className="flex items-baseline justify-between gap-4 py-4 first:pt-0 last:pb-0">
+                  <span className="font-serif text-2xl font-semibold tabular-nums text-[var(--color-ink)]">
+                    {big}
+                  </span>
+                  <span className="text-right text-sm leading-snug text-[var(--color-ink)]/75">
+                    {small}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
+        {/* 가치 3 */}
+        <div className="mt-16 grid grid-cols-1 gap-6 md:mt-24 md:grid-cols-3">
           {VALUES.map((v, i) => (
             <div
               key={v.title}
@@ -64,22 +92,27 @@ export default function RecruitPage() {
           ))}
         </div>
 
-        {/* 최종 CTA — 딥그린 밴드 */}
+        {/* 최종 CTA — 딥그린 밴드, 카카오톡 채널 연결 */}
         <div className="mt-16 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] px-7 py-12 text-center md:mt-20 md:px-12 md:py-16">
           <span aria-hidden className="mx-auto mb-5 block h-px w-6 bg-[var(--color-gold)]" />
+          <p className="mb-3 text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]/70">
+            경력·신입 설계사 상시 채용
+          </p>
           <h2 className="font-serif text-2xl font-semibold leading-[1.3] text-[var(--color-ink)] md:text-[2rem]">
-            먼저 커피 한 잔부터 시작하죠
+            이 길이, 당신의 소명일지 모릅니다
           </h2>
           <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-[var(--color-ink)]/80">
-            이력서 없이도 괜찮습니다. 천안 지사에서 이 일이 나와 맞는지
-            지사장과 직접 이야기해 보세요.
+            정식 지원 전에, 이 일이 나와 맞는지 지사장과 먼저 대화해 보세요.
+            카카오톡으로 편하게 물어보셔도 됩니다.
           </p>
-          <Link
-            href="/#consultation"
+          <a
+            href={BRAND.social.kakao}
+            target="_blank"
+            rel="noopener noreferrer"
             className="mt-8 inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-ink)] px-7 py-3.5 text-sm font-semibold text-[var(--color-forest)] transition-transform duration-300 hover:-translate-y-px"
           >
-            채용 상담 신청하기
-          </Link>
+            카카오톡으로 채용 문의하기
+          </a>
         </div>
       </section>
     </main>
