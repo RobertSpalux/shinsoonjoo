@@ -10,6 +10,12 @@ export const BRAND = {
   title: "지사장",
   company: "프라임에셋 140본부 천안3지점",
   region: "천안 · 충남 · 전남",
+  phone: "041-572-0372",
+  address: "충남 천안시 서북구 월봉7길 18 202호 프라임에셋",
+  social: {
+    instagram: "https://www.instagram.com/goodfinance_sj/",
+    kakao: "http://pf.kakao.com/_xoxdBwX",
+  },
   careerStart: new Date("2003-07-01T00:00:00+09:00"),
   credentials: [
     "2025 우수인증설계사 (2018년부터 8년 연속)",
