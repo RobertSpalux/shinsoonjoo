@@ -65,8 +65,7 @@ export default function HeroSection() {
 
           <motion.div {...fadeUp(0.45)} className="mb-12">
             <p className="mb-4 text-sm text-[var(--color-text-muted)]">
-              &ldquo;저를 믿으세요&rdquo;라고 말하지 않습니다. 계약 전체를
-              분석한 결과로 증명합니다.
+              지금 내고 있는 보험료, 제대로 쓰이고 있을까요?
             </p>
             <div className="flex flex-wrap items-center gap-x-7 gap-y-4">
               <Link
