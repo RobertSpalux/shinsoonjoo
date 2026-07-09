@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useInView } from "framer-motion";
+import { motion, useInView, useReducedMotion } from "framer-motion";
 import { useRef } from "react";
 import { getCareer } from "@/lib/brand";
 
@@ -27,9 +27,8 @@ const milestones = [
   },
   {
     year: "현재",
-    title: "프라임에셋 140본부 천안3지점 지사장",
-    description:
-      `${years}년의 경험과 철학을 바탕으로, 지점을 이끌며 후배 양성과 고객 자산 보호에 매진 중.`,
+    title: "지사장 취임",
+    description: `${years}년의 경험과 철학을 바탕으로, 지점을 이끌며 후배 양성과 고객 자산 보호에 매진 중.`,
   },
 ];
 
@@ -42,6 +41,7 @@ function TimelineItem({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-80px" });
+  const reduceMotion = useReducedMotion();
   const isLeft = index % 2 === 0;
 
   return (
@@ -53,7 +53,7 @@ function TimelineItem({
     >
       {/* Desktop center dot */}
       <motion.div
-        initial={{ scale: 0 }}
+        initial={reduceMotion ? { scale: 1 } : { scale: 0 }}
         animate={isInView ? { scale: 1 } : {}}
         transition={{ duration: 0.4, delay: 0.2 }}
         className="absolute left-1/2 top-10 z-10 hidden h-3 w-3 -translate-x-1/2 rounded-full border-2 border-[var(--color-gold)] bg-white md:block"
@@ -61,7 +61,7 @@ function TimelineItem({
 
       {/* Mobile dot */}
       <motion.div
-        initial={{ scale: 0 }}
+        initial={reduceMotion ? { scale: 1 } : { scale: 0 }}
         animate={isInView ? { scale: 1 } : {}}
         transition={{ duration: 0.4, delay: 0.2 }}
         className="absolute left-6 top-10 z-10 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-[var(--color-gold)] bg-white md:hidden"
@@ -69,21 +69,24 @@ function TimelineItem({
 
       {/* Card */}
       <motion.div
-        initial={{ opacity: 0, x: isLeft ? -30 : 30 }}
+        initial={reduceMotion ? { opacity: 1, x: 0 } : { opacity: 0, x: isLeft ? -30 : 30 }}
         animate={isInView ? { opacity: 1, x: 0 } : {}}
         transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
         className={`ml-14 w-full md:ml-0 md:w-[calc(50%-2.5rem)] ${
           isLeft ? "md:mr-auto md:pr-8" : "md:ml-auto md:pl-8"
         }`}
       >
-        <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-7 shadow-lg shadow-slate-300/60 transition-all duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-8">
-          <span className="mb-1 block text-2xl font-extrabold tracking-tight text-slate-900">
+        <div className="rounded-lg border border-[var(--color-line)] bg-[var(--color-ink-card)] p-7 transition-colors duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-8">
+          <span className="mb-1 block text-2xl font-semibold tracking-tight tabular-nums text-[var(--color-text-strong)]">
             {milestone.year}
           </span>
-          <h3 className="mb-3 text-sm font-bold text-slate-600">
+          <h3
+            className="mb-3 text-[15px] font-semibold text-[var(--color-text-strong)]"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
             {milestone.title}
           </h3>
-          <p className="text-sm font-medium leading-relaxed text-slate-600">
+          <p className="text-sm leading-relaxed text-[var(--color-text-body)]">
             {milestone.description}
           </p>
         </div>
@@ -95,6 +98,7 @@ function TimelineItem({
 export default function Timeline() {
   const sectionRef = useRef<HTMLElement>(null);
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
+  const reduceMotion = useReducedMotion();
 
   return (
     <section
@@ -104,28 +108,31 @@ export default function Timeline() {
       <div className="mx-auto max-w-6xl px-6 md:px-12 lg:px-20">
         {/* Section header */}
         <motion.div
-          initial={{ opacity: 0, y: 24 }}
+          initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
           animate={isInView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7 }}
           className="mb-20 text-center md:mb-28"
         >
-          <p className="mb-8 text-xs font-semibold tracking-[0.25em] uppercase text-slate-500">
+          <p className="mb-8 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--color-text-muted)]">
             Philosophy & History
           </p>
 
           <blockquote className="mx-auto max-w-2xl">
             <div className="mx-auto mb-6 h-px w-10 bg-[var(--color-line)]" />
-            <p className="text-2xl font-extrabold leading-snug tracking-tight text-slate-900 md:text-3xl lg:text-[2.5rem]">
+            <p
+              className="text-2xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-text-strong)] md:text-3xl lg:text-[2.5rem]"
+              style={{ fontFamily: "var(--font-serif)" }}
+            >
               보험영업은 단순한 판매가 아니라
               <br />
               사람의 미래를 책임지는
               <br />
-              <span className="font-black underline decoration-[var(--color-gold-dim)] decoration-1 underline-offset-4">
+              <span className="underline decoration-[var(--color-gold-dim)] decoration-1 underline-offset-4">
                 사명
               </span>
               입니다.
             </p>
-            <cite className="mt-6 block text-sm font-semibold tracking-wider text-slate-500 not-italic">
+            <cite className="mt-6 block text-sm font-medium text-[var(--color-text-muted)] not-italic">
               — 신순주 지사장
             </cite>
             <div className="mx-auto mt-6 h-px w-10 bg-[var(--color-line)]" />
