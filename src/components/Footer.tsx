@@ -1,6 +1,25 @@
 import Link from "next/link";
-import { Instagram } from "lucide-react";
 import { BRAND, getCareer } from "@/lib/brand";
+
+/** 인스타그램 — 라인 마크 (lucide 1.x에서 브랜드 아이콘이 제거되어 인라인 SVG 사용) */
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  );
+}
 
 /** 카카오톡 채널 — 심플 말풍선 라인 마크 */
 function KakaoIcon({ className }: { className?: string }) {
@@ -43,7 +62,7 @@ export default function Footer() {
                 aria-label="인스타그램"
                 className="text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-strong)]"
               >
-                <Instagram className="h-4 w-4" strokeWidth={1.8} />
+                <InstagramIcon className="h-4 w-4" />
               </a>
               <a
                 href={BRAND.social.kakao}
