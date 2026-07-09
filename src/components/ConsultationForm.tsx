@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { motion, useInView, AnimatePresence, useReducedMotion } from "framer-motion";
-import { getCareer } from "@/lib/brand";
+import { BRAND, getCareer } from "@/lib/brand";
 
 const categories = [
   "종신보험·사망보장",
@@ -118,9 +118,12 @@ export default function ConsultationForm() {
                 </div>
                 <div>
                   <p className="text-xs text-[var(--color-text-muted)]">전화 상담</p>
-                  <p className="text-sm font-semibold tabular-nums text-[var(--color-text-strong)]">
-                    010-XXXX-XXXX
-                  </p>
+                  <a
+                    href={`tel:${BRAND.phone}`}
+                    className="text-sm font-semibold tabular-nums text-[var(--color-text-strong)]"
+                  >
+                    {BRAND.phone}
+                  </a>
                 </div>
               </div>
               <div className="flex items-center gap-3">
