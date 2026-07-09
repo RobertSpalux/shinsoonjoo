@@ -76,14 +76,14 @@ function TimelineItem({
           isLeft ? "md:mr-auto md:pr-8" : "md:ml-auto md:pl-8"
         }`}
       >
-        <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-7 shadow-lg shadow-black/40 transition-all duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-8">
-          <span className="mb-1 block text-2xl font-extrabold tracking-tight text-white">
+        <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-7 shadow-lg shadow-slate-300/60 transition-all duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-8">
+          <span className="mb-1 block text-2xl font-extrabold tracking-tight text-slate-900">
             {milestone.year}
           </span>
-          <h3 className="mb-3 text-sm font-bold text-zinc-400">
+          <h3 className="mb-3 text-sm font-bold text-slate-600">
             {milestone.title}
           </h3>
-          <p className="text-sm font-medium leading-relaxed text-zinc-400">
+          <p className="text-sm font-medium leading-relaxed text-slate-600">
             {milestone.description}
           </p>
         </div>
@@ -109,13 +109,13 @@ export default function Timeline() {
           transition={{ duration: 0.7 }}
           className="mb-20 text-center md:mb-28"
         >
-          <p className="mb-8 text-xs font-semibold tracking-[0.25em] uppercase text-zinc-500">
+          <p className="mb-8 text-xs font-semibold tracking-[0.25em] uppercase text-slate-500">
             Philosophy & History
           </p>
 
           <blockquote className="mx-auto max-w-2xl">
             <div className="mx-auto mb-6 h-px w-10 bg-[var(--color-line)]" />
-            <p className="text-2xl font-extrabold leading-snug tracking-tight text-white md:text-3xl lg:text-[2.5rem]">
+            <p className="text-2xl font-extrabold leading-snug tracking-tight text-slate-900 md:text-3xl lg:text-[2.5rem]">
               보험영업은 단순한 판매가 아니라
               <br />
               사람의 미래를 책임지는
@@ -125,7 +125,7 @@ export default function Timeline() {
               </span>
               입니다.
             </p>
-            <cite className="mt-6 block text-sm font-semibold tracking-wider text-zinc-500 not-italic">
+            <cite className="mt-6 block text-sm font-semibold tracking-wider text-slate-500 not-italic">
               — 신순주 지사장
             </cite>
             <div className="mx-auto mt-6 h-px w-10 bg-[var(--color-line)]" />

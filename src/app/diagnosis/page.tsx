@@ -19,10 +19,10 @@ export default function DiagnosisPage() {
           <p className="mb-4 text-xs font-semibold tracking-[0.25em] uppercase text-[var(--color-gold)]">
             Asset Defense Check
           </p>
-          <h1 className="mb-4 text-3xl font-extrabold leading-tight tracking-tight text-white md:text-4xl">
+          <h1 className="mb-4 text-3xl font-extrabold leading-tight tracking-tight text-slate-900 md:text-4xl">
             내 자산, 위기에 얼마나 버틸까?
           </h1>
-          <p className="text-sm leading-relaxed text-zinc-400">
+          <p className="text-sm leading-relaxed text-slate-600">
             질문 4개, 3분이면 끝납니다. 플랫폼의 자동 분석이 아닌
             <br className="hidden md:block" />
             {years}년 현장 경험의 눈으로 직접 봐드립니다.
@@ -39,7 +39,7 @@ export default function DiagnosisPage() {
           ].map(([big, small]) => (
             <div key={small}>
               <p className="text-sm font-bold text-[var(--color-gold-light)]">{big}</p>
-              <p className="mt-1 text-[11px] text-zinc-600">{small}</p>
+              <p className="mt-1 text-[11px] text-slate-400">{small}</p>
             </div>
           ))}
         </div>

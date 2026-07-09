@@ -43,12 +43,12 @@ export default function TrustSection() {
           <p className="mb-4 text-xs font-semibold tracking-[0.25em] uppercase text-[var(--color-gold)]">
             Verified Trust
           </p>
-          <h2 className="mb-5 text-3xl font-extrabold leading-tight tracking-tight text-white md:text-4xl">
+          <h2 className="mb-5 text-3xl font-extrabold leading-tight tracking-tight text-slate-900 md:text-4xl">
             말이 아니라,
             <br />
             <span className="text-[var(--color-gold)]">조회되는 신뢰</span>입니다
           </h2>
-          <p className="text-[15px] leading-relaxed text-zinc-400">
+          <p className="text-[15px] leading-relaxed text-slate-600">
             보험 앱들은 상담사가 누구인지 알려주지 않습니다. 저는 반대로 갑니다 —
             이름, 경력 {years}년({days.toLocaleString("ko-KR")}일), 인증 이력 전부를
             공개하고, 제3자 기관에서 직접 확인하실 수 있게 합니다.
@@ -70,8 +70,8 @@ export default function TrustSection() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 01-1.043 3.296 3.745 3.745 0 01-3.296 1.043A3.745 3.745 0 0112 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 01-3.296-1.043 3.745 3.745 0 01-1.043-3.296A3.745 3.745 0 013 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 011.043-3.296 3.746 3.746 0 013.296-1.043A3.746 3.746 0 0112 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 013.296 1.043 3.746 3.746 0 011.043 3.296A3.745 3.745 0 0121 12z" />
                 </svg>
               </div>
-              <h3 className="mb-3 text-lg font-bold text-white">{p.label}</h3>
-              <p className="mb-5 flex-1 text-sm leading-relaxed text-zinc-400">{p.desc}</p>
+              <h3 className="mb-3 text-lg font-bold text-slate-900">{p.label}</h3>
+              <p className="mb-5 flex-1 text-sm leading-relaxed text-slate-600">{p.desc}</p>
               {p.link && (
                 <a
                   href={p.link.href}

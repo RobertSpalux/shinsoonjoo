@@ -107,6 +107,7 @@ export async function POST(request: Request) {
         category: article.category,
         summary: article.summary,
         tags: article.tags,
+        key_points: article.key_points ?? [],
         raw_source_url: source_url ?? null,
         raw_source_name: source_name ?? null,
         raw_source_excerpt: content.trim().slice(0, 2000),

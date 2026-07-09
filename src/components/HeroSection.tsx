@@ -36,7 +36,7 @@ export default function HeroSection() {
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.15 }}
-            className="mb-5 text-xs font-semibold tracking-[0.25em] uppercase text-zinc-500"
+            className="mb-5 text-xs font-semibold tracking-[0.25em] uppercase text-slate-500"
           >
             {BRAND.siteNameEn}
           </motion.p>
@@ -45,7 +45,7 @@ export default function HeroSection() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.25 }}
-            className="mb-7 text-[2.5rem] font-extrabold leading-tight tracking-tight text-white md:text-5xl lg:text-[3.4rem]"
+            className="mb-7 text-[2.5rem] font-extrabold leading-tight tracking-tight text-slate-900 md:text-5xl lg:text-[3.4rem]"
           >
             {years}년, {days.toLocaleString("ko-KR")}일.
             <br />
@@ -62,15 +62,15 @@ export default function HeroSection() {
             className="mb-9 max-w-lg border-l-2 border-[var(--color-gold-dim)] pl-5"
           >
             <p
-              className="text-[15px] leading-relaxed text-zinc-300"
+              className="text-[15px] leading-relaxed text-slate-700"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               &ldquo;{BRAND.verse.text}&rdquo;
-              <span className="mt-1 block text-xs text-zinc-500">
+              <span className="mt-1 block text-xs text-slate-500">
                 — {BRAND.verse.ref}
               </span>
             </p>
-            <p className="mt-3 text-sm font-medium leading-relaxed text-zinc-400">
+            <p className="mt-3 text-sm font-medium leading-relaxed text-slate-600">
               {BRAND.verse.tagline}
             </p>
           </motion.blockquote>
@@ -83,7 +83,7 @@ export default function HeroSection() {
           >
             <Link
               href="/diagnosis"
-              className="inline-flex items-center gap-3 rounded-full bg-[var(--color-gold)] px-8 py-4 text-sm font-bold tracking-wide text-black transition-all duration-300 hover:bg-[var(--color-gold-light)] hover:shadow-xl hover:shadow-[var(--color-gold)]/20"
+              className="inline-flex items-center gap-3 rounded-full bg-[var(--color-gold)] px-8 py-4 text-sm font-bold tracking-wide text-white transition-all duration-300 hover:bg-[var(--color-gold-light)] hover:shadow-xl hover:shadow-[var(--color-gold)]/20"
             >
               내 자산 방어력 진단하기
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -92,7 +92,7 @@ export default function HeroSection() {
             </Link>
             <a
               href="#consultation"
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-700 px-7 py-4 text-sm font-semibold text-zinc-300 transition-all duration-300 hover:border-[var(--color-gold-dim)] hover:text-[var(--color-gold-light)]"
+              className="inline-flex items-center gap-2 rounded-full border border-slate-300 px-7 py-4 text-sm font-semibold text-slate-700 transition-all duration-300 hover:border-[var(--color-gold-dim)] hover:text-[var(--color-gold-light)]"
             >
               1:1 상담 예약
             </a>
@@ -120,12 +120,12 @@ export default function HeroSection() {
         >
           <div className="relative aspect-[3/4] w-full max-w-sm">
             <div className="absolute -inset-3 rounded-2xl border border-[var(--color-gold-dim)]/30" />
-            <div className="relative h-full w-full overflow-hidden rounded-2xl bg-zinc-900">
+            <div className="relative h-full w-full overflow-hidden rounded-2xl bg-slate-200">
               <Image
                 src="/soonjoo.jpg"
                 alt={`${BRAND.personName} ${BRAND.title} — ${BRAND.company}`}
                 fill
-                className="object-cover object-top grayscale-[35%]"
+                className="object-cover object-top grayscale-[20%]"
                 priority
                 sizes="(max-width: 768px) 100vw, 40vw"
               />

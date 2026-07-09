@@ -35,21 +35,21 @@ export default function AdminLogin() {
         onSubmit={login}
         className="w-full max-w-sm rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-8"
       >
-        <h1 className="mb-1 text-lg font-bold text-white">관리자 로그인</h1>
-        <p className="mb-6 text-xs text-zinc-500">신순주의 선한 금융 · 운영 콘솔</p>
+        <h1 className="mb-1 text-lg font-bold text-slate-900">관리자 로그인</h1>
+        <p className="mb-6 text-xs text-slate-500">신순주의 선한 금융 · 운영 콘솔</p>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="관리자 비밀번호"
           autoFocus
-          className="mb-4 w-full rounded-xl border border-[var(--color-line)] bg-black/40 px-4 py-3.5 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-[var(--color-gold)]"
+          className="mb-4 w-full rounded-xl border border-[var(--color-line)] bg-white px-4 py-3.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-[var(--color-gold)]"
         />
         {error && <p className="mb-4 text-xs text-red-400">{error}</p>}
         <button
           type="submit"
           disabled={loading || !password}
-          className="w-full rounded-full bg-[var(--color-gold)] py-3.5 text-sm font-bold text-black transition-all hover:bg-[var(--color-gold-light)] disabled:opacity-40"
+          className="w-full rounded-full bg-[var(--color-gold)] py-3.5 text-sm font-bold text-white transition-all hover:bg-[var(--color-gold-light)] disabled:opacity-40"
         >
           {loading ? "확인 중..." : "로그인"}
         </button>

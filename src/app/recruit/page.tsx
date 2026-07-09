@@ -34,13 +34,13 @@ export default function RecruitPage() {
           <p className="mb-4 text-xs font-semibold tracking-[0.25em] uppercase text-[var(--color-gold)]">
             Join Us — {BRAND.company}
           </p>
-          <h1 className="mb-6 text-3xl font-extrabold leading-tight tracking-tight text-white md:text-5xl">
+          <h1 className="mb-6 text-3xl font-extrabold leading-tight tracking-tight text-slate-900 md:text-5xl">
             수수료가 아니라
             <br />
             <span className="text-[var(--color-gold)]">사람을 남기는 일</span>을
             배우고 싶다면
           </h1>
-          <p className="max-w-lg text-[15px] leading-relaxed text-zinc-400">
+          <p className="max-w-lg text-[15px] leading-relaxed text-slate-600">
             보험영업은 &ldquo;약속이자 누군가의 삶을 지키는 사명&rdquo;입니다.
             {years}년을 그렇게 일해온 GA명장의 팀에서, 오래 가는 설계사의 길을
             시작하세요. 경력·신입 모두 환영합니다.
@@ -56,23 +56,23 @@ export default function RecruitPage() {
               <p className="mb-4 text-2xl font-extrabold text-[var(--color-gold-dim)]">
                 0{i + 1}
               </p>
-              <h2 className="mb-3 text-lg font-bold text-white">{v.title}</h2>
-              <p className="text-sm leading-relaxed text-zinc-400">{v.body}</p>
+              <h2 className="mb-3 text-lg font-bold text-slate-900">{v.title}</h2>
+              <p className="text-sm leading-relaxed text-slate-600">{v.body}</p>
             </div>
           ))}
         </div>
 
         <div className="mt-16 rounded-2xl border border-[var(--color-gold-dim)]/40 bg-gradient-to-br from-[var(--color-ink-card)] to-black p-8 text-center md:p-12">
-          <p className="text-lg font-bold text-white md:text-xl">
+          <p className="text-lg font-bold text-slate-900 md:text-xl">
             먼저 커피 한 잔부터 시작하죠
           </p>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-zinc-400">
+          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-600">
             이력서 없이도 괜찮습니다. 천안 지사에서 이 일이 나와 맞는지
             지사장과 직접 이야기해 보세요.
           </p>
           <Link
             href="/#consultation"
-            className="mt-6 inline-block rounded-full bg-[var(--color-gold)] px-8 py-4 text-sm font-bold text-black transition-all duration-300 hover:bg-[var(--color-gold-light)]"
+            className="mt-6 inline-block rounded-full bg-[var(--color-gold)] px-8 py-4 text-sm font-bold text-white transition-all duration-300 hover:bg-[var(--color-gold-light)]"
           >
             채용 상담 신청하기
           </Link>

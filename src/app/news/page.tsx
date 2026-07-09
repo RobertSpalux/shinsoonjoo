@@ -29,12 +29,12 @@ export default async function NewsPage({
           <p className="mb-4 text-xs font-semibold tracking-[0.25em] uppercase text-[var(--color-gold)]">
             Daily Financial Insight
           </p>
-          <h1 className="mb-5 text-3xl font-extrabold leading-tight tracking-tight text-white md:text-5xl">
+          <h1 className="mb-5 text-3xl font-extrabold leading-tight tracking-tight text-slate-900 md:text-5xl">
             어려운 금융 뉴스,
             <br />
             <span className="text-[var(--color-gold)]">전문가의 언어</span>로 다시 씁니다
           </h1>
-          <p className="text-[15px] leading-relaxed text-zinc-400">
+          <p className="text-[15px] leading-relaxed text-slate-600">
             금융감독원 보도자료·경제 뉴스·보험금 분쟁 판례를 23년 현장 경험으로 해설합니다.
             플랫폼의 익명 콘텐츠가 아닌, 이름을 걸고 쓰는 글입니다.
           </p>
@@ -48,8 +48,8 @@ export default async function NewsPage({
               href={cat === "전체" ? "/news" : `/news?category=${encodeURIComponent(cat)}`}
               className={`rounded-full border px-5 py-2 text-sm font-medium transition-all duration-300 ${
                 active === cat
-                  ? "border-[var(--color-gold)] bg-[var(--color-gold)] text-black"
-                  : "border-[var(--color-line)] text-zinc-400 hover:border-[var(--color-gold-dim)] hover:text-[var(--color-gold-light)]"
+                  ? "border-[var(--color-gold)] bg-[var(--color-gold)] text-white"
+                  : "border-[var(--color-line)] text-slate-600 hover:border-[var(--color-gold-dim)] hover:text-[var(--color-gold-light)]"
               }`}
             >
               {cat}
@@ -60,10 +60,10 @@ export default async function NewsPage({
         {/* 글 목록 */}
         {articles.length === 0 ? (
           <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] px-8 py-20 text-center">
-            <p className="text-lg font-semibold text-zinc-300">
+            <p className="text-lg font-semibold text-slate-700">
               콘텐츠 발행을 준비하고 있습니다
             </p>
-            <p className="mt-2 text-sm text-zinc-500">
+            <p className="mt-2 text-sm text-slate-500">
               매일 아침, 금융감독원 소식과 보상 판례 해설이 이곳에 자동 발행됩니다.
             </p>
           </div>

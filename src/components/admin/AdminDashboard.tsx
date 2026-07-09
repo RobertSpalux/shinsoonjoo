@@ -79,15 +79,15 @@ export default function AdminDashboard({
   };
 
   const selectCls =
-    "rounded-lg border border-[var(--color-line)] bg-black/40 px-2 py-1.5 text-xs text-white outline-none focus:border-[var(--color-gold)]";
+    "rounded-lg border border-[var(--color-line)] bg-white px-2 py-1.5 text-xs text-slate-900 outline-none focus:border-[var(--color-gold)]";
 
   return (
     <main className="min-h-screen bg-[var(--color-ink)] pt-16">
       <div className="mx-auto max-w-7xl px-6 py-10 md:px-12">
         <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-white">운영 콘솔</h1>
-            <p className="text-xs text-zinc-500">신순주의 선한 금융 · 관리자 전용</p>
+            <h1 className="text-xl font-bold text-slate-900">운영 콘솔</h1>
+            <p className="text-xs text-slate-500">신순주의 선한 금융 · 관리자 전용</p>
           </div>
           <div className="flex gap-2">
             {([
@@ -100,8 +100,8 @@ export default function AdminDashboard({
                 onClick={() => setTab(key)}
                 className={`rounded-full border px-4 py-2 text-xs font-semibold transition-all ${
                   tab === key
-                    ? "border-[var(--color-gold)] bg-[var(--color-gold)] text-black"
-                    : "border-[var(--color-line)] text-zinc-400 hover:text-white"
+                    ? "border-[var(--color-gold)] bg-[var(--color-gold)] text-white"
+                    : "border-[var(--color-line)] text-slate-600 hover:text-slate-900"
                 }`}
               >
                 {label}
@@ -118,9 +118,9 @@ export default function AdminDashboard({
               <div key={l.id} className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <span className="font-bold text-white">{l.name}</span>
+                    <span className="font-bold text-slate-900">{l.name}</span>
                     <a href={`tel:${l.phone}`} className="ml-3 text-sm text-[var(--color-gold-light)]">{l.phone}</a>
-                    <span className="ml-3 text-xs text-zinc-500">{fmtDate(l.created_at)} · 유입 {l.lead_source ?? "-"}</span>
+                    <span className="ml-3 text-xs text-slate-500">{fmtDate(l.created_at)} · 유입 {l.lead_source ?? "-"}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     {l.quiz_score != null && (
@@ -142,7 +142,7 @@ export default function AdminDashboard({
                   </div>
                 </div>
                 {l.quiz_responses && (
-                  <p className="mt-3 text-xs leading-relaxed text-zinc-500">
+                  <p className="mt-3 text-xs leading-relaxed text-slate-500">
                     {Object.entries(l.quiz_responses)
                       .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join("·") : v}`)
                       .join("  |  ")}
@@ -161,10 +161,10 @@ export default function AdminDashboard({
               <div key={c.id} className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-5">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <span className="font-bold text-white">{c.name}</span>
+                    <span className="font-bold text-slate-900">{c.name}</span>
                     <a href={`tel:${c.phone}`} className="ml-3 text-sm text-[var(--color-gold-light)]">{c.phone}</a>
-                    <span className="ml-3 rounded-full border border-[var(--color-line)] px-2.5 py-0.5 text-[11px] text-zinc-400">{c.category}</span>
-                    <span className="ml-3 text-xs text-zinc-500">{fmtDate(c.created_at)}</span>
+                    <span className="ml-3 rounded-full border border-[var(--color-line)] px-2.5 py-0.5 text-[11px] text-slate-600">{c.category}</span>
+                    <span className="ml-3 text-xs text-slate-500">{fmtDate(c.created_at)}</span>
                   </div>
                   <select
                     className={selectCls}
@@ -178,7 +178,7 @@ export default function AdminDashboard({
                     {CONSULT_STATUSES.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </div>
-                {c.message && <p className="mt-3 text-sm leading-relaxed text-zinc-400">{c.message}</p>}
+                {c.message && <p className="mt-3 text-sm leading-relaxed text-slate-600">{c.message}</p>}
               </div>
             ))}
           </div>
@@ -197,15 +197,15 @@ export default function AdminDashboard({
                     <a
                       href={`/news/${a.slug}`}
                       target="_blank"
-                      className="font-bold text-white hover:text-[var(--color-gold-light)]"
+                      className="font-bold text-slate-900 hover:text-[var(--color-gold-light)]"
                     >
                       {a.title}
                     </a>
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className="mt-1 text-xs text-slate-500">
                       {a.category} · 조회 {a.view_count} · {fmtDate(a.created_at)}
                     </p>
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-zinc-400">
+                  <label className="flex items-center gap-2 text-xs text-slate-600">
                     <input
                       type="checkbox"
                       checked={a.is_main_published}
@@ -231,7 +231,7 @@ export default function AdminDashboard({
                       className={`rounded-full border px-4 py-2 text-xs font-semibold transition-all ${
                         a.is_naver_published
                           ? "border-emerald-800 text-emerald-400"
-                          : "border-[var(--color-line)] text-zinc-300 hover:border-[var(--color-gold-dim)]"
+                          : "border-[var(--color-line)] text-slate-700 hover:border-[var(--color-gold-dim)]"
                       }`}
                     >
                       {copied === `n-${a.id}` ? "✓ 복사됨!" : a.is_naver_published ? "네이버 원고 다시 복사" : "네이버 원고 복사"}
@@ -247,7 +247,7 @@ export default function AdminDashboard({
                       className={`rounded-full border px-4 py-2 text-xs font-semibold transition-all ${
                         a.is_blogspot_published
                           ? "border-emerald-800 text-emerald-400"
-                          : "border-[var(--color-line)] text-zinc-300 hover:border-[var(--color-gold-dim)]"
+                          : "border-[var(--color-line)] text-slate-700 hover:border-[var(--color-gold-dim)]"
                       }`}
                     >
                       {copied === `b-${a.id}` ? "✓ 복사됨!" : a.is_blogspot_published ? "블로그스팟 다시 복사" : "블로그스팟 원고 복사"}
@@ -260,12 +260,12 @@ export default function AdminDashboard({
                           key={url}
                           href={url}
                           target="_blank"
-                          className="rounded-full border border-[var(--color-line)] px-3 py-2 text-xs text-zinc-400 hover:border-[var(--color-gold-dim)] hover:text-[var(--color-gold-light)]"
+                          className="rounded-full border border-[var(--color-line)] px-3 py-2 text-xs text-slate-600 hover:border-[var(--color-gold-dim)] hover:text-[var(--color-gold-light)]"
                         >
                           카드{i + 1}
                         </a>
                       ))}
-                      <label className="ml-1 flex items-center gap-2 text-xs text-zinc-400">
+                      <label className="ml-1 flex items-center gap-2 text-xs text-slate-600">
                         <input
                           type="checkbox"
                           checked={a.is_instagram_published}
@@ -292,7 +292,7 @@ export default function AdminDashboard({
 
 function Empty({ text }: { text: string }) {
   return (
-    <div className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] px-6 py-14 text-center text-sm text-zinc-500">
+    <div className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] px-6 py-14 text-center text-sm text-slate-500">
       {text}
     </div>
   );

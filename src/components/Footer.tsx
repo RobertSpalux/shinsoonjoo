@@ -9,21 +9,21 @@ export default function Footer() {
       <div className="mx-auto max-w-7xl px-6 py-14 md:px-12">
         <div className="flex flex-col gap-10 md:flex-row md:justify-between">
           <div>
-            <p className="text-lg font-bold text-white">{BRAND.siteName}</p>
+            <p className="text-lg font-bold text-slate-900">{BRAND.siteName}</p>
             <p className="mt-1 text-[10px] font-medium tracking-[0.22em] uppercase text-[var(--color-gold)]">
               {BRAND.siteNameEn}
             </p>
-            <p className="mt-5 max-w-sm text-sm leading-relaxed text-zinc-500">
+            <p className="mt-5 max-w-sm text-sm leading-relaxed text-slate-500">
               {BRAND.verse.tagline}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-10 text-sm md:gap-16">
             <div>
-              <p className="mb-3 text-xs font-semibold tracking-widest uppercase text-zinc-600">
+              <p className="mb-3 text-xs font-semibold tracking-widest uppercase text-slate-400">
                 Menu
               </p>
-              <ul className="space-y-2.5 text-zinc-400">
+              <ul className="space-y-2.5 text-slate-600">
                 <li><Link href="/news" className="hover:text-[var(--color-gold-light)]">금융소식</Link></li>
                 <li><Link href="/diagnosis" className="hover:text-[var(--color-gold-light)]">자산진단</Link></li>
                 <li><Link href="/recruit" className="hover:text-[var(--color-gold-light)]">인재채용</Link></li>
@@ -31,10 +31,10 @@ export default function Footer() {
               </ul>
             </div>
             <div>
-              <p className="mb-3 text-xs font-semibold tracking-widest uppercase text-zinc-600">
+              <p className="mb-3 text-xs font-semibold tracking-widest uppercase text-slate-400">
                 Profile
               </p>
-              <ul className="space-y-2.5 text-zinc-400">
+              <ul className="space-y-2.5 text-slate-600">
                 <li>{BRAND.company}</li>
                 <li>{BRAND.personName} {BRAND.title} · {years}년 차</li>
                 <li>우수인증설계사 8년 연속</li>
@@ -53,7 +53,7 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-[var(--color-line)] pt-6 text-[11px] leading-relaxed text-zinc-600">
+        <div className="mt-12 border-t border-[var(--color-line)] pt-6 text-[11px] leading-relaxed text-slate-400">
           <p>
             본 사이트의 콘텐츠는 금융 정보 제공을 목적으로 하며, 특정 상품의 권유가 아닙니다.
             보험 계약 체결 전 상품설명서와 약관을 반드시 확인하시기 바랍니다.

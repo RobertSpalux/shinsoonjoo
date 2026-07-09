@@ -7,6 +7,7 @@ export interface Article {
   category: string;
   summary: string | null;
   tags: string[];
+  key_points: string[] | null;
   raw_source_url: string | null;
   raw_source_name: string | null;
   main_website_markdown: string | null;
@@ -28,7 +29,7 @@ export const CATEGORIES = [
 ] as const;
 
 const ARTICLE_COLUMNS =
-  "id, title, slug, category, summary, tags, raw_source_url, raw_source_name, main_website_markdown, faq_json, image_paths, og_image_path, published_at, view_count, created_at";
+  "id, title, slug, category, summary, tags, key_points, raw_source_url, raw_source_name, main_website_markdown, faq_json, image_paths, og_image_path, published_at, view_count, created_at";
 
 function publicClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

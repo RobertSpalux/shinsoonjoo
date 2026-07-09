@@ -19,6 +19,7 @@ export function factorySystemPrompt() {
 - blogspot_content: 구글 블로그스팟용. 개조식(번호·불릿 중심), 롱테일 키워드를 소제목에 배치, 전문 용어와 근거 중심. 800~1200자.
 - carousel_json: 인스타/스레드 카드뉴스 8~10장. 1장은 강력한 훅(질문 or 충격 수치), 중간 장들은 장당 핵심 1개(제목 15자 이내 + 본문 2줄 이내), 마지막 장은 "저장하고 두고두고 보세요" CTA.
 - faq_json: 이 주제로 사람들이 실제 검색할 질문 3~5개와 간결한 답변 (FAQPage 리치 스니펫용).
+- key_points: 본문 전체를 대신 읽어주는 "핵심 3줄 요약" (각 40자 이내, 바쁜 독자가 이것만 읽어도 되게).
 - slug: 영문 소문자와 하이픈만 사용한 SEO 슬러그 (예: fss-insurance-claim-guide-2026).
 - summary: 검색 결과에 노출될 2문장 요약.
 - tags: 검색 키워드 3~6개.`;
@@ -33,6 +34,7 @@ export const FACTORY_OUTPUT_SCHEMA = {
     "category",
     "summary",
     "tags",
+    "key_points",
     "main_website_markdown",
     "naver_blog_content",
     "blogspot_content",
@@ -40,6 +42,11 @@ export const FACTORY_OUTPUT_SCHEMA = {
     "faq_json",
   ],
   properties: {
+    key_points: {
+      type: "array",
+      description: "핵심 3줄 요약 (각 40자 이내)",
+      items: { type: "string" },
+    },
     title: { type: "string", description: "검색 클릭을 부르는 한국어 제목 (32자 이내)" },
     slug: { type: "string", description: "영문 소문자-하이픈 SEO 슬러그" },
     category: {

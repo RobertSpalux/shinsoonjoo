@@ -1,22 +1,23 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: #050505;
-  --color-foreground: #f5f5f4;
-  --color-gold: #d4af37;
-  --color-gold-light: #e6c96b;
-  --color-gold-dim: #9a7f2a;
-  --color-ink: #050505;
-  --color-ink-soft: #0d0d0f;
-  --color-ink-card: #121214;
-  --color-line: #26262a;
+  --color-background: #faf9f6;
+  --color-foreground: #1e293b;
+  /* 라이트 테마 전환 — 변수명은 유지하고 값만 교체 (컴포넌트 호환) */
+  --color-ink: #faf9f6;        /* 페이지 배경: 웜 아이보리 */
+  --color-ink-soft: #f3efe7;   /* 교차 섹션 배경 */
+  --color-ink-card: #ffffff;   /* 카드 배경 */
+  --color-line: #e8e2d6;       /* 보더 */
+  --color-gold: #a8842c;       /* 딥 샴페인 (라이트 배경 가독) */
+  --color-gold-light: #c09b3a; /* 호버 */
+  --color-gold-dim: #d9c893;   /* 은은한 보더/포인트 */
   --font-sans: "Pretendard Variable", "Pretendard", system-ui, -apple-system, sans-serif;
   --font-serif: "Noto Serif KR", "Nanum Myeongjo", serif;
 }
 
 body {
   background: var(--color-ink);
-  color: var(--color-foreground);
+  color: #1e293b;
   font-family: var(--font-sans);
   letter-spacing: -0.02em;
 }
@@ -26,7 +27,7 @@ html {
 }
 
 ::selection {
-  background: rgba(212, 175, 55, 0.25);
+  background: rgba(168, 132, 44, 0.18);
 }
 
 ::-webkit-scrollbar {
@@ -38,18 +39,18 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
 /* 블로그 본문 (마크다운 렌더링) 타이포그래피 */
 .article-body {
-  color: #d4d4d8;
+  color: #334155;
   line-height: 1.85;
   font-size: 1.0625rem;
 }
 .article-body h2 {
-  color: #fafafa;
+  color: #0f172a;
   font-size: 1.5rem;
   font-weight: 700;
   margin: 2.5rem 0 1rem;
@@ -57,7 +58,7 @@ html {
   border-top: 1px solid var(--color-line);
 }
 .article-body h3 {
-  color: #fafafa;
+  color: #0f172a;
   font-size: 1.2rem;
   font-weight: 700;
   margin: 2rem 0 0.75rem;
@@ -80,18 +81,18 @@ html {
   margin: 0.4rem 0;
 }
 .article-body strong {
-  color: var(--color-gold-light);
+  color: var(--color-gold);
   font-weight: 700;
 }
 .article-body blockquote {
   border-left: 2px solid var(--color-gold);
   padding: 0.25rem 0 0.25rem 1.25rem;
   margin: 1.75rem 0;
-  color: #a1a1aa;
+  color: #64748b;
   font-style: italic;
 }
 .article-body a {
-  color: var(--color-gold-light);
+  color: var(--color-gold);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -108,6 +109,6 @@ html {
   text-align: left;
 }
 .article-body th {
-  background: var(--color-ink-card);
-  color: #fafafa;
+  background: var(--color-ink-soft);
+  color: #0f172a;
 }

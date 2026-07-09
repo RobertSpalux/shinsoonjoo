@@ -115,7 +115,7 @@ export default function DiagnosisQuiz() {
       {/* 진행 바 */}
       {step < 5 && (
         <div className="mb-10">
-          <div className="mb-2 flex justify-between text-[11px] font-medium tracking-wider text-zinc-500">
+          <div className="mb-2 flex justify-between text-[11px] font-medium tracking-wider text-slate-500">
             <span>{step < 4 ? `STEP ${step + 1} / 4` : "리포트 준비 완료"}</span>
             <span>{Math.min(Math.round(((step + 1) / 5) * 100), 100)}%</span>
           </div>
@@ -139,8 +139,8 @@ export default function DiagnosisQuiz() {
             exit={{ opacity: 0, x: -32 }}
             transition={{ duration: 0.35 }}
           >
-            <h2 className="mb-2 text-xl font-bold text-white md:text-2xl">{current.question}</h2>
-            <p className="mb-8 text-sm text-zinc-500">{current.hint}</p>
+            <h2 className="mb-2 text-xl font-bold text-slate-900 md:text-2xl">{current.question}</h2>
+            <p className="mb-8 text-sm text-slate-500">{current.hint}</p>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {current.options.map((opt) => {
@@ -156,7 +156,7 @@ export default function DiagnosisQuiz() {
                     className={`rounded-xl border px-5 py-4 text-left text-sm font-medium transition-all duration-300 ${
                       selected
                         ? "border-[var(--color-gold)] bg-[var(--color-gold)]/10 text-[var(--color-gold-light)]"
-                        : "border-[var(--color-line)] bg-[var(--color-ink-card)] text-zinc-300 hover:border-[var(--color-gold-dim)]/60"
+                        : "border-[var(--color-line)] bg-[var(--color-ink-card)] text-slate-700 hover:border-[var(--color-gold-dim)]/60"
                     }`}
                   >
                     {opt}
@@ -169,7 +169,7 @@ export default function DiagnosisQuiz() {
               <button
                 onClick={() => setStep((s) => s + 1)}
                 disabled={(answers.coverages ?? []).length === 0}
-                className="mt-8 w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold text-black transition-all duration-300 hover:bg-[var(--color-gold-light)] disabled:cursor-not-allowed disabled:opacity-30"
+                className="mt-8 w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold text-white transition-all duration-300 hover:bg-[var(--color-gold-light)] disabled:cursor-not-allowed disabled:opacity-30"
               >
                 다음 단계로
               </button>
@@ -178,7 +178,7 @@ export default function DiagnosisQuiz() {
             {step > 0 && (
               <button
                 onClick={() => setStep((s) => s - 1)}
-                className="mt-4 w-full text-center text-xs text-zinc-600 hover:text-zinc-400"
+                className="mt-4 w-full text-center text-xs text-slate-400 hover:text-slate-600"
               >
                 ← 이전 질문으로
               </button>
@@ -197,16 +197,16 @@ export default function DiagnosisQuiz() {
           >
             {/* 점수 티저 — 블러 처리로 궁금증 유발 */}
             <div className="relative mb-8 overflow-hidden rounded-2xl border border-[var(--color-gold-dim)]/40 bg-[var(--color-ink-card)] p-8 text-center">
-              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-zinc-500">
+              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
                 나의 자산 방어력
               </p>
               <p className="mt-3 text-5xl font-extrabold text-[var(--color-gold)] blur-md select-none" aria-hidden>
                 {score}점
               </p>
-              <p className="mt-3 text-sm text-zinc-400">
+              <p className="mt-3 text-sm text-slate-600">
                 진단이 완료되었습니다. 아래 정보를 남기시면
                 <br />
-                <strong className="text-white">{years}년 차 GA명장의 맞춤 해설 리포트</strong>를 보내드립니다.
+                <strong className="text-slate-900">{years}년 차 GA명장의 맞춤 해설 리포트</strong>를 보내드립니다.
               </p>
             </div>
 
@@ -216,16 +216,16 @@ export default function DiagnosisQuiz() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="성함"
-                className="w-full rounded-xl border border-[var(--color-line)] bg-black/40 px-4 py-3.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[var(--color-gold)] focus:ring-1 focus:ring-[var(--color-gold)]"
+                className="w-full rounded-xl border border-[var(--color-line)] bg-white px-4 py-3.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[var(--color-gold)] focus:ring-1 focus:ring-[var(--color-gold)]"
               />
               <input
                 type="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="연락처 (010-0000-0000)"
-                className="w-full rounded-xl border border-[var(--color-line)] bg-black/40 px-4 py-3.5 text-sm text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[var(--color-gold)] focus:ring-1 focus:ring-[var(--color-gold)]"
+                className="w-full rounded-xl border border-[var(--color-line)] bg-white px-4 py-3.5 text-sm text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-[var(--color-gold)] focus:ring-1 focus:ring-[var(--color-gold)]"
               />
-              <label className="flex items-start gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-xs leading-relaxed text-zinc-400">
+              <label className="flex items-start gap-3 rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-xs leading-relaxed text-slate-600">
                 <input
                   type="checkbox"
                   checked={agreed}
@@ -243,11 +243,11 @@ export default function DiagnosisQuiz() {
               <button
                 onClick={submit}
                 disabled={submitting}
-                className="w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold text-black transition-all duration-300 hover:bg-[var(--color-gold-light)] hover:shadow-lg hover:shadow-[var(--color-gold)]/20 disabled:opacity-40"
+                className="w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold text-white transition-all duration-300 hover:bg-[var(--color-gold-light)] hover:shadow-lg hover:shadow-[var(--color-gold)]/20 disabled:opacity-40"
               >
                 {submitting ? "전송 중..." : "무료 리포트 받고 결과 확인하기"}
               </button>
-              <p className="text-center text-[11px] text-zinc-600">
+              <p className="text-center text-[11px] text-slate-400">
                 상담 강요는 없습니다. 리포트만 받아보셔도 됩니다.
               </p>
             </div>
@@ -264,7 +264,7 @@ export default function DiagnosisQuiz() {
             className="text-center"
           >
             <div className="mb-8 rounded-2xl border border-[var(--color-gold-dim)]/40 bg-[var(--color-ink-card)] p-10">
-              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-zinc-500">
+              <p className="text-xs font-semibold tracking-[0.2em] uppercase text-slate-500">
                 나의 자산 방어력
               </p>
               <motion.p
@@ -275,7 +275,7 @@ export default function DiagnosisQuiz() {
               >
                 {score}<span className="text-2xl">점</span>
               </motion.p>
-              <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-zinc-400">
+              <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-slate-600">
                 {score >= 70
                   ? "기본기가 탄탄하시네요. 다만 선택하신 리스크 영역은 정밀 점검이 필요합니다."
                   : score >= 45
@@ -283,8 +283,8 @@ export default function DiagnosisQuiz() {
                     : "지금 구조로는 큰 위기 한 번에 자산이 흔들릴 수 있습니다. 빠른 점검을 권합니다."}
               </p>
             </div>
-            <p className="text-sm leading-relaxed text-zinc-400">
-              접수가 완료되었습니다. <strong className="text-white">24시간 이내</strong>에
+            <p className="text-sm leading-relaxed text-slate-600">
+              접수가 완료되었습니다. <strong className="text-slate-900">24시간 이내</strong>에
               {years}년 차 GA명장 신순주 지사장이 직접 맞춤 리포트와 함께 연락드립니다.
             </p>
           </motion.div>

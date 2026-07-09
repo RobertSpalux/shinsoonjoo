@@ -102,6 +102,7 @@ async function main() {
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1080, height: 1350, deviceScaleFactor: 1 });
+  page.setDefaultTimeout(60000);
 
   for (const article of articles) {
     const cards = Array.isArray(article.carousel_json) ? article.carousel_json : [];
@@ -119,7 +120,9 @@ async function main() {
         isHook: i === 0,
         isCta: i === cards.length - 1,
       });
-      await page.setContent(html, { waitUntil: "networkidle0", timeout: 30000 });
+      // networkidle0은 CDN 폰트 스트리밍 때문에 타임아웃될 수 있음 — 폰트 로딩을 직접 대기
+      await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.evaluateHandle("document.fonts.ready");
       const png = await page.screenshot({ type: "png" });
 
       const storagePath = `${article.slug}/card-${String(i + 1).padStart(2, "0")}.png`;
