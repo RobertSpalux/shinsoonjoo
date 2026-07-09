@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useInView, motion } from "framer-motion";
+import { useInView, motion, useReducedMotion } from "framer-motion";
 
 interface CountUpProps {
   end: number;
@@ -20,10 +20,16 @@ export default function CountUp({
   const ref = useRef<HTMLDivElement>(null);
   const isInView = useInView(ref, { once: true, margin: "-50px" });
   const hasAnimated = useRef(false);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     if (!isInView || hasAnimated.current) return;
     hasAnimated.current = true;
+
+    if (reduceMotion) {
+      setCount(end);
+      return;
+    }
 
     const startTime = performance.now();
 
@@ -39,21 +45,21 @@ export default function CountUp({
     }
 
     requestAnimationFrame(animate);
-  }, [isInView, end, duration]);
+  }, [isInView, end, duration, reduceMotion]);
 
   return (
     <motion.div
       ref={ref}
-      initial={{ opacity: 0, y: 16 }}
+      initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
       animate={isInView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.5, ease: "easeOut" }}
       className="flex flex-col"
     >
-      <span className="text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl">
+      <span className="text-3xl font-bold tracking-tight tabular-nums text-[var(--color-text-strong)] md:text-4xl">
         {count.toLocaleString("ko-KR")}
-        <span className="text-[var(--color-gold)]">{suffix}</span>
+        <span className="text-xl font-semibold md:text-2xl">{suffix}</span>
       </span>
-      <span className="mt-1.5 text-xs font-medium tracking-wider text-slate-500">
+      <span className="mt-1.5 text-xs font-medium text-[var(--color-text-muted)]">
         {label}
       </span>
     </motion.div>

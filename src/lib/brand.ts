@@ -17,6 +17,8 @@ export const BRAND = {
     "2007 동부생명 연도대상",
   ],
   pressUrl: "https://www.insweek.co.kr/news/articleView.html?idxno=68744",
+  /** 히어로 등 한 줄 표기용 짧은 마크 (credentials의 축약형) */
+  pressMarks: ["보험신보 보도", "우수인증설계사 8년 연속", "GA명장"],
   verse: {
     text: "하나님이 생명을 구원하시려고 나를 당신들보다 먼저 보내셨나이다",
     ref: "창세기 45:5",
