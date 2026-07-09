@@ -144,22 +144,6 @@ export default async function ArticlePage({
           </div>
         </header>
 
-        {/* 리드 이미지 — 카드 1번 (1080×1350). 없으면 생략 */}
-        {leadImage && (
-          <figure className="mb-10">
-            <div className="relative mx-auto aspect-[4/5] w-full max-w-md overflow-hidden rounded-lg border border-[var(--color-line)]">
-              <Image
-                src={leadImage}
-                alt={article.title}
-                fill
-                priority
-                className="object-cover"
-                sizes="(max-width: 768px) 100vw, 448px"
-              />
-            </div>
-          </figure>
-        )}
-
         {/* 핵심 3줄 요약 — 바쁜 독자를 붙잡는 첫 블록 */}
         {keyPoints.length > 0 && (
           <aside className="mb-8 rounded-lg border border-[var(--color-gold-dim)] bg-gradient-to-br from-[#fdf9ef] to-white p-6">
