@@ -27,7 +27,7 @@ export default function TrustSection() {
     },
     {
       label: `${years}년, 한 자리를 지켜온 신뢰`,
-      desc: `보험설계사 대부분이 몇 년 안에 자리를 옮기는 업계에서, ${years}년(${days.toLocaleString("ko-KR")}일)째 같은 자리에서 같은 고객을 지켜왔습니다. 오래 남는 사람이 끝까지 책임집니다.`,
+      desc: `보험설계사 대부분이 몇 년 안에 자리를 옮기는 업계에서, ${years}년째 같은 자리에서 같은 고객을 지켜왔습니다. 오래 남는 사람이 끝까지 책임집니다.`,
       link: null,
     },
   ];
