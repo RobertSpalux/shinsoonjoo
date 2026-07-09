@@ -13,6 +13,9 @@
   --color-text-strong-hover: #3a342b; /* 주CTA hover 배경 */
   --color-text-body: #48423a;         /* 본문. 이보다 연한 본문 금지 (가독성) */
   --color-text-muted: #6b6457;        /* 캡션·라벨·메타 전용 */
+  /* 딥 그린 — '대비 밴드' 전용 (DESIGN-SPEC 3-4). 전체 도배 금지 */
+  --color-forest: #1b3a30;      /* 딥 파인 — 대비 밴드 배경·주CTA·헤딩 잉크 */
+  --color-forest-soft: #24493d; /* hover·서브 밴드 */
   --color-gold: #a8842c;      /* ⚠️ 얇은 선·작은 마크 전용. 면 채움(버튼·배경·헤딩 단어색) 금지 */
   --color-gold-light: #c09b3a; /* 골드 선·마크의 hover 전용 */
   --color-gold-dim: #d9c893;   /* 은은한 보더·언더라인 */
