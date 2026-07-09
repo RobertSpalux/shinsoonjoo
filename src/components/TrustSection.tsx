@@ -11,7 +11,7 @@ import { BRAND, getCareer } from "@/lib/brand";
  */
 
 export default function TrustSection() {
-  const { years, days } = getCareer();
+  const { years } = getCareer();
   const reduceMotion = useReducedMotion();
 
   const proofs = [
@@ -53,16 +53,15 @@ export default function TrustSection() {
             className="mb-5 text-3xl font-semibold leading-[1.3] tracking-[-0.01em] text-[var(--color-forest)] md:text-4xl"
             style={{ fontFamily: "var(--font-serif)" }}
           >
-            말이 아니라,
+            관계가 아니라,
             <br />
-            조회되는 신뢰입니다
+            분석으로
           </h2>
           <p className="text-[15px] leading-relaxed text-[var(--color-text-body)]">
-            보험 앱들은 상담사가 누구인지 알려주지 않습니다. 저는 반대로 갑니다 —
-            이름, 경력 {years}년(
-            <span className="tabular-nums">{days.toLocaleString("ko-KR")}</span>
-            일), 인증 이력 전부를 공개하고, 원하시면 제3자 기관에서 직접
-            확인하실 수 있게 합니다.
+            &ldquo;아는 사람이라 믿고 맡겼는데&hellip;&rdquo; — 저를 찾아와 이렇게
+            말씀하시는 분이 많습니다. 담당자는 몇 번씩 바뀌고, 요청하신 증권을 열어
+            분석해보면 중복 가입·과한 설계·부족한 보장이 반복됩니다. 그 패턴을{" "}
+            {years}년간 바로잡으며, 직접 분석 시스템을 만들었습니다.
           </p>
         </motion.div>
 
