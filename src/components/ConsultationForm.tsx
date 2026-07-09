@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { motion, useInView, AnimatePresence } from "framer-motion";
+import { getCareer } from "@/lib/brand";
 
 const categories = [
   "종신보험·사망보장",
@@ -15,6 +16,7 @@ const categories = [
 type FormState = "idle" | "submitting" | "success" | "error";
 
 export default function ConsultationForm() {
+  const { years } = getCareer();
   const sectionRef = useRef<HTMLElement>(null);
   const isInView = useInView(sectionRef, { once: true, margin: "-80px" });
 
@@ -61,13 +63,13 @@ export default function ConsultationForm() {
   }
 
   const inputClass =
-    "w-full rounded-xl border border-slate-300 bg-white px-4 py-3.5 text-sm font-medium text-slate-900 outline-none transition-all placeholder:text-slate-400 focus:border-slate-900 focus:ring-1 focus:ring-slate-900";
+    "w-full rounded-xl border border-[var(--color-line)] bg-black/40 px-4 py-3.5 text-sm font-medium text-white outline-none transition-all placeholder:text-zinc-600 focus:border-[var(--color-gold)] focus:ring-1 focus:ring-[var(--color-gold)]";
 
   return (
     <section
       ref={sectionRef}
       id="consultation"
-      className="relative w-full bg-slate-900 py-24 md:py-32"
+      className="relative w-full bg-[var(--color-ink)] py-24 md:py-32"
     >
       <div className="mx-auto max-w-6xl px-6 md:px-12 lg:px-20">
         <div className="grid gap-16 md:grid-cols-2 md:gap-20">
@@ -78,23 +80,23 @@ export default function ConsultationForm() {
             transition={{ duration: 0.7 }}
             className="flex flex-col justify-center"
           >
-            <p className="mb-6 text-xs font-semibold tracking-[0.25em] uppercase text-slate-500">
+            <p className="mb-6 text-xs font-semibold tracking-[0.25em] uppercase text-zinc-500">
               Private Consultation
             </p>
             <h2 className="mb-6 text-3xl font-extrabold leading-snug tracking-tight text-white md:text-4xl">
               프라이빗 상담 예약
             </h2>
-            <p className="mb-8 text-[15px] font-medium leading-relaxed text-slate-400">
-              24년간 쌓아온 전문성으로 고객님의 상황에 맞는
+            <p className="mb-8 text-[15px] font-medium leading-relaxed text-zinc-400">
+              {years}년간 쌓아온 전문성으로 고객님의 상황에 맞는
               <br className="hidden md:block" />
               최적의 보장 설계를 제안해 드립니다.
               <br className="hidden md:block" />
               부담 없이 문의해 주세요.
             </p>
 
-            <div className="space-y-4 border-t border-slate-700 pt-8">
+            <div className="space-y-4 border-t border-[var(--color-line)] pt-8">
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-ink-card)]">
                   <svg
                     className="h-4 w-4 text-[var(--color-gold)]"
                     fill="none"
@@ -110,14 +112,14 @@ export default function ConsultationForm() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">전화 상담</p>
+                  <p className="text-xs text-zinc-500">전화 상담</p>
                   <p className="text-sm font-bold text-white">
                     010-XXXX-XXXX
                   </p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-800">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-ink-card)]">
                   <svg
                     className="h-4 w-4 text-[var(--color-gold)]"
                     fill="none"
@@ -133,7 +135,7 @@ export default function ConsultationForm() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500">상담 가능 시간</p>
+                  <p className="text-xs text-zinc-500">상담 가능 시간</p>
                   <p className="text-sm font-bold text-white">
                     평일 09:00 – 18:00
                   </p>
@@ -150,13 +152,13 @@ export default function ConsultationForm() {
           >
             <form
               onSubmit={handleSubmit}
-              className="rounded-2xl border border-slate-700 bg-slate-800 p-8 md:p-10"
+              className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-8 md:p-10"
             >
               {/* Name */}
               <div className="mb-5">
                 <label
                   htmlFor="name"
-                  className="mb-1.5 block text-xs font-semibold text-slate-400"
+                  className="mb-1.5 block text-xs font-semibold text-zinc-500"
                 >
                   이름 *
                 </label>
@@ -175,7 +177,7 @@ export default function ConsultationForm() {
               <div className="mb-5">
                 <label
                   htmlFor="phone"
-                  className="mb-1.5 block text-xs font-semibold text-slate-400"
+                  className="mb-1.5 block text-xs font-semibold text-zinc-500"
                 >
                   연락처 *
                 </label>
@@ -194,7 +196,7 @@ export default function ConsultationForm() {
               <div className="mb-5">
                 <label
                   htmlFor="category"
-                  className="mb-1.5 block text-xs font-semibold text-slate-400"
+                  className="mb-1.5 block text-xs font-semibold text-zinc-500"
                 >
                   상담 분야 *
                 </label>
@@ -220,7 +222,7 @@ export default function ConsultationForm() {
               <div className="mb-5">
                 <label
                   htmlFor="message"
-                  className="mb-1.5 block text-xs font-semibold text-slate-400"
+                  className="mb-1.5 block text-xs font-semibold text-zinc-500"
                 >
                   상담 내용 (선택)
                 </label>
@@ -241,9 +243,9 @@ export default function ConsultationForm() {
                     type="checkbox"
                     checked={privacyAgreed}
                     onChange={(e) => setPrivacyAgreed(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-slate-500 accent-[var(--color-gold)]"
+                    className="mt-0.5 h-4 w-4 rounded border-[var(--color-line)] accent-[var(--color-gold)]"
                   />
-                  <span className="text-xs leading-relaxed text-slate-500">
+                  <span className="text-xs leading-relaxed text-zinc-500">
                     개인정보 수집 및 이용에 동의합니다. 수집된 정보(이름,
                     연락처)는 상담 목적으로만 사용되며, 상담 완료 후 즉시
                     파기됩니다.
@@ -255,7 +257,7 @@ export default function ConsultationForm() {
               <button
                 type="submit"
                 disabled={!isValid || formState === "submitting"}
-                className="w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold tracking-wide text-white transition-all duration-300 hover:bg-[var(--color-gold-light)] hover:shadow-lg hover:shadow-[var(--color-gold)]/20 disabled:cursor-not-allowed disabled:opacity-40"
+                className="w-full rounded-full bg-[var(--color-gold)] py-4 text-sm font-bold tracking-wide text-black transition-all duration-300 hover:bg-[var(--color-gold-light)] hover:shadow-lg hover:shadow-[var(--color-gold)]/20 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {formState === "submitting" ? (
                   <span className="inline-flex items-center gap-2">
@@ -299,10 +301,10 @@ export default function ConsultationForm() {
             transition={{ duration: 0.4, ease: "easeOut" }}
             className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2"
           >
-            <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-6 py-4 shadow-xl shadow-slate-200/60">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-50">
+            <div className="flex items-center gap-3 rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] px-6 py-4 shadow-xl shadow-black/40">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/10">
                 <svg
-                  className="h-4 w-4 text-emerald-600"
+                  className="h-4 w-4 text-emerald-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -316,10 +318,10 @@ export default function ConsultationForm() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-900">
+                <p className="text-sm font-bold text-white">
                   상담 신청이 접수되었습니다
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-zinc-300">
                   빠른 시일 내에 연락드리겠습니다
                 </p>
               </div>
@@ -335,10 +337,10 @@ export default function ConsultationForm() {
             transition={{ duration: 0.4, ease: "easeOut" }}
             className="fixed bottom-8 left-1/2 z-50 -translate-x-1/2"
           >
-            <div className="flex items-center gap-3 rounded-2xl border border-red-100 bg-white px-6 py-4 shadow-xl shadow-slate-200/60">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-50">
+            <div className="flex items-center gap-3 rounded-2xl border border-red-900/60 bg-[var(--color-ink-card)] px-6 py-4 shadow-xl shadow-black/40">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500/10">
                 <svg
-                  className="h-4 w-4 text-red-500"
+                  className="h-4 w-4 text-red-400"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -352,10 +354,10 @@ export default function ConsultationForm() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm font-bold text-slate-900">
+                <p className="text-sm font-bold text-white">
                   전송에 실패했습니다
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-zinc-300">
                   잠시 후 다시 시도해 주세요
                 </p>
               </div>

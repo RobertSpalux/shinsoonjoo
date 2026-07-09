@@ -2,6 +2,9 @@
 
 import { motion, useInView } from "framer-motion";
 import { useRef } from "react";
+import { getCareer } from "@/lib/brand";
+
+const { years } = getCareer();
 
 const milestones = [
   {
@@ -26,7 +29,7 @@ const milestones = [
     year: "현재",
     title: "프라임에셋 140본부 천안3지점 지사장",
     description:
-      "24년의 경험과 철학을 바탕으로, 지점을 이끌며 후배 양성과 고객 자산 보호에 매진 중.",
+      `${years}년의 경험과 철학을 바탕으로, 지점을 이끌며 후배 양성과 고객 자산 보호에 매진 중.`,
   },
 ];
 
@@ -73,14 +76,14 @@ function TimelineItem({
           isLeft ? "md:mr-auto md:pr-8" : "md:ml-auto md:pl-8"
         }`}
       >
-        <div className="rounded-2xl border border-slate-100 bg-white p-7 shadow-lg shadow-slate-200/50 transition-all duration-500 hover:shadow-xl hover:shadow-slate-200/60 md:p-8">
-          <span className="mb-1 block text-2xl font-extrabold tracking-tight text-slate-900">
+        <div className="rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-7 shadow-lg shadow-black/40 transition-all duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-8">
+          <span className="mb-1 block text-2xl font-extrabold tracking-tight text-white">
             {milestone.year}
           </span>
-          <h3 className="mb-3 text-sm font-bold text-slate-500">
+          <h3 className="mb-3 text-sm font-bold text-zinc-400">
             {milestone.title}
           </h3>
-          <p className="text-sm font-medium leading-relaxed text-slate-600">
+          <p className="text-sm font-medium leading-relaxed text-zinc-400">
             {milestone.description}
           </p>
         </div>
@@ -96,7 +99,7 @@ export default function Timeline() {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full bg-[var(--color-cream)] py-24 md:py-32"
+      className="relative w-full bg-[var(--color-ink)] py-24 md:py-32"
     >
       <div className="mx-auto max-w-6xl px-6 md:px-12 lg:px-20">
         {/* Section header */}
@@ -106,36 +109,36 @@ export default function Timeline() {
           transition={{ duration: 0.7 }}
           className="mb-20 text-center md:mb-28"
         >
-          <p className="mb-8 text-xs font-semibold tracking-[0.25em] uppercase text-slate-400">
+          <p className="mb-8 text-xs font-semibold tracking-[0.25em] uppercase text-zinc-500">
             Philosophy & History
           </p>
 
           <blockquote className="mx-auto max-w-2xl">
-            <div className="mx-auto mb-6 h-px w-10 bg-slate-300" />
-            <p className="text-2xl font-extrabold leading-snug tracking-tight text-slate-900 md:text-3xl lg:text-[2.5rem]">
+            <div className="mx-auto mb-6 h-px w-10 bg-[var(--color-line)]" />
+            <p className="text-2xl font-extrabold leading-snug tracking-tight text-white md:text-3xl lg:text-[2.5rem]">
               보험영업은 단순한 판매가 아니라
               <br />
               사람의 미래를 책임지는
               <br />
-              <span className="font-black underline decoration-slate-300 decoration-1 underline-offset-4">
+              <span className="font-black underline decoration-[var(--color-gold-dim)] decoration-1 underline-offset-4">
                 사명
               </span>
               입니다.
             </p>
-            <cite className="mt-6 block text-sm font-semibold tracking-wider text-slate-400 not-italic">
+            <cite className="mt-6 block text-sm font-semibold tracking-wider text-zinc-500 not-italic">
               — 신순주 지사장
             </cite>
-            <div className="mx-auto mt-6 h-px w-10 bg-slate-300" />
+            <div className="mx-auto mt-6 h-px w-10 bg-[var(--color-line)]" />
           </blockquote>
         </motion.div>
 
         {/* Timeline */}
         <div className="relative">
           {/* Desktop center line - very subtle */}
-          <div className="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-slate-200 md:block" />
+          <div className="absolute left-1/2 top-0 hidden h-full w-px -translate-x-1/2 bg-[var(--color-line)] md:block" />
 
           {/* Mobile line */}
-          <div className="absolute left-6 top-0 h-full w-px -translate-x-1/2 bg-slate-200 md:hidden" />
+          <div className="absolute left-6 top-0 h-full w-px -translate-x-1/2 bg-[var(--color-line)] md:hidden" />
 
           <div className="space-y-8 md:space-y-14">
             {milestones.map((milestone, index) => (

@@ -49,11 +49,11 @@ export default function CountUp({
       transition={{ duration: 0.5, ease: "easeOut" }}
       className="flex flex-col"
     >
-      <span className="text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl">
-        {count}
-        {suffix}
+      <span className="text-3xl font-extrabold tracking-tight text-white md:text-4xl">
+        {count.toLocaleString("ko-KR")}
+        <span className="text-[var(--color-gold)]">{suffix}</span>
       </span>
-      <span className="mt-1.5 text-xs font-medium tracking-wider text-slate-400">
+      <span className="mt-1.5 text-xs font-medium tracking-wider text-zinc-500">
         {label}
       </span>
     </motion.div>

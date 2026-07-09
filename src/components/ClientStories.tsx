@@ -62,18 +62,18 @@ function StoryCard({
       transition={{ duration: 0.6, delay: index * 0.12, ease: "easeOut" }}
       className="min-w-[300px] flex-shrink-0 snap-center md:min-w-0 md:flex-shrink"
     >
-      <article className="group flex h-full flex-col rounded-2xl border border-slate-100 bg-white p-8 shadow-lg shadow-slate-200/50 transition-all duration-500 hover:shadow-xl hover:shadow-slate-200/60 md:p-10">
+      <article className="group flex h-full flex-col rounded-2xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-8 shadow-lg shadow-black/40 transition-all duration-500 hover:border-[var(--color-gold-dim)]/60 md:p-10">
         <StarRating />
 
         <blockquote className="mt-6 flex-1">
-          <p className="text-[15px] font-medium leading-relaxed text-slate-700">
+          <p className="text-[15px] font-medium leading-relaxed text-zinc-300">
             &ldquo;{story.quote}&rdquo;
           </p>
         </blockquote>
 
-        <div className="my-6 h-px w-8 bg-slate-200" />
+        <div className="my-6 h-px w-8 bg-[var(--color-line)]" />
 
-        <p className="mb-4 text-sm font-bold text-slate-900">
+        <p className="mb-4 text-sm font-bold text-white">
           {story.clientLabel}
         </p>
 
@@ -81,7 +81,7 @@ function StoryCard({
           {story.tags.map((tag) => (
             <span
               key={tag}
-              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500"
+              className="rounded-full border border-[var(--color-line)] bg-white/[0.04] px-3 py-1 text-xs font-medium text-zinc-400"
             >
               {tag}
             </span>
@@ -99,7 +99,7 @@ export default function ClientStories() {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full bg-[var(--color-cream-dark)] py-24 md:py-32"
+      className="relative w-full bg-[var(--color-ink-soft)] py-24 md:py-32"
     >
       <div className="mx-auto max-w-6xl px-6 md:px-12 lg:px-20">
         <motion.div
@@ -108,10 +108,10 @@ export default function ClientStories() {
           transition={{ duration: 0.7 }}
           className="mb-16 text-center md:mb-20"
         >
-          <p className="mb-6 text-xs font-semibold tracking-[0.25em] uppercase text-slate-400">
+          <p className="mb-6 text-xs font-semibold tracking-[0.25em] uppercase text-zinc-500">
             Client Stories
           </p>
-          <h2 className="text-3xl font-extrabold leading-snug tracking-tight text-slate-900 md:text-4xl">
+          <h2 className="text-3xl font-extrabold leading-snug tracking-tight text-white md:text-4xl">
             고객이 직접 전하는
             <br />
             신뢰의 이야기
@@ -128,7 +128,7 @@ export default function ClientStories() {
           initial={{ opacity: 0 }}
           animate={isInView ? { opacity: 1 } : {}}
           transition={{ delay: 0.8 }}
-          className="mt-6 text-center text-[11px] font-medium tracking-wider text-slate-400 md:hidden"
+          className="mt-6 text-center text-[11px] font-medium tracking-wider text-zinc-500 md:hidden"
         >
           ← 스와이프하여 더 보기 →
         </motion.p>

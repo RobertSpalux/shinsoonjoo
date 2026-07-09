@@ -1,0 +1,51 @@
+# 매일 새벽 OSMU 콘텐츠 완전 자동화 파이프라인
+# 06:00 KST (21:00 UTC) — 뉴스 수집 → Claude 멀티 문체 생성 → 사이트 자동 발행
+#                        → 카드뉴스 PNG 렌더 → 네이버/블로그스팟 원고 텔레그램 전송
+name: Daily OSMU Content Factory
+
+on:
+  schedule:
+    - cron: "0 21 * * *" # 06:00 KST
+  workflow_dispatch: # 수동 실행 버튼
+
+jobs:
+  factory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pipeline deps
+        run: npm install --no-save rss-parser puppeteer @supabase/supabase-js
+
+      - name: Collect news & generate multi-channel content
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://soonjoo.vercel.app' }}
+          FACTORY_SECRET: ${{ secrets.FACTORY_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DAILY_ARTICLE_LIMIT: ${{ vars.DAILY_ARTICLE_LIMIT || '2' }}
+        run: node scripts/collect-and-generate.mjs
+
+      - name: Render card news images (1080x1350)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/render-cards.mjs
+
+      - name: Notify card news ready
+        if: success()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            --data-urlencode text="✅ 오늘의 OSMU 파이프라인 완료 — 사이트 발행 + 카드뉴스 생성 완료. 인스타 업로드용 이미지는 Supabase Storage(card-news)에 있습니다." \
+            > /dev/null
