@@ -22,7 +22,8 @@ export const BRAND = {
     ref: "창세기 45:5",
     tagline: "당신의 위기보다 항상 한 발 앞서, 가장 선한 금융의 통로가 되겠습니다.",
   },
-  siteUrl: "https://soonjoo.vercel.app",
+  // 도메인 구매 시 Vercel 환경변수 NEXT_PUBLIC_SITE_URL만 바꾸면 전체 반영
+  siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://soonjoo.vercel.app",
 } as const;
 
 /** 입사일 기준 경력 계산: { years: 23, days: 8395 } */
