@@ -37,8 +37,7 @@ export default async function NewsPage({
             <span className="text-[var(--color-forest)]">전문가의 언어</span>로 다시 씁니다
           </h1>
           <p className="text-[15px] leading-relaxed text-[var(--color-text-body)]">
-            보험료 절약·청구/보상·실손 가이드·리모델링·금융 뉴스를 {years}년 현장 경험으로 해설합니다.
-            플랫폼의 익명 콘텐츠가 아닌, 이름을 걸고 쓰는 글입니다.
+            보험료 절약·청구/보상·실손 가이드·리모델링·금융 뉴스를 {years}년 현장 경험으로 알기 쉽게 전해드립니다.
           </p>
         </div>
 
