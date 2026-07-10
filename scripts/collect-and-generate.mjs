@@ -67,15 +67,50 @@ async function filterProcessed(items) {
   return items.filter((i) => !seen.has(i.link));
 }
 
-/** 보험·금융 소비자 관련성 스코어 — 관련 높은 기사 우선 */
+/** 관련성 하한선 — 이 점수 미만이면 발행하지 않는다 (없는 날은 적게 나가게) */
+const RELEVANCE_MIN = Number(process.env.RELEVANCE_MIN ?? 10);
+
+/** 보험·금융 소비자 관련성 스코어 — 관련 높은 기사 우선 + off-topic 감점 */
 function relevanceScore(item) {
   const text = `${item.title} ${item.content}`;
   const keywords = [
-    ["보험", 10], ["보험금", 12], ["실손", 10], ["분쟁", 8], ["금감원", 8], ["약관", 8],
-    ["연금", 7], ["상속", 7], ["증여", 6], ["금리", 5], ["대출", 5], ["예금", 4],
-    ["세금", 5], ["청구", 6], ["노후", 6], ["가계", 4],
+    // 핵심 보험 (강)
+    ["보험금", 12], ["실손", 10], ["보험료", 10], ["보험", 9], ["리모델링", 10],
+    ["보장", 8], ["약관", 8], ["청구", 8], ["부지급", 10], ["갱신", 7], ["특약", 7],
+    ["자기부담", 7], ["보험사", 6], ["손해율", 6], ["자동차보험", 9],
+    // 감독·분쟁
+    ["금감원", 8], ["금융감독", 8], ["분쟁", 7], ["민원", 5], ["소비자", 5],
+    // 연금·노후·세테크
+    ["연금", 7], ["노후", 6], ["IRP", 7], ["ISA", 6], ["세액공제", 7],
+    ["상속", 6], ["증여", 5], ["납입면제", 8],
+    // 금리 (보험 공시이율 문맥)
+    ["공시이율", 8], ["기준금리", 5], ["금리", 4], ["대출", 4], ["예금", 3], ["가계", 3],
   ];
-  return keywords.reduce((acc, [kw, w]) => acc + (text.includes(kw) ? w : 0), 0);
+  // off-topic 신호 — 보험과 무관한 주제는 감점해 하한선 아래로
+  const penalties = [
+    ["주가", 6], ["증시", 6], ["코스피", 6], ["코스닥", 6], ["상장", 5],
+    ["코인", 6], ["가상자산", 6], ["부동산", 4], ["아파트", 4], ["분양", 4],
+    ["와인", 8], ["편의점", 5], ["게임", 5], ["연예", 8], ["스포츠", 8],
+  ];
+  let score = keywords.reduce((acc, [kw, w]) => acc + (text.includes(kw) ? w : 0), 0);
+  score -= penalties.reduce((acc, [kw, w]) => acc + (text.includes(kw) ? w : 0), 0);
+  return score;
+}
+
+/** 같은 배치 안의 URL·제목 중복 제거 (DB엔 없지만 이번 수집분끼리 겹치는 경우) */
+function dedupeBatch(items) {
+  const seenUrl = new Set();
+  const seenTitle = new Set();
+  const out = [];
+  for (const it of items) {
+    const urlKey = (it.link || "").split("?")[0].trim();
+    const titleKey = (it.title || "").replace(/\s+/g, "").slice(0, 40);
+    if (seenUrl.has(urlKey) || seenTitle.has(titleKey)) continue;
+    seenUrl.add(urlKey);
+    seenTitle.add(titleKey);
+    out.push(it);
+  }
+  return out;
 }
 
 async function generateArticle(item) {
@@ -114,10 +149,22 @@ async function sendTelegramDoc(filename, text, caption) {
 async function main() {
   const candidates = await collectCandidates();
   const fresh = await filterProcessed(candidates);
-  const picked = fresh
-    .map((i) => ({ ...i, score: relevanceScore(i) }))
+  const deduped = dedupeBatch(fresh);
+  const scoredAll = deduped.map((i) => ({ ...i, score: relevanceScore(i) }));
+
+  const picked = scoredAll
+    .filter((i) => i.score >= RELEVANCE_MIN)
     .sort((a, b) => b.score - a.score)
     .slice(0, DAILY_LIMIT);
+
+  // 관측용 로그: 컷된 것도 남겨 임계값 튜닝에 활용
+  const cut = scoredAll
+    .filter((i) => i.score < RELEVANCE_MIN)
+    .sort((a, b) => b.score - a.score);
+  if (cut.length) {
+    console.log(`[관련성 컷] ${cut.length}건 (하한 ${RELEVANCE_MIN}):`);
+    cut.slice(0, 5).forEach((i) => console.log(`  · ${i.score}점  ${i.title}`));
+  }
 
   if (!picked.length) {
     console.log("생성할 새 기사가 없습니다.");
