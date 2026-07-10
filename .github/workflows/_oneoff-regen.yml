@@ -1,0 +1,34 @@
+# 일회성(작업 후 삭제) — 수입차 기사 carousel 재생성 + 카드 렌더
+# collect-and-generate는 돌리지 않음(새 기사 생성 부작용 없음).
+name: _oneoff regen carousel (imported-car)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  regen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install deps
+        run: npm install --no-save tsx @supabase/supabase-js @anthropic-ai/sdk puppeteer
+
+      - name: Regenerate carousel (UPDATE only) + clear image_paths
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FACTORY_CLAUDE_MODEL: ${{ vars.FACTORY_CLAUDE_MODEL }}
+        run: npx tsx scripts/_oneoff-regen.ts
+
+      - name: Render card news images (new design)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/render-cards.mjs
