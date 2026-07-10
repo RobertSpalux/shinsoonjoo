@@ -143,10 +143,16 @@ async function main() {
         big_number: cards[i].big_number,
         highlight: cards[i].highlight,
       });
-      // 한글 tofu(□) 방지: 폰트 CDN 다운로드(networkidle0) + 폰트셋 적용 완료까지 실제 await 후 스냅샷.
-      // (evaluateHandle("document.fonts.ready")는 Promise 핸들만 반환하고 resolve를 기다리지 않아 tofu 발생 → evaluate로 실제 await)
-      await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
+      // 한글 tofu(□) 방지. networkidle0은 Pretendard CDN(서브셋 스트리밍)에서 idle에 도달 못해 타임아웃 →
+      // domcontentloaded 후, 카드에서 쓰는 Pretendard weight를 fonts.load()로 명시 강제 로드하고 fonts.ready까지 실제 await.
+      await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 60000 });
       await page.evaluate(async () => {
+        await Promise.all([
+          document.fonts.load("500 44px Pretendard"),
+          document.fonts.load("600 32px Pretendard"),
+          document.fonts.load("700 30px Pretendard"),
+          document.fonts.load("800 96px Pretendard"),
+        ]);
         await document.fonts.ready;
       });
       const png = await page.screenshot({ type: "png" });
