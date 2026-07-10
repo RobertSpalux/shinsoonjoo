@@ -19,6 +19,7 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
+// ⚠️ src/lib/brand.ts의 getCareer() 시작일과 반드시 동일하게 유지할 것 (불일치 시 카드/사이트 경력 어긋남)
 const CAREER_START = new Date("2003-07-01T00:00:00+09:00");
 const years = Math.floor((Date.now() - CAREER_START.getTime()) / 86_400_000 / 365.25);
 
@@ -26,58 +27,65 @@ function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-/** 1080x1350 세로형 카드 템플릿 — 딥블랙 + 샴페인골드, 상·하단 Safe Zone 브랜딩 */
+/** 1080x1350 세로형 카드 — 라이트/에디토리얼(크림↔딥그린 리듬), 전국구 */
 function cardHtml({ heading, body, index, total, category, isHook, isCta }) {
+  // 훅·CTA = 딥그린 배경 / 본문 = 크림 배경 (사이트 대비 밴드 리듬)
+  const dark = isHook || isCta;
+  const bg = dark ? "#1b3a30" : "#faf9f6";
+  const headColor = dark ? "#faf9f6" : "#221e18";
+  const bodyColor = dark ? "#9db3a8" : "#48423a";
+  const overline = dark ? "#c9a94a" : "#a8842c";
+  const footColor = dark ? "#7a9488" : "#6b6457";
+  const divider = dark ? "#3a5449" : "#e0d9cb";
+  const idxColor = dark ? "#5f776c" : "#a89f8e";
+  // 인덱스 라벨: 훅=카테고리, 본문=번호(01,02…), CTA="무료 진단"
+  const overlineText = isHook ? category : isCta ? "무료 진단" : "확인 포인트";
+  const pageLabel = String(index + 1).padStart(2, "0");
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
     width:1080px; height:1350px; overflow:hidden;
-    font-family:'Pretendard Variable', Pretendard, sans-serif;
-    background:#050505; color:#f5f5f4;
+    font-family:'Pretendard', sans-serif;
+    background:${bg}; color:${headColor};
     display:flex; flex-direction:column;
     letter-spacing:-0.02em;
   }
-  .glow { position:absolute; width:700px; height:700px; border-radius:50%;
-    background:radial-gradient(circle, rgba(212,175,55,0.10) 0%, transparent 70%);
-    top:-200px; right:-200px; }
-  .top { padding:64px 80px 0; display:flex; justify-content:space-between; align-items:center; }
-  .badge { font-size:26px; font-weight:700; color:#d4af37; letter-spacing:0.14em; }
-  .page { font-size:26px; color:#52525b; font-weight:600; }
-  .main { flex:1; display:flex; flex-direction:column; justify-content:center; padding:0 88px; position:relative; }
-  .cat { display:inline-block; font-size:28px; font-weight:700; color:#e6c96b;
-    border:2px solid rgba(154,127,42,0.6); border-radius:999px; padding:10px 30px;
-    margin-bottom:44px; width:fit-content; }
-  h1 { font-size:${isHook ? 84 : 68}px; font-weight:800; line-height:1.25; color:#ffffff;
-    margin-bottom:40px; word-break:keep-all; }
-  h1 .gold { color:#d4af37; }
-  p { font-size:40px; line-height:1.65; color:#c8c8cc; word-break:keep-all; white-space:pre-line; }
-  .rule { width:88px; height:5px; background:#d4af37; margin-bottom:44px; border-radius:3px; }
-  .bottom { padding:0 80px 60px; }
-  .footer { border-top:1px solid #26262a; padding-top:36px;
-    display:flex; justify-content:space-between; align-items:center; }
-  .brand { font-size:28px; font-weight:700; color:#fafafa; }
-  .brand small { display:block; font-size:22px; font-weight:500; color:#71717a; margin-top:6px; }
-  .seal { font-size:24px; font-weight:700; color:#d4af37; text-align:right; line-height:1.5; }
-  ${isCta ? ".main{align-items:center;text-align:center;} .rule{margin-left:auto;margin-right:auto;} .cat{display:none;}" : ""}
+  .top { padding:88px 96px 0; display:flex; justify-content:space-between; align-items:center; }
+  .overline { font-size:30px; font-weight:700; color:${overline}; letter-spacing:0.16em; }
+  .idx { font-size:30px; color:${idxColor}; font-weight:600; }
+  .main { flex:1; display:flex; flex-direction:column; justify-content:center; padding:0 96px; }
+  .rule { width:120px; height:6px; background:#a8842c; margin-bottom:56px; border-radius:2px; }
+  h1 { font-size:${isHook ? 116 : isCta ? 104 : 96}px; font-weight:800; line-height:1.22;
+    color:${headColor}; letter-spacing:-0.03em; word-break:keep-all; }
+  h1 .gold { color:#c9a94a; }
+  p { font-size:44px; line-height:1.6; color:${bodyColor}; word-break:keep-all;
+    white-space:pre-line; margin-top:56px; font-weight:500; }
+  .cta-btn { display:inline-flex; align-items:center; gap:12px; margin-top:64px;
+    background:#a8842c; color:#1b3a30; font-size:40px; font-weight:800;
+    padding:28px 52px; border-radius:14px; width:fit-content; letter-spacing:-0.02em; }
+  .bottom { padding:0 96px 88px; }
+  .footer { border-top:1px solid ${divider}; padding-top:44px; }
+  .brand { font-size:32px; font-weight:600; color:${footColor}; }
 </style></head>
 <body>
-  <div class="glow"></div>
   <div class="top">
-    <span class="badge">신순주의 선한 금융</span>
-    <span class="page">${index + 1} / ${total}</span>
+    <span class="overline">${esc(overlineText)}</span>
+    <span class="idx">${isHook || isCta ? "" : pageLabel}</span>
   </div>
   <div class="main">
-    ${isHook ? `<span class="cat">${esc(category)}</span>` : `<div class="rule"></div>`}
+    ${dark ? `<div class="rule"></div>` : ``}
     <h1>${esc(heading)}</h1>
-    <p>${esc(body)}</p>
+    ${isCta
+      ? `<div class="cta-btn">프로필 링크 →</div>`
+      : body ? `<p>${esc(body)}</p>` : ``}
   </div>
   <div class="bottom">
     <div class="footer">
-      <div class="brand">프라임에셋 140본부<small>보험은 약속입니다</small></div>
-      <div class="seal">GA명장 · ${years}년 경력<br>신순주</div>
+      <div class="brand">${isCta ? "비대면 · 전국 상담" : `신순주 · GA명장 ${years}년`}</div>
     </div>
   </div>
 </body></html>`;
