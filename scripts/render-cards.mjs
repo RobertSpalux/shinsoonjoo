@@ -143,9 +143,12 @@ async function main() {
         big_number: cards[i].big_number,
         highlight: cards[i].highlight,
       });
-      // networkidle0은 CDN 폰트 스트리밍 때문에 타임아웃될 수 있음 — 폰트 로딩을 직접 대기
-      await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 60000 });
-      await page.evaluateHandle("document.fonts.ready");
+      // 한글 tofu(□) 방지: 폰트 CDN 다운로드(networkidle0) + 폰트셋 적용 완료까지 실제 await 후 스냅샷.
+      // (evaluateHandle("document.fonts.ready")는 Promise 핸들만 반환하고 resolve를 기다리지 않아 tofu 발생 → evaluate로 실제 await)
+      await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
+      await page.evaluate(async () => {
+        await document.fonts.ready;
+      });
       const png = await page.screenshot({ type: "png" });
 
       const storagePath = `${article.slug}/card-${String(i + 1).padStart(2, "0")}.png`;
