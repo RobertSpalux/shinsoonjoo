@@ -15,6 +15,9 @@ export const metadata: Metadata = {
   description: `${years}년 경력 우수인증설계사 · GA명장 신순주. 보험료 절약, 청구·보상, 실손·보장성, 연금·노후, 보험 리모델링까지 — 관계가 아니라 분석으로 다시 설계하는 가장 선한 금융 파트너.`,
   verification: {
     google: "9t3fLGeJ2V0lK6CX6UOMmnSaDjUNwlbAYyFXbd8Cvbc",
+    other: {
+      "naver-site-verification": "3fb5adb2ed10a1f31427c8760b1ca35f1cc56905",
+    },
   },
   openGraph: {
     title: `${BRAND.siteName} | ${years}년 차 GA명장 신순주`,
