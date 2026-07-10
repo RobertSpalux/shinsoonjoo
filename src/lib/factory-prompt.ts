@@ -66,8 +66,6 @@ export const FACTORY_OUTPUT_SCHEMA = {
       type: "array",
       description: "핵심 요약 3개 (각 40자 이내). 빈 배열 금지 — 반드시 3개.",
       items: { type: "string" },
-      minItems: 3,
-      maxItems: 3,
     },
     remodeling_bridge: {
       type: "string",
