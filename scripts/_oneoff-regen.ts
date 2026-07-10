@@ -10,7 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { factorySystemPrompt, FACTORY_OUTPUT_SCHEMA } from "../src/lib/factory-prompt";
 
 const SLUG = "imported-car-market-share-auto-insurance-impact";
-const MODEL = process.env.FACTORY_CLAUDE_MODEL ?? "claude-sonnet-5";
+const MODEL = process.env.FACTORY_CLAUDE_MODEL || "claude-sonnet-5";
 
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
