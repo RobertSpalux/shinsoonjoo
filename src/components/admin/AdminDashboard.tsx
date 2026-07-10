@@ -33,6 +33,9 @@ interface Article {
   is_instagram_published: boolean;
   naver_blog_content: string | null;
   blogspot_content: string | null;
+  instagram_caption: string | null;
+  carousel_json: { heading: string; body: string }[] | null;
+  key_points: string[] | null;
   image_paths: string[];
   view_count: number;
   published_at: string | null;
@@ -253,19 +256,26 @@ export default function AdminDashboard({
                       {copied === `b-${a.id}` ? "✓ 복사됨!" : a.is_blogspot_published ? "블로그스팟 다시 복사" : "블로그스팟 원고 복사"}
                     </button>
                   )}
+                  {a.instagram_caption && (
+                    <button
+                      onClick={() => copy(a.instagram_caption ?? "", `i-${a.id}`)}
+                      className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 transition-all hover:border-[var(--color-gold-dim)]"
+                    >
+                      {copied === `i-${a.id}` ? "✓ 복사됨!" : "인스타 캡션 복사"}
+                    </button>
+                  )}
                   {a.image_paths?.length > 0 && (
-                    <>
-                      {a.image_paths.map((url, i) => (
-                        <a
-                          key={url}
-                          href={url}
-                          target="_blank"
-                          className="rounded-full border border-[var(--color-line)] px-3 py-2 text-xs text-slate-600 hover:border-[var(--color-gold-dim)] hover:text-[var(--color-gold-light)]"
-                        >
-                          카드{i + 1}
-                        </a>
-                      ))}
-                      <label className="ml-1 flex items-center gap-2 text-xs text-slate-600">
+                    <div className="mt-2 w-full">
+                      <div className="mb-2 flex flex-wrap gap-2">
+                        {a.image_paths.map((url, i) => (
+                          <a key={url} href={url} target="_blank" download title={`카드 ${i + 1} 열기/저장`}
+                            className="group relative block h-24 w-[76px] overflow-hidden rounded-lg border border-[var(--color-line)] hover:border-[var(--color-gold-dim)]">
+                            <img src={url} alt={`카드 ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
+                            <span className="absolute bottom-0 right-0 bg-black/60 px-1 text-[10px] text-white">{i + 1}</span>
+                          </a>
+                        ))}
+                      </div>
+                      <label className="flex items-center gap-2 text-xs text-slate-600">
                         <input
                           type="checkbox"
                           checked={a.is_instagram_published}
@@ -278,7 +288,7 @@ export default function AdminDashboard({
                         />
                         인스타 업로드 완료
                       </label>
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
