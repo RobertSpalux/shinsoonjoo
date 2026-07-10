@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import Analytics from "@/components/Analytics";
 import { BRAND, getCareer } from "@/lib/brand";
 
 const { years } = getCareer();
@@ -49,6 +50,7 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased">
+        <Analytics />
         <Header />
         {children}
         <Footer />
