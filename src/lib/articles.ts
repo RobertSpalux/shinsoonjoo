@@ -39,7 +39,12 @@ function publicClient() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
-/** 발행된 글 목록 (카테고리 필터 옵션) — RLS가 발행 글만 노출 */
+/**
+ * 발행된 글 목록 (카테고리 필터 옵션).
+ * 발행 게이트: is_main_published = true AND published_at <= now().
+ * → 초안(false)은 숨김. 예약발행(published_at 미래)은 그 시각까지 자동으로 숨음(크론 불필요).
+ * (RLS도 is_main_published를 막지만, published_at 게이트는 여기서만 걸므로 명시적으로 둔다.)
+ */
 export async function getPublishedArticles(
   category?: string,
   limit = 60
@@ -47,9 +52,12 @@ export async function getPublishedArticles(
   const supabase = publicClient();
   if (!supabase) return [];
 
+  const now = new Date().toISOString();
   let query = supabase
     .from("premium_articles")
     .select(ARTICLE_COLUMNS)
+    .eq("is_main_published", true)
+    .lte("published_at", now)
     .order("published_at", { ascending: false })
     .limit(limit);
 
@@ -69,10 +77,14 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
   const supabase = publicClient();
   if (!supabase) return null;
 
+  // 발행 게이트 — 초안·예약(미발행) 글은 직접 URL로도 열리지 않음(→ notFound)
+  const now = new Date().toISOString();
   const { data, error } = await supabase
     .from("premium_articles")
     .select(ARTICLE_COLUMNS)
     .eq("slug", slug)
+    .eq("is_main_published", true)
+    .lte("published_at", now)
     .maybeSingle();
 
   if (error) {

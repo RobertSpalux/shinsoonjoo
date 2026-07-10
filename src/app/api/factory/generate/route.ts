@@ -34,7 +34,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 JSON 요청" }, { status: 400 });
   }
 
-  const { title, category, source_url, source_name, content, auto_publish = true } = body;
+  // 발행 통제: 생성 = 초안(auto_publish 기본 false). 발행은 /admin에서 사람이 1클릭.
+  const { title, category, source_url, source_name, content, auto_publish = false } = body;
   if (!content?.trim()) {
     return NextResponse.json({ error: "content(원천 자료)가 필요합니다." }, { status: 400 });
   }
@@ -119,7 +120,9 @@ export async function POST(request: Request) {
         carousel_json: article.carousel_json,
         faq_json: article.faq_json,
         is_main_published: auto_publish,
-        published_at: auto_publish ? new Date().toISOString() : null,
+        // 초안이어도 published_at은 생성 시각으로 기록(정렬용). 노출 게이트는 is_main_published를
+        // 함께 보므로 초안(false)은 웹에 뜨지 않음. 발행 시 admin이 published_at을 재기록.
+        published_at: new Date().toISOString(),
       })
       .select("id, slug, title, category")
       .single();

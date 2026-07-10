@@ -208,19 +208,22 @@ export default function AdminDashboard({
                       {a.category} · 조회 {a.view_count} · {fmtDate(a.created_at)}
                     </p>
                   </div>
-                  <label className="flex items-center gap-2 text-xs text-slate-600">
-                    <input
-                      type="checkbox"
-                      checked={a.is_main_published}
-                      className="h-4 w-4 accent-[var(--color-gold)]"
-                      onChange={(e) => {
-                        const v = e.target.checked;
-                        setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: v } : x)));
-                        updateRow("premium_articles", a.id, { is_main_published: v });
-                      }}
-                    />
-                    사이트 공개
-                  </label>
+                  <PublishControls
+                    article={a}
+                    onPublish={() => {
+                      const published_at = new Date().toISOString();
+                      setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at } : x)));
+                      updateRow("premium_articles", a.id, { is_main_published: true });
+                    }}
+                    onSchedule={(iso) => {
+                      setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at: iso } : x)));
+                      updateRow("premium_articles", a.id, { is_main_published: true, published_at: iso });
+                    }}
+                    onDraft={() => {
+                      setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: false } : x)));
+                      updateRow("premium_articles", a.id, { is_main_published: false });
+                    }}
+                  />
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -297,6 +300,103 @@ export default function AdminDashboard({
         )}
       </div>
     </main>
+  );
+}
+
+/** 발행 통제 — 상태 뱃지(초안/발행됨/예약) + 발행·예약발행·초안으로 액션 */
+function PublishControls({
+  article,
+  onPublish,
+  onSchedule,
+  onDraft,
+}: {
+  article: Article;
+  onPublish: () => void;
+  onSchedule: (iso: string) => void;
+  onDraft: () => void;
+}) {
+  const [scheduling, setScheduling] = useState(false);
+  const [when, setWhen] = useState("");
+  // 현재 시각은 렌더 중 직접 읽으면 순수성 규칙 위반 → lazy initializer로 마운트 시 1회 캡처
+  const [now] = useState(() => Date.now());
+
+  const isFuture = !!article.published_at && new Date(article.published_at).getTime() > now;
+  const status: "draft" | "scheduled" | "published" = !article.is_main_published
+    ? "draft"
+    : isFuture
+      ? "scheduled"
+      : "published";
+
+  const badge = {
+    draft: { text: "초안", cls: "border-amber-300 bg-amber-50 text-amber-700" },
+    published: { text: "발행됨", cls: "border-emerald-300 bg-emerald-50 text-emerald-700" },
+    scheduled: {
+      text: `예약 · ${article.published_at ? fmtDate(article.published_at) : ""}`,
+      cls: "border-sky-300 bg-sky-50 text-sky-700",
+    },
+  }[status];
+
+  const btn = "rounded-full border px-3 py-1.5 text-xs font-semibold transition-all";
+
+  return (
+    <div className="flex flex-col items-end gap-2">
+      <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badge.cls}`}>
+        {badge.text}
+      </span>
+      <div className="flex flex-wrap items-center justify-end gap-1.5">
+        {status !== "published" && (
+          <button
+            onClick={onPublish}
+            className={`${btn} border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700`}
+          >
+            발행
+          </button>
+        )}
+        {!scheduling ? (
+          status !== "published" && (
+            <button
+              onClick={() => setScheduling(true)}
+              className={`${btn} border-[var(--color-line)] text-slate-600 hover:border-[var(--color-gold-dim)]`}
+            >
+              {status === "scheduled" ? "예약변경" : "예약발행"}
+            </button>
+          )
+        ) : (
+          <span className="flex items-center gap-1">
+            <input
+              type="datetime-local"
+              value={when}
+              onChange={(e) => setWhen(e.target.value)}
+              className="rounded-lg border border-[var(--color-line)] bg-white px-2 py-1 text-xs text-slate-900 outline-none focus:border-[var(--color-gold)]"
+            />
+            <button
+              onClick={() => {
+                if (!when) return;
+                onSchedule(new Date(when).toISOString());
+                setScheduling(false);
+              }}
+              className={`${btn} border-sky-600 bg-sky-600 text-white hover:bg-sky-700`}
+            >
+              확정
+            </button>
+            <button
+              onClick={() => setScheduling(false)}
+              className={`${btn} border-transparent text-slate-500 hover:text-slate-700`}
+            >
+              취소
+            </button>
+          </span>
+        )}
+        {status !== "draft" && (
+          <button
+            onClick={onDraft}
+            className={`${btn} border-[var(--color-line)] text-slate-600 hover:border-amber-400 hover:text-amber-700`}
+          >
+            초안으로
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

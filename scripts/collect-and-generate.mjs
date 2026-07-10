@@ -126,7 +126,8 @@ async function generateArticle(item) {
       source_url: item.link,
       source_name: item.source,
       content: `${item.title}\n\n${item.content}`,
-      auto_publish: true,
+      // 발행 통제: 자동 수집·생성분은 초안으로만 적재. 발행은 /admin에서 사람 검수 후 1클릭.
+      auto_publish: false,
     }),
   });
   const json = await res.json();
