@@ -12,6 +12,21 @@ import { factorySystemPrompt, FACTORY_OUTPUT_SCHEMA } from "../src/lib/factory-p
 const SLUG = "imported-car-market-share-auto-insurance-impact";
 const MODEL = process.env.FACTORY_CLAUDE_MODEL || "claude-sonnet-5";
 
+// Anthropic structured output은 array의 minItems/maxItems(0·1 외)를 지원하지 않는다.
+// 실제 스키마 사본에서 재귀적으로 제거 (원본/프로덕션 파일은 건드리지 않음).
+function stripItemBounds(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(stripItemBounds);
+  if (node && typeof node === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node)) {
+      if (k === "minItems" || k === "maxItems") continue;
+      out[k] = stripItemBounds(v);
+    }
+    return out;
+  }
+  return node;
+}
+
 async function main() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -38,7 +53,7 @@ async function main() {
     max_tokens: 32000,
     system: factorySystemPrompt(),
     output_config: {
-      format: { type: "json_schema", schema: FACTORY_OUTPUT_SCHEMA as unknown as Record<string, unknown> },
+      format: { type: "json_schema", schema: stripItemBounds(FACTORY_OUTPUT_SCHEMA) as Record<string, unknown> },
     },
     messages: [
       {
