@@ -28,7 +28,7 @@ function esc(s) {
 }
 
 /** 1080x1350 세로형 카드 — 라이트/에디토리얼(크림↔딥그린 리듬), 전국구 */
-function cardHtml({ heading, body, index, total, category, isHook, isCta }) {
+function cardHtml({ heading, body, index, total, category, isHook, isCta, big_number, highlight }) {
   // 훅·CTA = 딥그린 배경 / 본문 = 크림 배경 (사이트 대비 밴드 리듬)
   const dark = isHook || isCta;
   const bg = dark ? "#1b3a30" : "#faf9f6";
@@ -62,6 +62,10 @@ function cardHtml({ heading, body, index, total, category, isHook, isCta }) {
   h1 { font-size:${isHook ? 116 : isCta ? 104 : 96}px; font-weight:800; line-height:1.22;
     color:${headColor}; letter-spacing:-0.03em; word-break:keep-all; }
   h1 .gold { color:#c9a94a; }
+  h1 .hl { background:linear-gradient(transparent 55%, rgba(168,132,44,0.42) 55%); padding:0 4px; }
+  .bignum { position:absolute; top:${isHook ? "40" : "0"}px; right:-40px; font-size:420px;
+    font-weight:800; color:${dark ? "#22493d" : "#efe9dd"}; line-height:1; letter-spacing:-0.05em; z-index:0; }
+  .main, .top, .bottom { position:relative; z-index:1; }
   p { font-size:44px; line-height:1.6; color:${bodyColor}; word-break:keep-all;
     white-space:pre-line; margin-top:56px; font-weight:500; }
   .cta-btn { display:inline-flex; align-items:center; gap:12px; margin-top:64px;
@@ -78,7 +82,10 @@ function cardHtml({ heading, body, index, total, category, isHook, isCta }) {
   </div>
   <div class="main">
     ${dark ? `<div class="rule"></div>` : ``}
-    <h1>${esc(heading)}</h1>
+    ${isHook && big_number ? `<div class="bignum">${esc(big_number)}</div>` : ``}
+    <h1>${highlight && !isHook && !isCta && heading.includes(highlight)
+      ? esc(heading).replace(esc(highlight), `<span class="hl">${esc(highlight)}</span>`)
+      : esc(heading)}</h1>
     ${isCta
       ? `<div class="cta-btn">프로필 링크 →</div>`
       : body ? `<p>${esc(body)}</p>` : ``}
