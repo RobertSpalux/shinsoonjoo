@@ -42,6 +42,14 @@ function cardHtml({ heading, body, index, total, category, isHook, isCta, big_nu
   const overlineText = isHook ? category : isCta ? "무료 진단" : "확인 포인트";
   const pageLabel = String(index + 1).padStart(2, "0");
 
+  // 형광펜: 중간 카드에서 highlight 단어가 든 곳(heading/본문)에 첫 1회 강조.
+  // heading·본문 어디에도 리터럴로 없으면 강조 없이 그냥 렌더(패러프레이즈 방어).
+  const hlActive = highlight && !isHook && !isCta;
+  const hlText = (s) =>
+    hlActive && (s ?? "").includes(highlight)
+      ? esc(s).replace(esc(highlight), `<span class="hl">${esc(highlight)}</span>`)
+      : esc(s);
+
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
@@ -83,12 +91,10 @@ function cardHtml({ heading, body, index, total, category, isHook, isCta, big_nu
   <div class="main">
     ${dark ? `<div class="rule"></div>` : ``}
     ${isHook && big_number ? `<div class="bignum">${esc(big_number)}</div>` : ``}
-    <h1>${highlight && !isHook && !isCta && heading.includes(highlight)
-      ? esc(heading).replace(esc(highlight), `<span class="hl">${esc(highlight)}</span>`)
-      : esc(heading)}</h1>
+    <h1>${hlText(heading)}</h1>
     ${isCta
       ? `<div class="cta-btn">프로필 링크 →</div>`
-      : body ? `<p>${esc(body)}</p>` : ``}
+      : body ? `<p>${hlText(body)}</p>` : ``}
   </div>
   <div class="bottom">
     <div class="footer">
@@ -134,6 +140,8 @@ async function main() {
         category: article.category,
         isHook: i === 0,
         isCta: i === cards.length - 1,
+        big_number: cards[i].big_number,
+        highlight: cards[i].highlight,
       });
       // networkidle0은 CDN 폰트 스트리밍 때문에 타임아웃될 수 있음 — 폰트 로딩을 직접 대기
       await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 60000 });
