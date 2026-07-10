@@ -70,7 +70,7 @@ function cardHtml({ heading, body, index, total, category, isHook, isCta, big_nu
   h1 { font-size:${isHook ? 116 : isCta ? 104 : 96}px; font-weight:800; line-height:1.22;
     color:${headColor}; letter-spacing:-0.03em; word-break:keep-all; }
   h1 .gold { color:#c9a94a; }
-  h1 .hl { background:linear-gradient(transparent 55%, rgba(168,132,44,0.42) 55%); padding:0 4px; }
+  .hl { background:linear-gradient(transparent 55%, rgba(168,132,44,0.42) 55%); padding:0 4px; }
   .bignum { position:absolute; top:${isHook ? "40" : "0"}px; right:-40px; font-size:420px;
     font-weight:800; color:${dark ? "#22493d" : "#efe9dd"}; line-height:1; letter-spacing:-0.05em; z-index:0; }
   .main, .top, .bottom { position:relative; z-index:1; }
