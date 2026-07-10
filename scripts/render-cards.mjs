@@ -143,18 +143,18 @@ async function main() {
         big_number: cards[i].big_number,
         highlight: cards[i].highlight,
       });
-      // 한글 tofu(□) 방지. networkidle0은 Pretendard CDN(서브셋 스트리밍)에서 idle에 도달 못해 타임아웃 →
-      // domcontentloaded 후, 카드에서 쓰는 Pretendard weight를 fonts.load()로 명시 강제 로드하고 fonts.ready까지 실제 await.
-      await page.setContent(html, { waitUntil: "domcontentloaded", timeout: 60000 });
-      await page.evaluate(async () => {
-        await Promise.all([
-          document.fonts.load("500 44px Pretendard"),
-          document.fonts.load("600 32px Pretendard"),
-          document.fonts.load("700 30px Pretendard"),
-          document.fonts.load("800 96px Pretendard"),
-        ]);
+      // 한글 tofu(□) 방지. Pretendard static CSS는 unicode-range로 한글을 여러 서브셋으로 쪼개므로,
+      // fonts.load()에 실제 렌더 텍스트(한글 포함)를 인자로 넘겨 필요한 서브셋을 강제 로드해야 한다.
+      // waitUntil:"load"로 스타일시트/@import 완료(=@font-face 등록) 보장 후, weight별로 로드하고 fonts.ready까지 await.
+      // (networkidle0은 CDN 서브셋 스트리밍에서 idle 미도달 → 60s 타임아웃이라 사용 불가)
+      const uiText = "확인포인트무료진단신순주GA명장년비대면전국상담프로필링크";
+      const cardText = `${cards[i].heading ?? ""}${cards[i].body ?? ""}${cards[i].big_number ?? ""}${cards[i].highlight ?? ""}${article.category ?? ""}${uiText}`;
+      await page.setContent(html, { waitUntil: "load", timeout: 60000 });
+      await page.evaluate(async (text) => {
+        const weights = ["500", "600", "700", "800"];
+        await Promise.all(weights.map((w) => document.fonts.load(`${w} 44px Pretendard`, text)));
         await document.fonts.ready;
-      });
+      }, cardText);
       const png = await page.screenshot({ type: "png" });
 
       const storagePath = `${article.slug}/card-${String(i + 1).padStart(2, "0")}.png`;
