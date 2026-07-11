@@ -35,9 +35,11 @@ const parser = new Parser({ timeout: 15000 });
 
 async function collectCandidates() {
   const items = [];
+  const sourceStats = []; // 관측용: 소스별 수집 건수·실패 (텔레그램 요약에 실림)
   for (const source of SOURCES) {
     try {
       const feed = await parser.parseURL(source.url);
+      let count = 0;
       for (const item of (feed.items ?? []).slice(0, 8)) {
         if (!item.link || !item.title) continue;
         items.push({
@@ -48,13 +50,16 @@ async function collectCandidates() {
           category: source.category,
           pubDate: item.isoDate ?? item.pubDate ?? null,
         });
+        count++;
       }
+      sourceStats.push({ name: source.name, count, failed: false });
       console.log(`[수집] ${source.name}: ${feed.items?.length ?? 0}건`);
     } catch (err) {
+      sourceStats.push({ name: source.name, count: 0, failed: true });
       console.warn(`[수집 실패] ${source.name}: ${err.message}`);
     }
   }
-  return items;
+  return { items, sourceStats };
 }
 
 async function filterProcessed(items) {
@@ -132,7 +137,17 @@ async function generateArticle(item) {
   });
   const json = await res.json();
   if (!res.ok) throw new Error(`generate 실패(${res.status}): ${json.error ?? "unknown"}`);
-  return json.article;
+  // carousel_warning: 카드 검증 가드(route.ts)가 재시도 후에도 실패하면 사유를 실어 보냄
+  return { article: json.article, carousel_warning: json.carousel_warning ?? null };
+}
+
+async function sendTelegramMessage(text) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text: text.slice(0, 4000) }),
+  }).catch((e) => console.warn("텔레그램 전송 실패:", e.message));
 }
 
 async function sendTelegramDoc(filename, text, caption) {
@@ -147,10 +162,56 @@ async function sendTelegramDoc(filename, text, caption) {
   }).catch((e) => console.warn("텔레그램 전송 실패:", e.message));
 }
 
+/** 파이프라인 요약 알림 — 매일 아침 이것만 보고 "왜 글이 없는지/소스가 부실한지" 판단 가능해야 함 */
+function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, picked, cut, results, failures }) {
+  const today = new Date().toLocaleDateString("ko-KR", {
+    month: "numeric", day: "numeric", timeZone: "Asia/Seoul",
+  });
+  const lines = [];
+
+  if (results.length > 0) {
+    lines.push(`✅ OSMU 파이프라인 (${today}) — 기사 ${results.length}건 생성(초안)`);
+  } else if (picked.length > 0) {
+    lines.push(`⚠️ OSMU 파이프라인 (${today}) — 게이트 통과 ${picked.length}건 전부 생성 실패`);
+  } else {
+    lines.push(`⚠️ OSMU 파이프라인 (${today}) — 오늘 적합 기사 없음(소스 부실). 기사 0건`);
+  }
+
+  const srcLine = sourceStats
+    .map((s) => `${s.name.replace(/^연합뉴스 /, "연합")} ${s.failed ? "실패" : s.count}`)
+    .join(" · ");
+  lines.push(`📥 수집: RSS ${collected}건 (${srcLine})`);
+  lines.push(
+    `🚧 게이트(하한 ${RELEVANCE_MIN}점): 통과 ${picked.length} / 컷 ${cut.length}` +
+      ` — 중복 제외 ${alreadyProcessed + batchDupes}건(기처리 ${alreadyProcessed}·배치 ${batchDupes})`
+  );
+  if (cut.length) {
+    lines.push(`✂️ 컷 상위 ${Math.min(cut.length, 5)}건:`);
+    cut.slice(0, 5).forEach((i) => lines.push(` · ${i.score}점 — ${i.title.slice(0, 45)}`));
+  }
+  if (results.length) {
+    lines.push(`📝 생성:`);
+    results.forEach((r) => {
+      lines.push(
+        ` · [${r.category}] ${r.title.slice(0, 40)} (관련도 ${r.score}, 카드 ${r.cards}장)` +
+          (r.warning ? `\n   ⚠️ 카드 검증: ${r.warning}` : "")
+      );
+    });
+    lines.push(`발행 대기: ${SITE_URL}/admin 에서 검수 후 [발행]`);
+  }
+  if (failures.length) {
+    lines.push(`❌ 생성 실패 ${failures.length}건:`);
+    failures.forEach((f) => lines.push(` · ${f.title.slice(0, 40)} — ${f.error.slice(0, 80)}`));
+  }
+  return lines.join("\n");
+}
+
 async function main() {
-  const candidates = await collectCandidates();
+  const { items: candidates, sourceStats } = await collectCandidates();
   const fresh = await filterProcessed(candidates);
   const deduped = dedupeBatch(fresh);
+  const alreadyProcessed = candidates.length - fresh.length; // DB에 이미 있는 URL
+  const batchDupes = fresh.length - deduped.length; // 이번 배치 내 URL·제목 중복
   const scoredAll = deduped.map((i) => ({ ...i, score: relevanceScore(i) }));
 
   const picked = scoredAll
@@ -167,23 +228,30 @@ async function main() {
     cut.slice(0, 5).forEach((i) => console.log(`  · ${i.score}점  ${i.title}`));
   }
 
-  if (!picked.length) {
-    console.log("생성할 새 기사가 없습니다.");
-    return;
-  }
+  const results = []; // 생성 성공 (제목·카테고리·카드 장수·검증 경고)
+  const failures = []; // 생성 실패 (0건은 에러가 아님 — 실패는 게이트 통과분의 생성 오류만)
 
   for (const item of picked) {
     console.log(`[생성] ${item.title} (관련도 ${item.score})`);
     try {
-      const article = await generateArticle(item);
-      console.log(`  → 발행: ${SITE_URL}/news/${article.slug}`);
+      const { article, carousel_warning } = await generateArticle(item);
+      console.log(`  → 초안 적재: ${SITE_URL}/news/${article.slug}`);
+      if (carousel_warning) console.warn(`  → ⚠️ 카드 검증 경고: ${carousel_warning}`);
 
-      // 네이버/블로그스팟 원고를 발행 대기함(텔레그램)으로
+      // 네이버/블로그스팟 원고를 발행 대기함(텔레그램)으로 + 카드 장수 집계
       const { data: full } = await supabase
         .from("premium_articles")
-        .select("title, naver_blog_content, blogspot_content")
+        .select("title, category, naver_blog_content, blogspot_content, carousel_json")
         .eq("id", article.id)
         .single();
+
+      results.push({
+        title: article.title,
+        category: full?.category ?? article.category ?? "-",
+        score: item.score,
+        cards: Array.isArray(full?.carousel_json) ? full.carousel_json.length : 0,
+        warning: carousel_warning ?? null,
+      });
 
       if (full) {
         await sendTelegramDoc(
@@ -199,8 +267,25 @@ async function main() {
       }
     } catch (err) {
       console.error(`  → 실패: ${err.message}`);
+      failures.push({ title: item.title, error: err.message });
     }
   }
+
+  if (!picked.length) console.log("생성할 새 기사가 없습니다. (관련성 게이트 정상 동작 — 실패 아님)");
+
+  // 실측 요약 알림 — 0건이어도 반드시 보낸다 (엔진이 보이게)
+  const summary = buildSummary({
+    sourceStats,
+    collected: candidates.length,
+    alreadyProcessed,
+    batchDupes,
+    picked,
+    cut,
+    results,
+    failures,
+  });
+  console.log(`\n──── 파이프라인 요약 ────\n${summary}`);
+  await sendTelegramMessage(summary);
 }
 
 main().catch((err) => {

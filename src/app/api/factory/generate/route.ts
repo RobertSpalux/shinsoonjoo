@@ -8,6 +8,54 @@ export const maxDuration = 300; // Fluid Compute: 멀티 원고 생성은 수 �
 const MODEL = process.env.FACTORY_CLAUDE_MODEL ?? "claude-sonnet-5";
 
 /**
+ * 카드 검증 가드 — 생성 변동성 방어 (실측: stat 4장 중복 + cta 누락 샘플 관측).
+ * 위반 목록을 반환. 비어 있으면 통과.
+ */
+function validateCarousel(cards: unknown): string[] {
+  const issues: string[] = [];
+  if (!Array.isArray(cards) || cards.length === 0) return ["carousel_json 없음/비어 있음"];
+
+  type Card = { type?: string; overline?: string; headline?: string; body?: string };
+  const list = cards as Card[];
+
+  if (list[0]?.type !== "hook") issues.push(`1번 카드가 hook 아님(${list[0]?.type ?? "없음"})`);
+  if (list[list.length - 1]?.type !== "cta")
+    issues.push(`마지막 카드가 cta 아님(${list[list.length - 1]?.type ?? "없음"})`);
+  if (list.length < 5 || list.length > 9) issues.push(`카드 수 ${list.length}장(5~9 범위 밖)`);
+
+  const typeCounts = new Map<string, number>();
+  for (const c of list) {
+    const t = c.type ?? "unknown";
+    typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
+  }
+  for (const [t, n] of typeCounts) {
+    if (n >= 3) issues.push(`${t} 타입 ${n}장 반복(물타기 의심)`);
+  }
+
+  list.forEach((c, i) => {
+    for (const field of ["overline", "headline", "body"] as const) {
+      if (!String(c[field] ?? "").trim()) issues.push(`${i + 1}번(${c.type}) ${field} 비어 있음`);
+    }
+  });
+  return issues;
+}
+
+/** 검증 최종 실패 시 텔레그램 플래그 (best-effort — env 없으면 조용히 스킵) */
+async function notifyCarouselWarning(title: string, issues: string[]) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: `⚠️ 카드 검증 실패(재시도 후에도) — 저장은 됨, /admin에서 카드 확인 필요\n${title}\n· ${issues.join("\n· ")}`.slice(0, 4000),
+    }),
+  }).catch(() => undefined);
+}
+
+/**
  * OSMU 콘텐츠 팩토리.
  * 인풋: { title?, category?, source_url, source_name, content }
  * 원천 뉴스 1건 → Claude가 4개 채널 원고 + FAQ + 카드뉴스 스크립트를
@@ -42,7 +90,24 @@ export async function POST(request: Request) {
 
   const anthropic = new Anthropic(); // ANTHROPIC_API_KEY
 
-  try {
+  const userContent = [
+    "다음 원천 자료로 4개 채널 원고를 생성하라.",
+    title ? `제안 제목: ${title}` : "",
+    category ? `카테고리 힌트: ${category}` : "",
+    source_name ? `출처: ${source_name}` : "",
+    source_url ? `원문 URL: ${source_url}` : "",
+    "",
+    "--- 원천 자료 ---",
+    content.trim().slice(0, 30000),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  // 1회 생성 — 카드 검증 가드의 재생성에서도 동일하게 호출
+  const generateOnce = async (): Promise<
+    | { error: { status: number; message: string } }
+    | { article: Record<string, unknown>; usage: { input_tokens: number; output_tokens: number } }
+  > => {
     const stream = anthropic.messages.stream({
       model: MODEL,
       max_tokens: 32000,
@@ -53,40 +118,64 @@ export async function POST(request: Request) {
           schema: FACTORY_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
         },
       },
-      messages: [
-        {
-          role: "user",
-          content: [
-            "다음 원천 자료로 4개 채널 원고를 생성하라.",
-            title ? `제안 제목: ${title}` : "",
-            category ? `카테고리 힌트: ${category}` : "",
-            source_name ? `출처: ${source_name}` : "",
-            source_url ? `원문 URL: ${source_url}` : "",
-            "",
-            "--- 원천 자료 ---",
-            content.trim().slice(0, 30000),
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        },
-      ],
+      messages: [{ role: "user", content: userContent }],
     });
 
     const message = await stream.finalMessage();
 
     if (message.stop_reason === "refusal") {
-      return NextResponse.json({ error: "생성이 거부되었습니다." }, { status: 422 });
+      return { error: { status: 422, message: "생성이 거부되었습니다." } };
     }
     if (message.stop_reason === "max_tokens") {
-      return NextResponse.json({ error: "출력이 잘렸습니다. 원천 자료를 줄여주세요." }, { status: 422 });
+      return { error: { status: 422, message: "출력이 잘렸습니다. 원천 자료를 줄여주세요." } };
     }
-
     const textBlock = message.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      return NextResponse.json({ error: "빈 응답" }, { status: 502 });
+      return { error: { status: 502, message: "빈 응답" } };
+    }
+    return {
+      article: JSON.parse(textBlock.text),
+      usage: {
+        input_tokens: message.usage.input_tokens,
+        output_tokens: message.usage.output_tokens,
+      },
+    };
+  };
+
+  try {
+    const first = await generateOnce();
+    if ("error" in first) {
+      return NextResponse.json({ error: first.error.message }, { status: first.error.status });
     }
 
-    const article = JSON.parse(textBlock.text);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let article: any = first.article;
+    const usage = { ...first.usage };
+
+    // 카드 검증 가드 — 실패 시 1회만 재생성. 그래도 실패하면 그대로 저장하되 ⚠️ 플래그.
+    let carouselIssues = validateCarousel(article.carousel_json);
+    if (carouselIssues.length > 0) {
+      console.warn(`carousel 검증 실패 — 1회 재생성: ${carouselIssues.join(" / ")}`);
+      try {
+        const retry = await generateOnce();
+        if (!("error" in retry)) {
+          usage.input_tokens += retry.usage.input_tokens;
+          usage.output_tokens += retry.usage.output_tokens;
+          const retryIssues = validateCarousel((retry.article as { carousel_json?: unknown }).carousel_json);
+          // 위반이 더 적은 쪽 채택 (재시도 통과 시 0건 → 경고 해제)
+          if (retryIssues.length < carouselIssues.length) {
+            article = retry.article;
+            carouselIssues = retryIssues;
+          }
+        }
+      } catch (retryErr) {
+        console.warn("재생성 호출 실패 — 원본 유지:", retryErr);
+      }
+      if (carouselIssues.length > 0) {
+        console.warn(`carousel 검증 최종 실패 — 그대로 저장: ${carouselIssues.join(" / ")}`);
+        await notifyCarouselWarning(String(article.title ?? "(제목 없음)"), carouselIssues);
+      }
+    }
 
     // slug 중복 방지 — 이미 있으면 날짜 접미사
     const supabase = createAdminClient();
@@ -135,10 +224,9 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       article: inserted,
-      usage: {
-        input_tokens: message.usage.input_tokens,
-        output_tokens: message.usage.output_tokens,
-      },
+      // 재시도 후에도 남은 검증 위반 — 파이프라인이 텔레그램 요약에 플래그로 실음
+      carousel_warning: carouselIssues.length > 0 ? carouselIssues.join(" / ") : undefined,
+      usage, // 재생성 포함 합산
     });
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {
