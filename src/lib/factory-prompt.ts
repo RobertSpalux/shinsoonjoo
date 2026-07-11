@@ -24,11 +24,20 @@ export function factorySystemPrompt() {
   · 마무리: 3줄 요약 + "더 자세한 해설은 프로필 링크에서" (외부 링크 언급은 이 1회만 — 링크 남발 감점)
   · 금지: 원문 문장 복사(유사문서 감점), 수익률 보장·과장 표현(금소법), "무료상담 클릭" 같은 노골적 광고 문구
 - blogspot_content: 구글 블로그스팟용. 개조식(번호·불릿 중심), 롱테일 키워드를 소제목(h2급)에 배치, 전문 용어와 근거 중심. 1,000~1,500자. 첫 문단에 결론 요약(구글 피처드 스니펫 대응), 중간에 [이미지①] 마커 1~2개, 마지막에 "원문 심층 해설" 본진 링크 안내 1회.
-- carousel_json: 인스타/스레드 카드뉴스. ⚠️장수는 내용이 정한다 — 억지로 늘리지 마라. 이 주제에서 진짜 할 말이 4개면 6장(훅1+본문4+CTA1), 6개면 8장. 물 타는 카드("~도 만만치 않아요" 식 껍데기) 절대 금지. 최소 5장~최대 9장.
-  · 첫 장(isHook용): 스크롤을 멈추는 강력한 훅. 가능하면 충격 수치 하나를 big_number로 뽑아라(예: "25%", "1.5배", "3명 중 1명"). heading은 그 수치의 의미를 손실/궁금증 프레임으로("신차 4대 중 1대가 수입차?!"보다 "수입차 늘면 내 보험료도 오릅니다"가 강함). body는 맥락 1~2문장.
-  · 중간 장들: 한 장 = 완결된 포인트 하나. 단, 껍데기 금지 — heading(18자 이내)으로 포인트를 던지고 body(2~3문장, 60~90자)로 반드시 "왜/어떻게"까지 해소해라. 독자가 그 장만 봐도 하나를 배우고 넘어가게. 핵심 단어는 highlight에 담아라(그 카드에서 가장 중요한 2~6자, 형광펜 강조됨). ⚠️highlight는 반드시 그 카드의 heading 또는 body에 **글자 그대로 등장하는 리터럴 단어**여야 한다(패러프레이즈·요약어 금지). 렌더러가 그 단어를 찾아 형광펜 처리하므로, 본문에 없는 말을 highlight로 쓰면 강조가 사라진다.
-  · 마지막 장(isCta용): 보험 리모델링 진단으로 연결. heading은 행동 유도("내 보험 새는 곳, 무료로 점검하세요"), "저장하고 두고두고 보세요"는 지양(식상함).
-  · 각 장 객체: { heading, body, big_number?(첫 장만, 없으면 생략), highlight?(중간 장, 없으면 생략) }
+- carousel_json: 인스타/스레드 카드뉴스 — 타입 기반 카드 배열(8종). 각 카드 = { type, overline, ...타입별 필드 }.
+  · 생성 절차: ① 본문에서 "구조화 가능한 정보 단위"(충격 수치·비교/구분·절차·항목 묶음·오해와 교정·결정적 한 마디)를 먼저 추출 → ② 단위마다 최적 타입을 배정 → ③ 그 단위 수만큼만 카드를 만든다. ⚠️한 정보를 여러 장으로 늘리는 물타기 절대 금지. 정보가 빈약하면 5장 안팎, 풍부하면 최대 9장.
+  · 1번 카드 = 반드시 hook, 마지막 카드 = 반드시 cta. 중간 카드는 "제목+두 줄" 벙벙 카드 금지 — 매 장이 표·숫자·스텝·항목 등 실제 정보 덩어리 하나를 완결로 담아, 독자가 그 장만 봐도 하나를 배우고 넘어가게.
+  · 모든 카드는 headline과 body를 채운다(필수 필드). body의 타입별 의미는 아래 참조 — 특히 stat의 caption과 callout의 correction은 카드의 완성도를 결정한다.
+  · 공통 overline: 카드 상단 라벨 2~8자(예 "핵심 정리", "비교", "따라하기"). ★ 기호는 렌더러가 붙이니 넣지 말 것.
+  · hook(1번 고정): headline(스크롤 멈추는 훅 20자 내외 — 손실/궁금증 프레임. "신차 4대 중 1대가 수입차?!"보다 "수입차 늘면 내 보험료도 오릅니다"가 강함), highlight(headline에 글자 그대로 등장하는 강조 단어·숫자 — 리터럴만, 패러프레이즈 금지), body=넘김 유도 한 마디(예 "지금 확인하세요")
+  · points(항목 나열): headline, body(부연 한 문장), items 2~5개 — 각 { tag: "num"(순번 원)|"check"(골드 체크), title(핵심 12자 내외), sub(부연 40자 내외 — "왜/어떻게"까지 해소) }, highlight?(items의 title/sub에 글자 그대로 있는 단어만)
+  · table(비교·구분이 있을 때): headline, body(표의 함의 한 문장), columns(2~4개), rows(각 행 = columns와 같은 길이의 배열), highlight_row_index?(강조할 행, 0부터)
+  · steps(절차·순서): headline, body(이 절차의 이득 한 문장), items 2~5개 [{ title, sub }] (tag 생략), extra?=하단 배지 문구(예 "5분이면 끝")
+  · stat(숫자 하나가 주인공일 때): headline, big_number(충격 수치, 예 "25%"·"1.5배"), extra?=단위·보조 표기, body=그 수치가 내게 갖는 의미 한 문장
+  · callout(오해 교정): headline(흔한 오해·통념), mark: "x"(틀렸다)|"check"(맞다), body=바로잡는 한 문장(⚠️"무조건 해지"가 아니라 "점검·재설계" 프레임), extra?=주의 문구
+  · quote(결정적 한 마디): headline=인용 문장, body=출처(예 "신순주 · ${years}년차 현장")
+  · cta(마지막 고정): headline(행동 유도 — "내 보험 새는 곳, 무료로 점검하세요" 방향. "저장하고 두고두고 보세요"는 지양), body(안심 문구 한 줄, 예 "비대면·전국, 부담 없이"), items 2~3개 [{ tag: 이모지 1개, title: 행동 문구 }] — 마지막 항목이 핵심 행동(보험 리모델링 진단), extra="@goodfinance_sj"
+  · 컴플라이언스: 특정사 비방·순위/추천·수익률 보장 금지.
 - faq_json: 이 주제로 사람들이 실제 검색할 질문 3~5개와 간결한 답변 (FAQPage 리치 스니펫용).
 - instagram_caption: 인스타/스레드 게시물 캡션. 2026년 인스타 알고리즘 기준(첫 줄 후크로 '더보기' 유도, 저장·댓글 유도, 주제 키워드 자연 포함, 해시태그 5개 이하)에 맞춰 아래 5블록으로 작성한다:
   · 1줄차: 강력한 후크 한 문장 (carousel 첫 장의 핵심을 손실·궁금증 프레임으로). 이모지 없이.
@@ -100,16 +109,66 @@ export const FACTORY_OUTPUT_SCHEMA = {
     blogspot_content: { type: "string" },
     carousel_json: {
       type: "array",
-      description: "카드뉴스 5~9장 (장수는 내용이 결정, 물타기 금지)",
+      description:
+        "카드뉴스 — 타입 기반 카드 배열. 1번=hook, 마지막=cta 고정. 장수는 정보 단위 수가 결정(빈약 5장 안팎 ~ 최대 9장, 물타기 금지). " +
+        "각 카드는 type에 해당하는 필드만 채운다(타입별 필드는 시스템 프롬프트 참조).",
+      // ⚠️ 스키마 복잡도 제한(Anthropic structured output): minItems/maxItems 금지(과거 라이브 400 사고),
+      // optional 필드 총량 제한(~24, 중첩 포함) → 타입별 전용 필드를 body/extra 2개 범용 필드로 통합.
+      // 타입별 의미 매핑은 description·시스템 프롬프트로 지시하고, 렌더러(render-cards.mjs)가 타입별로 해석.
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["heading", "body"],
+        required: ["type", "overline", "headline", "body"],
         properties: {
-          heading: { type: "string", description: "카드 제목 (18자 이내)" },
-          body: { type: "string", description: "카드 본문 (2~3문장, 60~90자로 왜/어떻게까지 해소)" },
-          big_number: { type: "string", description: "첫 장(훅) 전용. 충격 수치 하나(예 '25%','1.5배','3명 중 1명'). 없으면 생략" },
-          highlight: { type: "string", description: "중간 장 전용. 그 카드 핵심 단어(2~6자, 형광펜 강조). ⚠️heading/body에 글자 그대로 등장하는 리터럴 단어만(패러프레이즈 금지). 없으면 생략" },
+          type: {
+            type: "string",
+            enum: ["hook", "points", "table", "steps", "stat", "callout", "quote", "cta"],
+            description: "카드 레이아웃 타입. hook=1번 고정, cta=마지막 고정",
+          },
+          overline: { type: "string", description: "상단 라벨 2~8자 (★ 기호 제외 — 렌더러가 붙임)" },
+          headline: {
+            type: "string",
+            description:
+              "카드 제목(필수). hook=훅 문장(20자 내외) | quote=인용 문장 자체 | callout=흔한 오해 | 그 외=18자 이내 제목",
+          },
+          highlight: {
+            type: "string",
+            description: "강조 단어(형광펜/골드). headline 또는 items의 title/sub에 글자 그대로 등장하는 리터럴만. 없으면 생략",
+          },
+          body: {
+            type: "string",
+            description:
+              "타입별 보조 문장(필수): hook=swipe cue(넘김 유도 한 마디) | stat=caption(수치의 의미 한 문장) | callout=correction(바로잡는 한 문장, 점검·재설계 프레임) | quote=attribution(출처, 예 '신순주 · 23년차 현장') | points·table·steps=headline 아래 붙는 부연 한 문장(왜 중요한지) | cta=안심 문구 한 줄(예 '비대면·전국, 부담 없이')",
+          },
+          extra: {
+            type: "string",
+            description:
+              "타입별 부가 요소: stat=unit(단위·보조 표기) | steps=footer_badge(하단 골드 배지 문구) | callout=warning(⚠️ 주의 문구) | cta=handle('@goodfinance_sj') | 그 외=생략",
+          },
+          big_number: { type: "string", description: "stat 전용. 충격 수치 (예 '25%','1.5배'). 다른 타입은 생략" },
+          mark: { type: "string", enum: ["x", "check"], description: "callout 전용. x=오해(빨강 ✕), check=사실(딥그린 ✓)" },
+          items: {
+            type: "array",
+            description:
+              "points(항목 2~5개: tag='num'|'check', title, sub) · steps(단계 2~5개: title, sub) · cta(행동 2~3개: tag=이모지 1개, title=행동 문구, 마지막이 핵심 행동) 공용. 다른 타입은 생략",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["title"],
+              properties: {
+                tag: { type: "string", description: "points: 'num'(순번 원)|'check'(골드 체크) / cta: 이모지 1개 / steps: 생략" },
+                title: { type: "string", description: "항목·단계 핵심(12자 내외) 또는 cta 행동 문구" },
+                sub: { type: "string", description: "부연 (40자 내외 — 왜/어떻게까지 해소). cta는 생략" },
+              },
+            },
+          },
+          columns: { type: "array", items: { type: "string" }, description: "table 전용. 열 제목 2~4개" },
+          rows: {
+            type: "array",
+            items: { type: "array", items: { type: "string" } },
+            description: "table 전용. 각 행은 columns와 같은 길이의 문자열 배열",
+          },
+          highlight_row_index: { type: "integer", description: "table 전용. 강조할 행 인덱스(0부터). 없으면 생략" },
         },
       },
     },
