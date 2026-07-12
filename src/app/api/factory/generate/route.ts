@@ -40,8 +40,22 @@ function validateCarousel(cards: unknown): string[] {
   return issues;
 }
 
+/**
+ * 원고 검증 가드 — 커밋 M0. 실측: 프롬프트의 글자수 지시(2,000~3,200자)가 안 먹혀
+ * 1,749자/1,302자 미달 생성물 관측 → 글자수가 아니라 구조(H2 개수)로 강제하고 여기서 검증.
+ */
+function validateMainMarkdown(md: unknown): string[] {
+  const issues: string[] = [];
+  const text = typeof md === "string" ? md : "";
+  if (!text.trim()) return ["main_website_markdown 없음/비어 있음"];
+  const h2Count = (text.match(/^##\s/gm) ?? []).length;
+  if (h2Count < 4) issues.push(`H2 소제목 ${h2Count}개(최소 4개)`);
+  if (text.length < 1900) issues.push(`본문 ${text.length}자(1,900자 미만)`);
+  return issues;
+}
+
 /** 검증 최종 실패 시 텔레그램 플래그 (best-effort — env 없으면 조용히 스킵) */
-async function notifyCarouselWarning(title: string, issues: string[]) {
+async function notifyValidationWarning(title: string, kind: string, issues: string[]) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHAT_ID;
   if (!token || !chatId) return;
@@ -50,7 +64,7 @@ async function notifyCarouselWarning(title: string, issues: string[]) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       chat_id: chatId,
-      text: `⚠️ 카드 검증 실패(재시도 후에도) — 저장은 됨, /admin에서 카드 확인 필요\n${title}\n· ${issues.join("\n· ")}`.slice(0, 4000),
+      text: `⚠️ ${kind} 검증 실패(재시도 후에도) — 저장은 됨, /admin에서 확인 필요\n${title}\n· ${issues.join("\n· ")}`.slice(0, 4000),
     }),
   }).catch(() => undefined);
 }
@@ -152,20 +166,30 @@ export async function POST(request: Request) {
     let article: any = first.article;
     const usage = { ...first.usage };
 
-    // 카드 검증 가드 — 실패 시 1회만 재생성. 그래도 실패하면 그대로 저장하되 ⚠️ 플래그.
+    // 검증 가드 — 카드(커밋 G) + 본진 원고(커밋 M0). 어느 쪽이든 실패 시 1회만 재생성
+    // (가드별 재생성이면 최대 3회 호출이 되므로 합산 1회). 그래도 실패하면 그대로 저장하되 ⚠️ 플래그.
     let carouselIssues = validateCarousel(article.carousel_json);
-    if (carouselIssues.length > 0) {
-      console.warn(`carousel 검증 실패 — 1회 재생성: ${carouselIssues.join(" / ")}`);
+    let markdownIssues = validateMainMarkdown(article.main_website_markdown);
+    if (carouselIssues.length + markdownIssues.length > 0) {
+      console.warn(
+        `생성물 검증 실패 — 1회 재생성: ${[...carouselIssues, ...markdownIssues].join(" / ")}`
+      );
       try {
         const retry = await generateOnce();
         if (!("error" in retry)) {
           usage.input_tokens += retry.usage.input_tokens;
           usage.output_tokens += retry.usage.output_tokens;
-          const retryIssues = validateCarousel((retry.article as { carousel_json?: unknown }).carousel_json);
-          // 위반이 더 적은 쪽 채택 (재시도 통과 시 0건 → 경고 해제)
-          if (retryIssues.length < carouselIssues.length) {
+          const retryArticle = retry.article as {
+            carousel_json?: unknown;
+            main_website_markdown?: unknown;
+          };
+          const retryCarousel = validateCarousel(retryArticle.carousel_json);
+          const retryMarkdown = validateMainMarkdown(retryArticle.main_website_markdown);
+          // 위반 합계가 더 적은 쪽 채택 (재시도 통과 시 0건 → 경고 해제)
+          if (retryCarousel.length + retryMarkdown.length < carouselIssues.length + markdownIssues.length) {
             article = retry.article;
-            carouselIssues = retryIssues;
+            carouselIssues = retryCarousel;
+            markdownIssues = retryMarkdown;
           }
         }
       } catch (retryErr) {
@@ -173,7 +197,11 @@ export async function POST(request: Request) {
       }
       if (carouselIssues.length > 0) {
         console.warn(`carousel 검증 최종 실패 — 그대로 저장: ${carouselIssues.join(" / ")}`);
-        await notifyCarouselWarning(String(article.title ?? "(제목 없음)"), carouselIssues);
+        await notifyValidationWarning(String(article.title ?? "(제목 없음)"), "카드", carouselIssues);
+      }
+      if (markdownIssues.length > 0) {
+        console.warn(`본진 원고 검증 최종 실패 — 그대로 저장: ${markdownIssues.join(" / ")}`);
+        await notifyValidationWarning(String(article.title ?? "(제목 없음)"), "본진 원고", markdownIssues);
       }
     }
 
@@ -226,6 +254,7 @@ export async function POST(request: Request) {
       article: inserted,
       // 재시도 후에도 남은 검증 위반 — 파이프라인이 텔레그램 요약에 플래그로 실음
       carousel_warning: carouselIssues.length > 0 ? carouselIssues.join(" / ") : undefined,
+      markdown_warning: markdownIssues.length > 0 ? markdownIssues.join(" / ") : undefined,
       usage, // 재생성 포함 합산
     });
   } catch (err) {
