@@ -11,6 +11,9 @@ import { articleSchema, faqSchema, personSchema, jsonLdString } from "@/lib/json
 import { BRAND, getCareer } from "@/lib/brand";
 import ReadingProgress from "@/components/news/ReadingProgress";
 import ArticleCard from "@/components/news/ArticleCard";
+import ArticleCtaInline from "@/components/news/ArticleCtaInline";
+import ArticleCtaEnd from "@/components/news/ArticleCtaEnd";
+import { CTA_MARKER } from "@/lib/osmu-format";
 
 export const revalidate = 60;
 // 빌드 시점에 없던 slug(빌드 후 발행된 초안)도 요청 시 렌더 — SSG 404 방지.
@@ -77,6 +80,13 @@ export default async function ArticlePage({
   const keyPoints = article.key_points ?? [];
   const toc = extractToc(markdown);
   const readMinutes = Math.max(1, Math.round(markdown.length / 600));
+
+  // 글 중간 CTA (커밋 N5) — <!--CTA--> 마커 첫 번째 위치에만 치환, 나머지 마커는 제거(화면 노출 금지)
+  const markerIdx = markdown.indexOf(CTA_MARKER);
+  const bodyBeforeCta =
+    markerIdx === -1 ? markdown.replaceAll(CTA_MARKER, "") : markdown.slice(0, markerIdx);
+  const bodyAfterCta =
+    markerIdx === -1 ? "" : markdown.slice(markerIdx + CTA_MARKER.length).replaceAll(CTA_MARKER, "");
 
   const related = (await getPublishedArticles(article.category, 4))
     .filter((a) => a.slug !== article.slug)
@@ -169,11 +179,19 @@ export default async function ArticlePage({
           </nav>
         )}
 
-        {/* 본문 */}
+        {/* 본문 — 마커가 있으면 그 지점에 인라인 진단 다리 삽입 (커밋 N5) */}
         <div className="article-body">
           <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
-            {markdown}
+            {bodyBeforeCta}
           </ReactMarkdown>
+          {markerIdx !== -1 && (
+            <>
+              <ArticleCtaInline slug={article.slug} />
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
+                {bodyAfterCta}
+              </ReactMarkdown>
+            </>
+          )}
         </div>
 
         {/* 원문 출처 — 신뢰 신호 */}
@@ -212,28 +230,8 @@ export default async function ArticlePage({
           </section>
         )}
 
-        {/* 상담 CTA */}
-        <aside className="mt-16 rounded-lg border border-[var(--color-gold-dim)] bg-gradient-to-br from-white to-[#f7f2e6] p-8 text-center md:p-10">
-          <p
-            className="text-lg font-semibold text-[var(--color-forest)] md:text-xl"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            내 상황에는 어떻게 적용될까요?
-          </p>
-          <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[var(--color-text-body)]">
-            같은 뉴스도 자산 구조에 따라 답이 다릅니다. {years}년 차 GA명장이 직접 확인해 드립니다.
-          </p>
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-x-7 gap-y-4">
-            <Link href="/diagnosis"
-              className="rounded-sm bg-[var(--color-forest)] px-7 py-3.5 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)]">
-              내 보험 진단받기
-            </Link>
-            <Link href="/#consultation"
-              className="border-b border-[var(--color-gold-dim)] pb-0.5 text-sm font-medium text-[var(--color-text-strong)] transition-colors duration-300 hover:border-[var(--color-gold)]">
-              1:1 상담 예약
-            </Link>
-          </div>
-        </aside>
+        {/* 글 끝 CTA — 딥그린 밴드, 모든 기사 자동 삽입 (커밋 N5 — 기존 골드 카드 CTA 대체) */}
+        <ArticleCtaEnd slug={article.slug} />
 
         {/* 관련 글 — 내부 순환으로 체류시간 연장 */}
         {related.length > 0 && (

@@ -11,6 +11,13 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://goodfinance.kr";
 /** [이미지①] [이미지 2] 등 카드 삽입 위치 마커 */
 const IMG_MARKER = /\[이미지\s*[①②③④⑤⑥⑦⑧⑨⑩0-9]+\]/g;
 
+/**
+ * 본진 전용 글 중간 CTA 삽입 마커 (커밋 N5) — /news/[slug] 렌더러가 이 위치에
+ * ArticleCtaInline을 치환한다. ⚠️ 외부 채널(네이버/블로그스팟) 원고에는 절대 노출 금지
+ * — 아래 두 변환기가 반드시 제거한다.
+ */
+export const CTA_MARKER = "<!--CTA-->";
+
 /** tags 배열 → "#태그1 #태그2 …" (앞의 # 중복·공백 방어, 도배 방지 상한 10개) */
 function toHashtags(tags: string[] | null | undefined): string {
   return (tags ?? [])
@@ -30,6 +37,7 @@ function toHashtags(tags: string[] | null | undefined): string {
 export function toBlogspotHtml(markdown: string, slug: string, tags?: string[] | null): string {
   const cleaned = markdown
     .replace(IMG_MARKER, "")
+    .replaceAll(CTA_MARKER, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
@@ -57,6 +65,7 @@ export function toNaverText(
   opts?: { articleTitle?: string; slug?: string; tags?: string[] | null }
 ): string {
   let text = markdown
+    .replaceAll(CTA_MARKER, "") // 본진 전용 CTA 마커 — 외부 채널 노출 금지
     .replace(/^#{1,6}\s+/gm, "") // 헤딩 마커
     .replace(/^>\s?/gm, "") // 인용 마커
     .replace(/^\s*[-*]\s+/gm, "· ") // 불릿
