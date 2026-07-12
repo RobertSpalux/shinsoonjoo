@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { toBlogspotHtml, toNaverText } from "@/lib/osmu-format";
 
 /**
  * 관리자 운영 콘솔 — 매일 아침 5분 운영 도구 (검수 → 발행 → 4채널 배포 → 리드 관리).
@@ -405,18 +406,30 @@ export default function AdminDashboard({
                       </button>
                       {a.naver_blog_content && (
                         <button
-                          onClick={() => copy(`${a.title}\n\n${a.naver_blog_content}`, "네이버 원고")}
+                          onClick={() =>
+                            copy(
+                              `${a.title}\n\n${toNaverText(a.naver_blog_content ?? "")}`,
+                              "네이버 원고 (에디터용 텍스트 변환)"
+                            )
+                          }
+                          title="마크다운 기호 제거 · [이미지] 마커 유지 · 진단 링크 삽입"
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
                         >
-                          네이버 원고 복사
+                          네이버 복사 <span className="text-slate-400">· 텍스트 변환</span>
                         </button>
                       )}
                       {a.blogspot_content && (
                         <button
-                          onClick={() => copy(`${a.title}\n\n${a.blogspot_content}`, "블로그스팟 원고")}
+                          onClick={() =>
+                            copy(
+                              toBlogspotHtml(a.blogspot_content ?? "", a.slug),
+                              "블로그스팟 HTML (Blogger 'HTML 보기'에 붙여넣기)"
+                            )
+                          }
+                          title="마크다운→HTML 변환 · 이미지 마커 제거 · 본진 링크 삽입. 제목은 Blogger 제목란에 별도 입력"
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
                         >
-                          블로그스팟 복사
+                          블로그스팟 복사 <span className="text-slate-400">· HTML 변환</span>
                         </button>
                       )}
                       {a.instagram_caption && (
