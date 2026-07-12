@@ -1,0 +1,55 @@
+# 주 2회 상록수(evergreen) 콘텐츠 파이프라인 — 커밋 M3
+# 화·금 07:00 KST (뉴스 크론 06시 daily-content.yml과 분리 — 그 파일은 건드리지 않는다)
+# 시드뱅크 → 공공 1차 소스 그라운딩 → Claude 상록수 생성(초안, 발행은 /admin)
+# → 카드뉴스·네이버 이미지 렌더(뉴스와 동일 파이프라인 재사용)
+name: Weekly Evergreen Content
+
+on:
+  schedule:
+    - cron: "0 22 * * 1,4" # UTC 월·목 22:00 = KST 화·금 07:00
+  workflow_dispatch: # 수동 실행 (intent 선택 가능)
+    inputs:
+      intent:
+        description: "시드 의도 (auto = 요일 자동: 화=유입, 금=전환)"
+        type: choice
+        options:
+          - auto
+          - 유입
+          - 전환
+        default: auto
+
+jobs:
+  evergreen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install pipeline deps
+        run: npm install --no-save puppeteer @supabase/supabase-js
+
+      - name: Generate evergreen article (seed → grounding → Claude draft)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SITE_URL: ${{ vars.SITE_URL || 'https://soonjoo.vercel.app' }}
+          FACTORY_SECRET: ${{ secrets.FACTORY_SECRET }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          ARGS=""
+          INTENT="${{ inputs.intent }}"
+          if [ -n "$INTENT" ] && [ "$INTENT" != "auto" ]; then
+            ARGS="--intent=$INTENT"
+          fi
+          node scripts/generate-evergreen.mjs $ARGS
+
+      - name: Render card news + naver image set (1080x1350 / 800px)
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/render-cards.mjs
