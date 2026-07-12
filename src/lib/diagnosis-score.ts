@@ -67,11 +67,11 @@ const CONTRACT_STATUS: Record<string, string> = {
   "잘 모르겠다": "개수를 모르십니다",
 };
 const CHECK_STATUS: Record<string, string> = {
-  "1년 이내": "1년 이내 점검",
-  "1~3년 전": "1~3년 전 — 권장 주기(3~5년) 안",
-  "3~5년 전": "3~5년 전 — 점검 주기 도래",
-  "5년 이상": "5년 이상 — 권장 주기 경과",
-  "가입 후 한 번도 없음": "가입 후 한 번도",
+  "1년 이내": "1년 이내 — 최근에 확인하셨습니다",
+  "1~3년 전": "1~3년 전 — 아직 여유가 있습니다",
+  "3~5년 전": "3~5년 전 — 점검 주기를 넘겼습니다",
+  "5년 이상": "5년 이상 — 그 사이 제도도 상품도 바뀌었습니다",
+  "가입 후 한 번도 없음": "가입 후 한 번도 — 무엇에 가입했는지 모르는 상태입니다",
 };
 const CHANNEL_STATUS: Record<string, string> = {
   "다이렉트·온라인": "직접 가입",
@@ -81,13 +81,16 @@ const CHANNEL_STATUS: Record<string, string> = {
   "기억나지 않음": "기억나지 않음",
 };
 
-/** [B] 보장 공백 감점표 — [name, 감점] */
-const GAP_DEDUCTIONS: [name: string, points: number][] = [
-  ["실손의료비", 10],
-  ["암 진단비", 7],
-  ["뇌·심장 진단비", 6],
-  ["수술비", 4],
-  ["간병·치매", 3],
+/**
+ * [B] 보장 공백 감점표 — [매칭 키(퀴즈 선택지 문자열 그대로), 표시 라벨, 감점].
+ * ⚠️ 표시 라벨에는 내부 가운뎃점을 쓰지 않는다(N8) — 구분자 ' · '와 섞여 읽히지 않음.
+ */
+const GAP_DEDUCTIONS: [key: string, label: string, points: number][] = [
+  ["실손의료비", "실손의료비", 10],
+  ["암 진단비", "암 진단비", 7],
+  ["뇌·심장 진단비", "뇌심장 진단비", 6],
+  ["수술비", "수술비", 4],
+  ["간병·치매", "간병", 3],
 ];
 
 export function computeDiagnosis(a: DiagnosisAnswers): DiagnosisResult {
@@ -123,18 +126,16 @@ export function computeDiagnosis(a: DiagnosisAnswers): DiagnosisResult {
     scoreB = 0;
     breakdown.push({ key: "gaps", label: "보장 공백", value: "보유 보장을 모르십니다" });
   } else {
-    missing = GAP_DEDUCTIONS.filter(
-      ([name]) => !cov.includes(name) && !(name === "간병·치매" && isYoungSingle)
-    ).map(([name]) => name);
-    const deducted = GAP_DEDUCTIONS.filter(([name]) => missing.includes(name)).reduce(
-      (sum, [, p]) => sum + p,
-      0
+    const missingRows = GAP_DEDUCTIONS.filter(
+      ([key]) => !cov.includes(key) && !(key === "간병·치매" && isYoungSingle)
     );
+    missing = missingRows.map(([, label]) => label);
+    const deducted = missingRows.reduce((sum, [, , p]) => sum + p, 0);
     scoreB = Math.max(0, 30 - deducted);
     breakdown.push({
       key: "gaps",
       label: "보장 공백",
-      value: missing.length ? `${missing.join("·")} 없음` : "핵심 보장 확인됨",
+      value: missing.length ? `${missing.join(" · ")} 없음` : "핵심 보장 확인됨",
     });
   }
 
@@ -203,8 +204,8 @@ function buildNarrative(
     signals.push(["어떤 보장을 갖고 계신지도 확실하지 않으며", "어떤 보장을 갖고 계신지도 확실하지 않습니다"]);
   } else if (missing.length >= 2) {
     signals.push([
-      `${missing.slice(0, 2).join("·")} 등 ${missing.length}곳이 비어 있으며`,
-      `${missing.slice(0, 2).join("·")} 등 ${missing.length}곳이 비어 있습니다`,
+      `${missing.slice(0, 2).join(" · ")} 등 ${missing.length}곳이 비어 있으며`,
+      `${missing.slice(0, 2).join(" · ")} 등 ${missing.length}곳이 비어 있습니다`,
     ]);
   }
 

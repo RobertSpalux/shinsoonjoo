@@ -11,7 +11,27 @@ import { MOCKUP_CASES, MOCKUP_CONCLUSION } from "@/lib/mockup-analysis";
 
 const won = (n: number) => `${n.toLocaleString("ko-KR")}원`;
 
-export default function CoverageMockup() {
+export type ContractAnswer = "1~2개" | "3~5개" | "6~9개" | "10개 이상" | "잘 모르겠다";
+
+/**
+ * 응답별 도입 문장 (N8) — 진단 응답(계약 개수)과 목업의 논리를 잇는다.
+ * ⚠️ 문장은 확정 카피 — 임의로 다듬지 말 것. 목업 데이터는 절대 응답에 맞춰 바꾸지 않는다
+ * (실제 분석 결과를 조작하는 것 = 과장광고·PIPA 리스크. 바뀌는 건 도입 문장뿐).
+ */
+const INTRO_BY_CONTRACTS: Record<ContractAnswer, string> = {
+  "1~2개":
+    "계약이 적다는 건 새는 곳이 없다는 뜻이지, 비어 있지 않다는 뜻은 아닙니다. 아래 두 분은 계약이 많았지만 — 두 분 모두 비어 있던 곳이 나왔습니다.",
+  "3~5개":
+    "계약이 여러 개면 같은 담보가 반드시 흩어집니다. 본인은 그 합계를 알 수 없습니다. 아래 두 분이 그랬습니다.",
+  "6~9개":
+    "계약이 여러 개면 같은 담보가 반드시 흩어집니다. 본인은 그 합계를 알 수 없습니다. 아래 두 분이 그랬습니다.",
+  "10개 이상":
+    "계약이 여러 개면 같은 담보가 반드시 흩어집니다. 본인은 그 합계를 알 수 없습니다. 아래 두 분이 그랬습니다.",
+  "잘 모르겠다": "개수를 모르신다면, 합계는 더더욱 모르십니다. 아래 두 분도 그랬습니다.",
+};
+
+export default function CoverageMockup({ contractAnswer }: { contractAnswer?: ContractAnswer } = {}) {
+  const intro = contractAnswer ? INTRO_BY_CONTRACTS[contractAnswer] : undefined;
   return (
     <section aria-label="담보 합산 분석 가상 사례">
       {/* 오버라인 라벨 — 가상 사례 명시 1회차 */}
@@ -23,9 +43,14 @@ export default function CoverageMockup() {
       <h3 className="mt-5 font-serif text-xl font-semibold tracking-[-0.01em] text-[var(--color-text-strong)] md:text-2xl">
         다른 분들의 표는 이렇게 나왔습니다
       </h3>
-      <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">
-        당신의 표는 상담에서 실제 계약을 조회해야 나옵니다.
-      </p>
+      {intro ? (
+        <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-body)]">{intro}</p>
+      ) : (
+        // 기본 문장 — 다른 페이지에서 응답 없이 재사용할 때
+        <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">
+          당신의 표는 상담에서 실제 계약을 조회해야 나옵니다.
+        </p>
+      )}
 
       {/* 사례 카드 2장 — 줄어든 사례와 늘어난 사례를 같은 톤으로 나란히 */}
       <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">

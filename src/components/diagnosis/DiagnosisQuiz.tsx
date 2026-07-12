@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BRAND, getCareer } from "@/lib/brand";
 import { computeDiagnosis, type DiagnosisAnswers } from "@/lib/diagnosis-score";
 import { gaEvent } from "@/lib/ga";
-import CoverageMockup from "@/components/CoverageMockup";
+import CoverageMockup, { type ContractAnswer } from "@/components/CoverageMockup";
 
 /**
  * 7문항 자산 방어력 진단 퀴즈 (N7 — 점수 로직은 lib/diagnosis-score.ts).
@@ -267,9 +267,9 @@ export default function DiagnosisQuiz() {
               </div>
             </div>
 
-            {/* 담보 합산 목업 + 잔여 공백 경고 (커밋 N1) — 크림 배경. 딥그린 밴드 연속 금지(DESIGN-SPEC) */}
+            {/* 담보 합산 목업 + 잔여 공백 경고 — 크림 배경. 응답별 도입 문장으로 논리 연결(N8) */}
             <div className="mb-8">
-              <CoverageMockup />
+              <CoverageMockup contractAnswer={answers.contracts as ContractAnswer | undefined} />
             </div>
 
             {/* 해결 — 정밀분석 다리 + 주 CTA(카카오톡, 화면당 주 CTA 1개). 별도 딥그린 밴드 */}
