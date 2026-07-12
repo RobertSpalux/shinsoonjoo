@@ -31,7 +31,7 @@ export default async function AdminPage() {
     supabase
       .from("premium_articles")
       .select(
-        "id, title, slug, category, summary, key_points, remodeling_bridge, main_website_markdown, is_main_published, is_naver_published, is_blogspot_published, is_instagram_published, naver_blog_content, blogspot_content, instagram_caption, carousel_json, image_paths, naver_image_paths, view_count, published_at, created_at"
+        "id, title, slug, category, summary, key_points, remodeling_bridge, main_website_markdown, is_main_published, is_naver_published, is_blogspot_published, is_instagram_published, naver_blog_content, blogspot_content, instagram_caption, carousel_json, image_paths, naver_image_paths, view_count, published_at, created_at, content_type, seed_key, verify_claims, needs_human_review"
       )
       .order("created_at", { ascending: false })
       .limit(100),

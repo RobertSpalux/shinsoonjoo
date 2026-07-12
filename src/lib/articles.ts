@@ -17,6 +17,13 @@ export interface Article {
   published_at: string | null;
   view_count: number;
   created_at: string;
+  /** 'news'=RSS 시의성 기사 | 'evergreen'=상록수(키워드 소유용 기획 콘텐츠) */
+  content_type: "news" | "evergreen";
+  /** 상록수 시드 식별자 (news는 null). not null인 행끼리 unique */
+  seed_key: string | null;
+  /** 사실검증 결과(jsonb) — 구조는 M2에서 확정 */
+  verify_claims: unknown[] | null;
+  needs_human_review: boolean;
 }
 
 export const CATEGORIES = [
@@ -30,7 +37,7 @@ export const CATEGORIES = [
 ] as const;
 
 const ARTICLE_COLUMNS =
-  "id, title, slug, category, summary, tags, key_points, raw_source_url, raw_source_name, main_website_markdown, faq_json, image_paths, og_image_path, published_at, view_count, created_at";
+  "id, title, slug, category, summary, tags, key_points, raw_source_url, raw_source_name, main_website_markdown, faq_json, image_paths, og_image_path, published_at, view_count, created_at, content_type, seed_key, verify_claims, needs_human_review";
 
 function publicClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -71,6 +78,51 @@ export async function getPublishedArticles(
     return [];
   }
   return (data as Article[]) ?? [];
+}
+
+/**
+ * content_type별 발행 글 (상록수/뉴스 분리 노출용 — 커밋 M1).
+ * 노출 게이트는 getPublishedArticles와 동일(is_main_published AND published_at <= now).
+ * 홈·sitemap·llms.txt처럼 둘 다 노출하는 곳은 계속 getPublishedArticles를 쓴다.
+ */
+async function getPublishedByContentType(
+  contentType: Article["content_type"],
+  category?: string,
+  limit = 60
+): Promise<Article[]> {
+  const supabase = publicClient();
+  if (!supabase) return [];
+
+  const now = new Date().toISOString();
+  let query = supabase
+    .from("premium_articles")
+    .select(ARTICLE_COLUMNS)
+    .eq("content_type", contentType)
+    .eq("is_main_published", true)
+    .lte("published_at", now)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+
+  if (category && category !== "전체") {
+    query = query.eq("category", category);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error(`getPublishedByContentType(${contentType}) error:`, error.message);
+    return [];
+  }
+  return (data as Article[]) ?? [];
+}
+
+/** 상록수(evergreen) 발행 글 목록 */
+export async function getEvergreenArticles(category?: string, limit = 60): Promise<Article[]> {
+  return getPublishedByContentType("evergreen", category, limit);
+}
+
+/** 뉴스(news) 발행 글 목록 */
+export async function getNewsArticles(category?: string, limit = 60): Promise<Article[]> {
+  return getPublishedByContentType("news", category, limit);
 }
 
 export async function getArticleBySlug(slug: string): Promise<Article | null> {
