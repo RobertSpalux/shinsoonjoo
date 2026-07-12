@@ -88,7 +88,8 @@ export default function DiagnosisQuiz() {
       const utm = [params.get("utm_source"), params.get("utm_medium"), params.get("utm_campaign")]
         .filter(Boolean)
         .join("/");
-      const leadSource = utm || params.get("ref") || "direct";
+      // 폴백 'diagnosis-anon' — 실제 리드의 'direct'와 구분 (익명 로그 필터링용)
+      const leadSource = utm || params.get("ref") || "diagnosis-anon";
       fetch("/api/diagnosis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
