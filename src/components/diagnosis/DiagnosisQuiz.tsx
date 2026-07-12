@@ -1,8 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { getCareer } from "@/lib/brand";
+import { BRAND, getCareer } from "@/lib/brand";
+import { getDiagnosisPatterns } from "@/lib/diagnosis-patterns";
+import { gaEvent } from "@/lib/ga";
 
 /**
  * 4단계 자산 방어력 진단 퀴즈.
@@ -66,13 +69,31 @@ export default function DiagnosisQuiz() {
   const [error, setError] = useState("");
 
   const score = useMemo(() => computeScore(answers), [answers]);
+  const patterns = useMemo(() => getDiagnosisPatterns(answers), [answers]);
+
+  // GA4 전환 퍼널: diagnosis_start(첫 응답) → diagnosis_complete(4문항 완료) → lead_created(제출)
+  const startedRef = useRef(false);
+  const completedRef = useRef(false);
+  const markStart = () => {
+    if (startedRef.current) return;
+    startedRef.current = true;
+    gaEvent("diagnosis_start");
+  };
+  useEffect(() => {
+    if (step === 4 && !completedRef.current) {
+      completedRef.current = true;
+      gaEvent("diagnosis_complete", { score });
+    }
+  }, [step, score]);
 
   const selectSingle = (key: string, value: string) => {
+    markStart();
     setAnswers((prev) => ({ ...prev, [key]: value }));
     setTimeout(() => setStep((s) => s + 1), 250);
   };
 
   const toggleMulti = (key: "coverages", value: string) => {
+    markStart();
     setAnswers((prev) => {
       const cur = prev[key] ?? [];
       return { ...prev, [key]: cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value] };
@@ -88,6 +109,11 @@ export default function DiagnosisQuiz() {
     setError("");
     try {
       const params = new URLSearchParams(window.location.search);
+      // 채널 유입 구분: utm_source/medium/campaign을 lead_source(기존 필드)에 압축 저장
+      const utm = [params.get("utm_source"), params.get("utm_medium"), params.get("utm_campaign")]
+        .filter(Boolean)
+        .join("/");
+      const leadSource = utm || params.get("ref") || "direct";
       const res = await fetch("/api/diagnosis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -96,11 +122,12 @@ export default function DiagnosisQuiz() {
           phone,
           quiz_responses: answers,
           quiz_score: score,
-          lead_source: params.get("utm_source") ?? params.get("ref") ?? "direct",
+          lead_source: leadSource,
           privacy_agreed: agreed,
         }),
       });
       if (!res.ok) throw new Error();
+      gaEvent("lead_created", { score, lead_source: leadSource });
       setStep(5);
     } catch {
       setError("전송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
@@ -266,41 +293,110 @@ export default function DiagnosisQuiz() {
           </motion.div>
         )}
 
-        {/* 완료 — 점수 공개 (딥그린 밴드) */}
+        {/* 완료 — 점수 공개 + 정밀분석 다리 (딥그린 밴드) */}
         {step === 5 && (
           <motion.div
             key="done"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5 }}
-            className="text-center"
           >
-            <div className="mb-8 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-10">
-              <span aria-hidden className="mx-auto mb-4 block h-px w-6 bg-[var(--color-gold)]" />
-              <p className="text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]/70">
-                나의 자산 방어력
-              </p>
-              <motion.p
-                initial={{ scale: 0.6, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.3, type: "spring", stiffness: 120 }}
-                className="mt-3 font-serif text-6xl font-semibold tabular-nums text-[var(--color-ink)]"
-              >
-                {score}
-                <span className="text-2xl">점</span>
-              </motion.p>
-              <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--color-ink)]/85">
-                {score >= 70
-                  ? "기본기가 탄탄하시네요. 다만 선택하신 리스크 영역은 정밀 점검이 필요합니다."
-                  : score >= 45
-                    ? "보장의 뼈대는 있지만 공백이 보입니다. 특히 선택하신 리스크가 무방비 상태일 가능성이 높습니다."
-                    : "지금 구조로는 큰 위기 한 번에 자산이 흔들릴 수 있습니다. 빠른 점검을 권합니다."}
-              </p>
+            <div className="mb-8 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-8 md:p-10">
+              {/* 점수 */}
+              <div className="text-center">
+                <span aria-hidden className="mx-auto mb-4 block h-px w-6 bg-[var(--color-gold)]" />
+                <p className="text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]/70">
+                  나의 자산 방어력
+                </p>
+                <motion.p
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.3, type: "spring", stiffness: 120 }}
+                  className="mt-3 font-serif text-6xl font-semibold tabular-nums text-[var(--color-ink)]"
+                >
+                  {score}
+                  <span className="text-2xl">점</span>
+                </motion.p>
+                <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--color-ink)]/85">
+                  {score >= 70
+                    ? "기본기가 탄탄하시네요. 다만 선택하신 리스크 영역은 정밀 점검이 필요합니다."
+                    : score >= 45
+                      ? "보장의 뼈대는 있지만 공백이 보입니다. 특히 선택하신 리스크가 무방비 상태일 가능성이 높습니다."
+                      : "지금 구조로는 큰 위기 한 번에 자산이 흔들릴 수 있습니다. 빠른 점검을 권합니다."}
+                </p>
+              </div>
+
+              {/* 패턴 — 응답 프로필 기반 (추정 표현만, 단정 금지) */}
+              <div className="mt-8 border-t border-[var(--color-ink)]/15 pt-7 text-left">
+                <p className="text-xs font-semibold tracking-[0.08em] text-[var(--color-gold)]">
+                  비슷한 프로필에서 자주 나타나는 패턴
+                </p>
+                <ul className="mt-4 space-y-3">
+                  {patterns.map((p) => (
+                    <li
+                      key={p}
+                      className="flex gap-3 text-sm leading-relaxed text-[var(--color-ink)]/90"
+                    >
+                      <span aria-hidden className="mt-2.5 block h-px w-3 shrink-0 bg-[var(--color-gold)]" />
+                      {p}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-6 text-[13px] leading-relaxed text-[var(--color-ink)]/60">
+                  다만, 이건 설문 기반 추정입니다. 실제로는 본인도 모르는 계약이 섞여 있는 경우가
+                  대부분입니다.
+                </p>
+              </div>
+
+              {/* 해결 — 정밀분석 다리 + 주 CTA(카카오톡) */}
+              <div className="mt-7 border-t border-[var(--color-ink)]/15 pt-7 text-center">
+                <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-ink)]/90">
+                  상담 시 가입된{" "}
+                  <strong className="font-semibold text-[var(--color-ink)]">
+                    전체 계약을 한 번에 조회
+                  </strong>
+                  해 중복·과설계·보장 공백을 정밀 분석해 드립니다.
+                </p>
+                <p className="mt-2 text-xs text-[var(--color-ink)]/60">
+                  {years}년 경험을 담아 직접 개발한 분석 시스템으로 진행합니다.
+                </p>
+                <a
+                  href={BRAND.social.kakao}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => gaEvent("kakao_cta_click", { position: "diagnosis_result" })}
+                  className="mt-6 inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-ink)] px-7 py-3.5 text-sm font-semibold text-[var(--color-forest)] transition-transform duration-300 hover:-translate-y-px"
+                >
+                  카카오톡으로 정밀 진단 상담하기
+                </a>
+                <p className="mt-3">
+                  <Link
+                    href="/#consultation"
+                    className="text-xs text-[var(--color-ink)]/70 underline underline-offset-4 transition-colors hover:text-[var(--color-ink)]"
+                  >
+                    전화 상담이 편하시면 — 상담 폼으로 신청하기
+                  </Link>
+                </p>
+              </div>
             </div>
-            <p className="text-sm leading-relaxed text-[var(--color-text-body)]">
+
+            <p className="text-center text-sm leading-relaxed text-[var(--color-text-body)]">
               접수가 완료되었습니다.{" "}
-              <strong className="font-semibold text-[var(--color-text-strong)]">24시간 이내</strong>에
+              <strong className="font-semibold text-[var(--color-text-strong)]">24시간 이내</strong>에{" "}
               {years}년 차 GA명장 신순주 지사장이 직접 맞춤 리포트와 함께 연락드립니다.
+            </p>
+
+            {/* 관계 장치 — 아직 상담이 부담스러운 사람을 위한 약한 연결 */}
+            <p className="mt-6 text-center">
+              <a
+                href={BRAND.social.kakao}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => gaEvent("kakao_cta_click", { position: "channel_add" })}
+                className="text-xs text-[var(--color-text-muted)] underline underline-offset-4 transition-colors hover:text-[var(--color-text-body)]"
+              >
+                아직 상담은 부담스러우시다면 — 카카오톡 채널 추가하고 보험 꿀팁만 받아보세요 →
+              </a>
             </p>
           </motion.div>
         )}
