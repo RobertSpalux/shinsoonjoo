@@ -149,6 +149,7 @@ export async function POST(request: Request) {
       intent: seed.intent === "전환" ? "전환" : "유입",
       keywords: seed.keywords ?? [],
       sources: seed.sources ?? [],
+      description: seed.description,
     };
     const { data: seedExisting } = await createAdminClient()
       .from("premium_articles")

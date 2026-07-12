@@ -157,7 +157,7 @@ function specificTokens(seed) {
 /** 게시판 검색어 — 시드가 searchTerms로 직접 지정, 미지정 시 특이 토큰 사용 */
 function boardSearchTerms(seed) {
   const terms = seed.searchTerms?.length ? seed.searchTerms : specificTokens(seed);
-  return terms.slice(0, 4);
+  return terms.slice(0, 6);
 }
 
 /**
@@ -289,6 +289,7 @@ async function generateEvergreen(seed, groundingText) {
         intent: seed.intent,
         keywords: seed.keywords,
         sources: seed.sources,
+        description: seed.description,
       },
       source_url: seed.sources[0],
       source_name: "금감원·파인 공공 1차 소스",

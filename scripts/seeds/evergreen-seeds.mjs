@@ -43,7 +43,10 @@ export const EVERGREEN_SEEDS = [
     intent: "전환",
     isHub: true,
     keywords: ["보험 리모델링", "보험 점검", "새는 보험", "보험 재설계", "내보험다보여"],
-    searchTerms: ["리모델링", "승환", "고지의무", "중복가입"],
+    // 점검 앵글 검색어를 앞에 — 그라운딩이 승환 경보 일변도가 되지 않게 근거 다변화 (M3-2)
+    searchTerms: ["리모델링", "중복가입", "비례보상", "보장분석", "승환", "고지의무"],
+    description:
+      "리모델링 = 전 계약을 담보 단위로 펼쳐 중복·과설계·보장 공백을 찾는 '점검'. 승환 경고문이 아니라 점검 가이드를 쓴다. 결론의 대부분은 '유지'다.",
     sources: [SRC.MY_INSURANCE, SRC.ALERT, SRC.KKULTIP],
   },
 
