@@ -149,6 +149,30 @@ export default function DiagnosisQuiz() {
 
   return (
     <div className="mx-auto w-full max-w-2xl">
+      {/* 인증 3종 딥그린 밴드 (N9-1) — 히어로 아래·질문 위. 신뢰는 '선택하기 전에' 필요하다:
+          "이걸 왜 너한테 말해야 하지?"의 답이 질문보다 위에 있어야 한다.
+          질문 화면 전용(결과 화면은 점수·CTA 딥그린으로 리듬 완성 — 3개 금지).
+          w-screen 풀블리드 — 가로 스크롤은 page의 overflow-x-clip이 차단 */}
+      {step < TOTAL_STEPS && (
+        <section
+          aria-label="인증 실적"
+          className="relative left-1/2 mb-12 w-screen -translate-x-1/2 bg-[var(--color-forest)] py-10 md:py-12"
+        >
+          <div className="mx-auto grid max-w-2xl grid-cols-3 divide-x divide-[var(--color-gold)] px-5">
+            {TRUST.map(([big, small]) => (
+              <div key={small} className="px-3 text-center md:px-6">
+                <p className="font-serif text-lg font-semibold tabular-nums text-[var(--color-ink)] md:text-2xl">
+                  {big}
+                </p>
+                <p className="mt-1.5 text-[10px] leading-snug text-[var(--color-ink)]/70 md:text-xs">
+                  {small}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* 진행 바 — 각진 3px 트랙(반경 0), 라벨은 오버라인 스타일 (N9) */}
       {step < TOTAL_STEPS && (
         <div className="mb-10">
@@ -326,28 +350,6 @@ export default function DiagnosisQuiz() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* 인증 3종 딥그린 밴드 (N9) — 질문 화면 전용(결과 화면은 CTA 딥그린으로 끝나 연속 금지).
-          w-screen 풀블리드 — 가로 스크롤은 page의 overflow-x-clip이 차단 */}
-      {step < TOTAL_STEPS && (
-        <section
-          aria-label="인증 실적"
-          className="relative left-1/2 mt-16 w-screen -translate-x-1/2 bg-[var(--color-forest)] py-10 md:py-12"
-        >
-          <div className="mx-auto grid max-w-2xl grid-cols-3 divide-x divide-[var(--color-gold)] px-5">
-            {TRUST.map(([big, small]) => (
-              <div key={small} className="px-3 text-center md:px-6">
-                <p className="font-serif text-lg font-semibold tabular-nums text-[var(--color-ink)] md:text-2xl">
-                  {big}
-                </p>
-                <p className="mt-1.5 text-[10px] leading-snug text-[var(--color-ink)]/70 md:text-xs">
-                  {small}
-                </p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
