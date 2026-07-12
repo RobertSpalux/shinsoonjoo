@@ -77,6 +77,16 @@ const TOTAL_STEPS = STEPS.length; // 7 — 질문 수. 결과 화면은 step ===
 
 type Answers = DiagnosisAnswers;
 
+/**
+ * 인증 3종 — 질문 화면 하단 딥그린 밴드(N9). 크림(질문) ↔ 딥그린(인증) 대비 리듬.
+ * ⚠️ 결과 화면에서는 렌더하지 않는다 — 결과가 CTA 딥그린 밴드로 끝나 딥그린이 연속되기 때문.
+ */
+const TRUST = [
+  ["8년 연속", "우수인증설계사"],
+  ["GA명장", "보험GA협회 인증"],
+  ["0건", "불완전판매 (인증 필수 요건)"],
+] as const;
+
 export default function DiagnosisQuiz() {
   const { years } = getCareer();
   const [step, setStep] = useState(0); // 0~6 질문, 7 결과(즉시 공개 — 게이트 없음)
@@ -138,19 +148,18 @@ export default function DiagnosisQuiz() {
   const pct = Math.min(Math.round(((step + 1) / TOTAL_STEPS) * 100), 100);
 
   return (
-    <div className="mx-auto w-full max-w-xl">
-      {/* 진행 바 */}
+    <div className="mx-auto w-full max-w-2xl">
+      {/* 진행 바 — 각진 3px 트랙(반경 0), 라벨은 오버라인 스타일 (N9) */}
       {step < TOTAL_STEPS && (
         <div className="mb-10">
-          <div className="mb-2 flex justify-between text-[11px] font-medium tracking-wider text-[var(--color-text-muted)]">
+          <div className="mb-2 flex justify-between text-xs font-semibold tracking-[0.08em] text-[var(--color-text-muted)]">
             <span>{`STEP ${step + 1} / ${TOTAL_STEPS}`}</span>
             <span className="tabular-nums">{pct}%</span>
           </div>
-          <div className="h-1 overflow-hidden rounded-full bg-[var(--color-line)]">
-            <motion.div
-              className="h-full rounded-full bg-[var(--color-forest)]"
-              animate={{ width: `${pct}%` }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
+          <div className="h-[3px] bg-[var(--color-line)]">
+            <div
+              className="h-full bg-[var(--color-forest)] transition-[width] duration-300 ease-out motion-reduce:transition-none"
+              style={{ width: `${pct}%` }}
             />
           </div>
         </div>
@@ -183,14 +192,31 @@ export default function DiagnosisQuiz() {
                       current.multi ? toggleMulti("coverages", opt) : selectSingle(current.key, opt)
                     }
                     aria-pressed={selected}
-                    className={`rounded-[var(--radius-sm)] border px-5 py-4 text-left text-sm transition-[background-color,border-color,color,box-shadow] duration-200 ${
+                    className={`relative overflow-hidden rounded-[var(--radius-sm)] border px-5 py-4 text-left text-sm transition-[background-color,border-color,color,transform] duration-200 ${
                       selected
-                        ? // 선택 상태 명확화(N7) — 보더 2px 효과(ring-inset로 레이아웃 시프트 방지) + ink-soft 배경
-                          "border-[var(--color-forest)] bg-[var(--color-ink-soft)] font-semibold text-[var(--color-forest)] ring-1 ring-inset ring-[var(--color-forest)]"
-                        : "border-[var(--color-line)] bg-[var(--color-ink-card)] font-medium text-[var(--color-text-body)] hover:border-[var(--color-gold-dim)]"
+                        ? // 선택 상태(N9) — 보더 2px 효과(ring-inset) + ink-soft 배경 + 좌측 3px 딥그린 바(색맹 대응, 절대배치라 시프트 없음)
+                          "border-[var(--color-forest)] bg-[var(--color-ink-soft)] font-semibold text-[var(--color-text-strong)] ring-1 ring-inset ring-[var(--color-forest)]"
+                        : "border-[var(--color-line)] bg-[var(--color-ink-card)] font-medium text-[var(--color-text-body)] hover:border-[var(--color-text-muted)] motion-safe:hover:-translate-y-px"
                     }`}
                   >
-                    {opt}
+                    {selected && (
+                      <span
+                        aria-hidden
+                        className="absolute inset-y-0 left-0 w-[3px] bg-[var(--color-forest)]"
+                      />
+                    )}
+                    {current.multi ? (
+                      <span className="flex items-center justify-between gap-3">
+                        {opt}
+                        {selected && (
+                          <span aria-hidden className="shrink-0 font-semibold text-[var(--color-forest)]">
+                            ✓
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      opt
+                    )}
                   </button>
                 );
               })}
@@ -300,6 +326,28 @@ export default function DiagnosisQuiz() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 인증 3종 딥그린 밴드 (N9) — 질문 화면 전용(결과 화면은 CTA 딥그린으로 끝나 연속 금지).
+          w-screen 풀블리드 — 가로 스크롤은 page의 overflow-x-clip이 차단 */}
+      {step < TOTAL_STEPS && (
+        <section
+          aria-label="인증 실적"
+          className="relative left-1/2 mt-16 w-screen -translate-x-1/2 bg-[var(--color-forest)] py-10 md:py-12"
+        >
+          <div className="mx-auto grid max-w-2xl grid-cols-3 divide-x divide-[var(--color-gold)] px-5">
+            {TRUST.map(([big, small]) => (
+              <div key={small} className="px-3 text-center md:px-6">
+                <p className="font-serif text-lg font-semibold tabular-nums text-[var(--color-ink)] md:text-2xl">
+                  {big}
+                </p>
+                <p className="mt-1.5 text-[10px] leading-snug text-[var(--color-ink)]/70 md:text-xs">
+                  {small}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

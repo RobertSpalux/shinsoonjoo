@@ -10,17 +10,13 @@ export const metadata: Metadata = {
   alternates: { canonical: "/diagnosis" },
 };
 
-const TRUST = [
-  ["8년 연속", "우수인증설계사"],
-  ["GA명장", "보험GA협회 인증"],
-  ["0건", "불완전판매 (인증 필수 요건)"],
-] as const;
-
 export default function DiagnosisPage() {
   return (
-    <main className="min-h-screen bg-[var(--color-ink)] pt-16">
+    // overflow-x-clip: 퀴즈 하단 인증 밴드가 w-screen 풀블리드라 가로 스크롤 방지 (N9)
+    <main className="min-h-screen overflow-x-clip bg-[var(--color-ink)] pt-16">
       <section className="mx-auto max-w-7xl px-5 py-20 md:px-8 md:py-28">
-        <div className="mx-auto mb-12 max-w-xl text-center md:mb-16">
+        {/* 히어로 — 히어로급만 중앙정렬. 본문과 좌측 라인을 맞추기 위해 폭은 질문 블록과 동일(max-w-2xl) */}
+        <div className="mx-auto mb-12 max-w-2xl text-center">
           <p className="mb-4 text-xs font-semibold tracking-[0.08em] text-[var(--color-text-muted)]">
             ASSET DEFENSE CHECK
           </p>
@@ -35,19 +31,6 @@ export default function DiagnosisPage() {
         </div>
 
         <DiagnosisQuiz />
-
-        <div className="mx-auto mt-16 grid max-w-xl grid-cols-3 gap-4 border-t border-[var(--color-line)] pt-8 text-center">
-          {TRUST.map(([big, small]) => (
-            <div key={small}>
-              <p className="font-serif text-lg font-semibold tabular-nums text-[var(--color-forest)]">
-                {big}
-              </p>
-              <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-muted)]">
-                {small}
-              </p>
-            </div>
-          ))}
-        </div>
       </section>
     </main>
   );
