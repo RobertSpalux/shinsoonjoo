@@ -36,6 +36,10 @@ const FAINT_ON_DARK = "#26493c"; // 배경 인덱스 숫자(흐리게)
 
 const DARK_TYPES = new Set(["hook", "stat", "quote", "cta"]);
 
+// ⚠️ src/lib/brand.ts의 getCareer() 시작일과 반드시 동일하게 유지할 것 (불일치 시 이미지/사이트 경력 어긋남)
+const CAREER_START = new Date("2003-07-01T00:00:00+09:00");
+const YEARS = Math.floor((Date.now() - CAREER_START.getTime()) / 86_400_000 / 365.25);
+
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -402,6 +406,117 @@ function cardHtml(rawCard, index, total) {
   });
 }
 
+/* ── 네이버 블로그용 가로 이미지 세트 (본문 폭 800px) ─────────────────
+ * 같은 carousel_json 데이터 재사용. 세로 카드는 인스타 전용 — 네이버 본문에 쌓으면
+ * 본문 텍스트와 중복 + 스크롤 지옥이라, 검색 썸네일·정보 도식·CTA 배너를 따로 만든다.
+ * 저장: card-news/{slug}/naver-0X.png (slug 직속 — /api/admin/delete의 폴더 정리 범위 안)
+ */
+
+const NAVER_BASE_CSS = `
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Pretendard', sans-serif; overflow:hidden; position:relative;
+    letter-spacing:-0.02em; word-break:keep-all; }
+`;
+
+function naverDoc(w, h, bodyStyle, inner) {
+  return `<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>${NAVER_BASE_CSS} body { width:${w}px; height:${h}px; ${bodyStyle} }</style>
+</head><body>${inner}</body></html>`;
+}
+
+/** 1) 대표 썸네일 800×450 — 검색 결과 노출용, 제목 가독성 최우선 */
+function naverThumbHtml(title) {
+  return naverDoc(800, 450, `background:${GREEN}; color:${CREAM}; display:flex; flex-direction:column;`, `
+    <div style="position:absolute; right:-24px; bottom:-90px; font-size:340px; font-weight:800;
+      color:${FAINT_ON_DARK}; line-height:1; letter-spacing:-0.05em;">${YEARS}</div>
+    <div style="position:relative; z-index:1; display:flex; flex-direction:column; height:100%; padding:48px 56px;">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <span style="display:block; width:34px; height:4px; background:${GOLD};"></span>
+        <span style="font-size:19px; font-weight:800; letter-spacing:0.12em; color:${GOLD};">보험 리모델링 인사이트</span>
+      </div>
+      <h1 style="margin-top:auto; margin-bottom:auto; font-size:52px; font-weight:800; line-height:1.32;
+        color:${CREAM}; letter-spacing:-0.03em; padding-right:110px;">${esc(title)}</h1>
+      <div style="border-top:1px solid ${LINE_ON_DARK}; padding-top:20px; font-size:20px; font-weight:600;
+        color:${MUTED_ON_DARK};">신순주 지사장 · GA명장&nbsp;&nbsp;|&nbsp;&nbsp;비대면 전국</div>
+    </div>`);
+}
+
+/** 도식 공통 헤더 밴드 */
+function naverDiagramShell(h, headline, overline, inner) {
+  return naverDoc(800, h, `background:${CREAM}; color:${CHARCOAL}; display:flex; flex-direction:column;`, `
+    <div style="background:${GREEN}; padding:26px 48px;">
+      <p style="font-size:16px; font-weight:800; letter-spacing:0.12em; color:${GOLD};">★ ${esc(overline || "핵심 정리")}</p>
+      <h2 style="margin-top:6px; font-size:30px; font-weight:800; color:${CREAM}; line-height:1.3;">${esc(headline)}</h2>
+    </div>
+    <div style="flex:1; padding:34px 48px; display:flex; flex-direction:column; justify-content:center;">${inner}</div>`);
+}
+
+/** 2) 정보 도식 — table/points/steps/stat 타입을 가로 레이아웃으로 재배치 */
+function naverDiagramHtml(c) {
+  if (c.type === "table") {
+    const cols = Array.isArray(c.columns) ? c.columns : [];
+    const rows = Array.isArray(c.rows) ? c.rows : [];
+    const head = cols.map((x) => `<th style="background:${GREEN}; color:${CREAM}; font-size:21px; font-weight:800; padding:14px 12px; text-align:center;">${esc(x)}</th>`).join("");
+    const body = rows.map((r, ri) => {
+      const hl = ri === c.highlight_row_index;
+      const cells = (Array.isArray(r) ? r : []).map((cell, ci) =>
+        `<td style="font-size:21px; font-weight:${ci === 0 || hl ? 800 : 600}; padding:15px 12px; text-align:${ci === 0 ? "left" : "center"}; line-height:1.4;
+          ${hl ? `background:${GOLD}; color:${CHARCOAL}; border-bottom:1px solid ${GOLD};` : `border-bottom:1px solid ${LINE_ON_LIGHT};`}">${esc(cell)}</td>`).join("");
+      return `<tr>${cells}</tr>`;
+    }).join("");
+    return { h: 560, html: naverDiagramShell(560, c.headline, c.overline, `<table style="width:100%; border-collapse:collapse;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`) };
+  }
+  if (c.type === "points" || c.type === "steps") {
+    const items = Array.isArray(c.items) ? c.items : [];
+    const isSteps = c.type === "steps";
+    const cells = items.slice(0, 4).map((it, i) => {
+      const mark = !isSteps && it.tag === "check"
+        ? `<span style="display:flex; width:40px; height:40px; border-radius:12px; background:${GOLD}; color:${CHARCOAL}; font-size:24px; font-weight:800; align-items:center; justify-content:center;">✓</span>`
+        : `<span style="display:flex; width:40px; height:40px; border-radius:50%; background:${GREEN}; color:${CREAM}; font-size:21px; font-weight:800; align-items:center; justify-content:center;">${i + 1}</span>`;
+      return `<div style="flex:1; min-width:0;">
+        ${mark}
+        <p style="margin-top:12px; font-size:22px; font-weight:800; line-height:1.35;">${esc(it.title)}</p>
+        ${it.sub ? `<p style="margin-top:8px; font-size:17px; font-weight:500; line-height:1.5; color:${MUTED_ON_LIGHT};">${esc(it.sub)}</p>` : ""}
+      </div>`;
+    }).join(isSteps ? `<div style="align-self:center; padding:0 10px; font-size:26px; font-weight:800; color:${GOLD};">→</div>` : `<div style="width:24px;"></div>`);
+    return { h: 480, html: naverDiagramShell(480, c.headline, c.overline, `<div style="display:flex; align-items:flex-start;">${cells}</div>`) };
+  }
+  if (c.type === "stat") {
+    return {
+      h: 450,
+      html: naverDiagramShell(450, c.headline, c.overline, `
+        <div style="display:flex; align-items:center; gap:40px;">
+          <div style="font-size:130px; font-weight:800; color:${GOLD}; letter-spacing:-0.04em; line-height:1;
+            font-variant-numeric:tabular-nums;">${esc(c.big_number)}${c.unit ?? c.extra ? `<span style="font-size:38px; color:${MUTED_ON_LIGHT};"> ${esc(c.unit ?? c.extra)}</span>` : ""}</div>
+          <p style="flex:1; font-size:24px; font-weight:600; line-height:1.55; color:${CHARCOAL};">${esc(c.caption ?? c.body)}</p>
+        </div>`),
+    };
+  }
+  return null;
+}
+
+/** 3) CTA 배너 800×250 */
+function naverCtaHtml() {
+  return naverDoc(800, 250, `background:${GREEN}; color:${CREAM}; display:flex; align-items:center;`, `
+    <div style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:0 56px;">
+      <div>
+        <p style="font-size:17px; font-weight:800; letter-spacing:0.1em; color:${GOLD};">비대면 · 전국 · 무료</p>
+        <p style="margin-top:10px; font-size:36px; font-weight:800; color:${CREAM}; letter-spacing:-0.02em;">내 보험, 새는 곳 없는지<br/>무료 리모델링 진단 받기</p>
+      </div>
+      <div style="background:${GOLD}; color:${CHARCOAL}; font-size:24px; font-weight:800; padding:20px 34px;
+        border-radius:14px; white-space:nowrap;">goodfinance.kr →</div>
+    </div>`);
+}
+
+/** 도식 대상 카드 선별 — table > points > steps > stat 우선, 최대 2장. 없으면 억지로 만들지 않음 */
+function pickDiagramCards(cards) {
+  const byType = (t) => cards.filter((c) => c.type === t);
+  const ordered = [...byType("table"), ...byType("points"), ...byType("steps"), ...byType("stat")];
+  return ordered.slice(0, 2);
+}
+
 /** 카드 객체의 모든 문자열을 모아 폰트 서브셋 로드 텍스트로 사용 */
 function collectText(v) {
   if (typeof v === "string") return v;
@@ -470,6 +585,55 @@ async function main() {
     if (updErr) throw updErr;
 
     console.log(`[${article.slug}] 완료 — ${paths.length}장 업로드`);
+  }
+
+  // ── 네이버 가로 이미지 세트 (썸네일 + 도식 0~2 + CTA) — carousel 있고 naver 세트 없는 글
+  const { data: naverTargets, error: nvErr } = await supabase
+    .from("premium_articles")
+    .select("id, slug, title, carousel_json")
+    .not("carousel_json", "is", null)
+    .eq("naver_image_paths", "{}")
+    .limit(5);
+  if (nvErr) throw nvErr;
+
+  for (const article of naverTargets ?? []) {
+    const cards = Array.isArray(article.carousel_json) ? article.carousel_json : [];
+    const specs = [{ w: 800, h: 450, html: naverThumbHtml(article.title) }];
+    for (const card of pickDiagramCards(cards)) {
+      const d = naverDiagramHtml(card);
+      if (d) specs.push({ w: 800, h: d.h, html: d.html });
+    }
+    specs.push({ w: 800, h: 250, html: naverCtaHtml() });
+    console.log(`[${article.slug}] 네이버 이미지 ${specs.length}장 렌더링...`);
+
+    const naverPaths = [];
+    for (let i = 0; i < specs.length; i++) {
+      const spec = specs[i];
+      await page.setViewport({ width: spec.w, height: spec.h, deviceScaleFactor: 2 });
+      const fontText = `${article.title}${collectText(cards)}${YEARS}보험리모델링인사이트신순주지사장GA명장비대면전국무료진단핵심정리내새는곳없는지받기★✓→0123456789|`;
+      await page.setContent(spec.html, { waitUntil: "load", timeout: 60000 });
+      await page.evaluate(async (text) => {
+        const weights = ["500", "600", "700", "800"];
+        await Promise.all(weights.map((w) => document.fonts.load(`${w} 24px Pretendard`, text)));
+        await document.fonts.ready;
+      }, fontText);
+      const png = await page.screenshot({ type: "png" });
+
+      const storagePath = `${article.slug}/naver-${String(i + 1).padStart(2, "0")}.png`;
+      const { error: upErr } = await supabase.storage
+        .from("card-news")
+        .upload(storagePath, png, { contentType: "image/png", upsert: true });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("card-news").getPublicUrl(storagePath);
+      naverPaths.push(pub.publicUrl);
+    }
+
+    const { error: nvUpd } = await supabase
+      .from("premium_articles")
+      .update({ naver_image_paths: naverPaths })
+      .eq("id", article.id);
+    if (nvUpd) throw nvUpd;
+    console.log(`[${article.slug}] 네이버 세트 완료 — ${naverPaths.length}장 업로드`);
   }
 
   await browser.close();

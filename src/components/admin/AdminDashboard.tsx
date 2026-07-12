@@ -56,6 +56,7 @@ interface Article {
   instagram_caption: string | null;
   carousel_json: CarouselCard[] | null;
   image_paths: string[];
+  naver_image_paths: string[] | null;
   view_count: number;
   published_at: string | null;
   created_at: string;
@@ -147,7 +148,7 @@ export default function AdminDashboard({
 
   // 모달
   const [previewArticle, setPreviewArticle] = useState<Article | null>(null);
-  const [lightbox, setLightbox] = useState<{ article: Article; index: number } | null>(null);
+  const [lightbox, setLightbox] = useState<{ images: string[]; slug: string; index: number } | null>(null);
   const [zipping, setZipping] = useState("");
 
   const now = useMemo(() => Date.now(), []);
@@ -194,7 +195,7 @@ export default function AdminDashboard({
       if (e.key === "Escape") setLightbox(null);
       if (e.key === "ArrowRight")
         setLightbox((lb) =>
-          lb ? { ...lb, index: Math.min(lb.index + 1, lb.article.image_paths.length - 1) } : lb
+          lb ? { ...lb, index: Math.min(lb.index + 1, lb.images.length - 1) } : lb
         );
       if (e.key === "ArrowLeft")
         setLightbox((lb) => (lb ? { ...lb, index: Math.max(lb.index - 1, 0) } : lb));
@@ -221,19 +222,19 @@ export default function AdminDashboard({
     }
   };
 
-  const downloadZip = async (a: Article) => {
-    if (!a.image_paths?.length) return;
-    setZipping(a.id);
+  const downloadZip = async (zipKey: string, urls: string[], zipName: string, label: string) => {
+    if (!urls.length) return;
+    setZipping(zipKey);
     try {
       const JSZip = (await import("jszip")).default;
       const zip = new JSZip();
-      for (const [i, url] of a.image_paths.entries()) {
+      for (const url of urls) {
         const blob = await (await fetch(url)).blob();
-        zip.file(`${a.slug}-card-${String(i + 1).padStart(2, "0")}.png`, blob);
+        zip.file(url.split("/").pop() ?? "image.png", blob);
       }
       const blob = await zip.generateAsync({ type: "blob" });
-      downloadBlob(blob, `${a.slug}-cards.zip`);
-      showToast(`카드 ${a.image_paths.length}장 ZIP 다운로드`);
+      downloadBlob(blob, zipName);
+      showToast(`${label} ${urls.length}장 ZIP 다운로드`);
     } catch {
       showToast("ZIP 생성 실패");
     } finally {
@@ -442,11 +443,11 @@ export default function AdminDashboard({
                       )}
                       {a.image_paths?.length > 0 && (
                         <button
-                          onClick={() => downloadZip(a)}
-                          disabled={zipping === a.id}
+                          onClick={() => downloadZip(`insta-${a.id}`, a.image_paths, `${a.slug}-cards.zip`, "인스타 카드")}
+                          disabled={zipping === `insta-${a.id}`}
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)] disabled:opacity-40"
                         >
-                          {zipping === a.id ? "ZIP 생성 중..." : `카드 전체 ZIP (${a.image_paths.length})`}
+                          {zipping === `insta-${a.id}` ? "ZIP 생성 중..." : `인스타 카드 ZIP (${a.image_paths.length})`}
                         </button>
                       )}
                       <button
@@ -481,13 +482,13 @@ export default function AdminDashboard({
                       ))}
                     </div>
 
-                    {/* 카드 썸네일 */}
+                    {/* 인스타 세로 카드 썸네일 */}
                     {a.image_paths?.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {a.image_paths.map((url, i) => (
                           <button
                             key={url}
-                            onClick={() => setLightbox({ article: a, index: i })}
+                            onClick={() => setLightbox({ images: a.image_paths, slug: a.slug, index: i })}
                             title={`카드 ${i + 1} 확대`}
                             className="group relative block h-24 w-[76px] overflow-hidden rounded-lg border border-[var(--color-line)] hover:border-[var(--color-gold-dim)]"
                           >
@@ -496,6 +497,38 @@ export default function AdminDashboard({
                             <span className="absolute bottom-0 right-0 bg-black/60 px-1 text-[10px] text-white">{i + 1}</span>
                           </button>
                         ))}
+                      </div>
+                    )}
+
+                    {/* 네이버 가로 이미지 세트 (썸네일·도식·CTA — 본문 [이미지] 마커 위치에 순서대로) */}
+                    {(a.naver_image_paths?.length ?? 0) > 0 && (
+                      <div className="mt-3 rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-[11px] font-bold tracking-wide text-slate-400">
+                            네이버 이미지 (본문 [이미지] 마커 위치에 순서대로)
+                          </span>
+                          <button
+                            onClick={() => downloadZip(`naver-${a.id}`, a.naver_image_paths ?? [], `${a.slug}-naver.zip`, "네이버 이미지")}
+                            disabled={zipping === `naver-${a.id}`}
+                            className="rounded-full border border-[var(--color-line)] px-3 py-1 text-[11px] font-semibold text-slate-700 hover:border-[var(--color-gold-dim)] disabled:opacity-40"
+                          >
+                            {zipping === `naver-${a.id}` ? "ZIP 생성 중..." : `네이버 ZIP (${a.naver_image_paths?.length})`}
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {(a.naver_image_paths ?? []).map((url, i) => (
+                            <button
+                              key={url}
+                              onClick={() => setLightbox({ images: a.naver_image_paths ?? [], slug: a.slug, index: i })}
+                              title={`네이버 이미지 ${i + 1} 확대`}
+                              className="group relative block h-16 w-28 overflow-hidden rounded-lg border border-[var(--color-line)] hover:border-[var(--color-gold-dim)]"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={url} alt={`네이버 이미지 ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
+                              <span className="absolute bottom-0 right-0 bg-black/60 px-1 text-[10px] text-white">{i + 1}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -653,17 +686,17 @@ export default function AdminDashboard({
             </button>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={lightbox.article.image_paths[lightbox.index]}
-              alt={`카드 ${lightbox.index + 1}`}
-              className="max-h-[80vh] rounded-lg"
+              src={lightbox.images[lightbox.index]}
+              alt={`이미지 ${lightbox.index + 1}`}
+              className="max-h-[80vh] max-w-[80vw] rounded-lg object-contain"
             />
             <button
               onClick={() =>
                 setLightbox((lb) =>
-                  lb ? { ...lb, index: Math.min(lb.index + 1, lb.article.image_paths.length - 1) } : lb
+                  lb ? { ...lb, index: Math.min(lb.index + 1, lb.images.length - 1) } : lb
                 )
               }
-              disabled={lightbox.index === lightbox.article.image_paths.length - 1}
+              disabled={lightbox.index === lightbox.images.length - 1}
               className="rounded-full bg-white/10 px-4 py-3 text-xl text-white disabled:opacity-20"
               aria-label="다음 카드"
             >
@@ -672,13 +705,13 @@ export default function AdminDashboard({
           </div>
           <div className="mt-4 flex items-center gap-4" onClick={(e) => e.stopPropagation()}>
             <span className="text-sm tabular-nums text-white/80">
-              {lightbox.index + 1} / {lightbox.article.image_paths.length}
+              {lightbox.index + 1} / {lightbox.images.length}
             </span>
             <button
               onClick={() =>
                 downloadImage(
-                  lightbox.article.image_paths[lightbox.index],
-                  `${lightbox.article.slug}-card-${String(lightbox.index + 1).padStart(2, "0")}.png`
+                  lightbox.images[lightbox.index],
+                  `${lightbox.slug}-${lightbox.images[lightbox.index].split("/").pop() ?? "image.png"}`
                 )
               }
               className="rounded-full bg-white px-4 py-1.5 text-xs font-bold text-slate-900"
