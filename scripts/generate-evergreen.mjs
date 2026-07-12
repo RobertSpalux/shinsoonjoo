@@ -423,7 +423,7 @@ async function main() {
     const { data: full } = await supabase
       .from("premium_articles")
       .select(
-        "title, category, main_website_markdown, carousel_json, faq_json, naver_blog_content, blogspot_content, needs_human_review, verify_claims"
+        "title, naver_title, blogspot_title, category, main_website_markdown, carousel_json, faq_json, naver_blog_content, blogspot_content, needs_human_review, verify_claims"
       )
       .eq("id", gen.article.id)
       .single();
@@ -463,13 +463,13 @@ async function main() {
     if (full) {
       await sendTelegramDoc(
         `naver-${gen.article.slug}.txt`,
-        `${full.title}\n\n${full.naver_blog_content}`,
-        `📝 [상록수] 네이버 블로그 발행 대기\n${full.title}\n\n본진: ${SITE_URL}/news/${gen.article.slug}\n파일 내용을 복사해 네이버 블로그에 붙여넣으세요.`
+        `${full.naver_title ?? full.title}\n\n${full.naver_blog_content}`,
+        `📝 [상록수] 네이버 블로그 발행 대기\n${full.naver_title ?? full.title}\n\n본진: ${SITE_URL}/news/${gen.article.slug}\n파일 내용을 복사해 네이버 블로그에 붙여넣으세요.`
       );
       await sendTelegramDoc(
         `blogspot-${gen.article.slug}.txt`,
-        `${full.title}\n\n${full.blogspot_content}`,
-        `📝 [상록수] 블로그스팟 발행 대기\n${full.title}`
+        `${full.blogspot_title ?? full.title}\n\n${full.blogspot_content}`,
+        `📝 [상록수] 블로그스팟 발행 대기\n${full.blogspot_title ?? full.title}`
       );
     }
     return; // 주 2회 리듬 — 실행당 1편

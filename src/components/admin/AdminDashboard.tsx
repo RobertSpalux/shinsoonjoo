@@ -41,6 +41,8 @@ interface CarouselCard {
 interface Article {
   id: string;
   title: string;
+  naver_title: string | null;
+  blogspot_title: string | null;
   slug: string;
   category: string;
   summary: string | null;
@@ -409,11 +411,11 @@ export default function AdminDashboard({
                         <button
                           onClick={() =>
                             copy(
-                              `${a.title}\n\n${toNaverText(a.naver_blog_content ?? "")}`,
-                              "네이버 원고 (에디터용 텍스트 변환)"
+                              `${a.naver_title ?? a.title}\n\n${toNaverText(a.naver_blog_content ?? "")}`,
+                              "네이버 원고 (네이버 제목 + 에디터용 텍스트 변환)"
                             )
                           }
-                          title="마크다운 기호 제거 · [이미지] 마커 유지 · 진단 링크 삽입"
+                          title="네이버 전용 제목 포함 · 마크다운 기호 제거 · [이미지] 마커 유지 · 진단 링크 삽입"
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
                         >
                           네이버 복사 <span className="text-slate-400">· 텍스트 변환</span>
@@ -431,6 +433,15 @@ export default function AdminDashboard({
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
                         >
                           블로그스팟 복사 <span className="text-slate-400">· HTML 변환</span>
+                        </button>
+                      )}
+                      {a.blogspot_title && (
+                        <button
+                          onClick={() => copy(a.blogspot_title ?? "", "블로그스팟 제목 (Blogger 제목란에 붙여넣기)")}
+                          title="구글 자기잠식 방지용 별도 제목 — Blogger 제목란 전용"
+                          className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
+                        >
+                          블로그스팟 제목 복사
                         </button>
                       )}
                       {a.instagram_caption && (

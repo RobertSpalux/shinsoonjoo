@@ -417,7 +417,7 @@ async function main() {
       // 네이버/블로그스팟 원고를 발행 대기함(텔레그램)으로 + 카드 장수 집계
       const { data: full } = await supabase
         .from("premium_articles")
-        .select("title, category, naver_blog_content, blogspot_content, carousel_json")
+        .select("title, naver_title, blogspot_title, category, naver_blog_content, blogspot_content, carousel_json")
         .eq("id", article.id)
         .single();
 
@@ -432,13 +432,13 @@ async function main() {
       if (full) {
         await sendTelegramDoc(
           `naver-${article.slug}.txt`,
-          `${full.title}\n\n${full.naver_blog_content}`,
-          `📝 네이버 블로그 발행 대기\n${full.title}\n\n본진: ${SITE_URL}/news/${article.slug}\n파일 내용을 복사해 네이버 블로그에 붙여넣으세요.`
+          `${full.naver_title ?? full.title}\n\n${full.naver_blog_content}`,
+          `📝 네이버 블로그 발행 대기\n${full.naver_title ?? full.title}\n\n본진: ${SITE_URL}/news/${article.slug}\n파일 내용을 복사해 네이버 블로그에 붙여넣으세요.`
         );
         await sendTelegramDoc(
           `blogspot-${article.slug}.txt`,
-          `${full.title}\n\n${full.blogspot_content}`,
-          `📝 블로그스팟 발행 대기\n${full.title}`
+          `${full.blogspot_title ?? full.title}\n\n${full.blogspot_content}`,
+          `📝 블로그스팟 발행 대기\n${full.blogspot_title ?? full.title}`
         );
       }
     } catch (err) {

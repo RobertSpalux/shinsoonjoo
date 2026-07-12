@@ -330,6 +330,8 @@ export async function POST(request: Request) {
       .from("premium_articles")
       .insert({
         title: article.title,
+        naver_title: article.naver_title ?? null,
+        blogspot_title: article.blogspot_title ?? null,
         slug,
         category: article.category,
         summary: article.summary,
