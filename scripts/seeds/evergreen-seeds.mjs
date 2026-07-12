@@ -5,6 +5,8 @@
  * ⚠️ sources는 CONTENT-STRATEGY §9-2 표의 공공 1차 소스 URL만 (민간 매체 재가공 금지 — §9-1).
  * category는 팩토리 스키마의 6-카테고리 enum 문자열과 정확히 일치해야 한다.
  * 배열 순서 = 발행 우선순위 (선정: 미생성 중 intent 일치 첫 번째, isHub는 intent 무관 최우선).
+ * searchTerms(M3-1): 게시판 검색용 단일 토큰 — 시드가 직접 지정한다(키워드 자동 유추 금지).
+ *   검색·스코어링 통과 게시글이 없으면 그 소스는 실패 처리(최신글 폴백 없음 — 오염 차단).
  */
 
 // CONTENT-STRATEGY §9-2 그라운딩 소스 (재가공 O)
@@ -41,6 +43,7 @@ export const EVERGREEN_SEEDS = [
     intent: "전환",
     isHub: true,
     keywords: ["보험 리모델링", "보험 점검", "새는 보험", "보험 재설계", "내보험다보여"],
+    searchTerms: ["리모델링", "승환", "고지의무", "중복가입"],
     sources: [SRC.MY_INSURANCE, SRC.ALERT, SRC.KKULTIP],
   },
 
@@ -51,6 +54,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험료 절약·꿀팁",
     intent: "유입",
     keywords: ["자동차보험료 할인", "자동차보험 특약", "마일리지 특약", "자동차보험료 아끼기"],
+    searchTerms: ["자동차보험", "마일리지", "운전자"],
     sources: [SRC.KKULTIP, SRC.TALKTALK],
   },
   {
@@ -59,6 +63,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험료 절약·꿀팁",
     intent: "유입",
     keywords: ["보험료 할인", "보험료 절약", "할인 특약", "건강체 할인"],
+    searchTerms: ["할인", "보험료", "절약"],
     sources: [SRC.KKULTIP, SRC.TALKTALK],
   },
   {
@@ -67,6 +72,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험료 절약·꿀팁",
     intent: "유입",
     keywords: ["납입면제", "납입면제 조건", "보험료 면제", "납입면제 특약"],
+    searchTerms: ["납입면제", "납입", "면제"],
     sources: [SRC.KKULTIP, SRC.INS_INTRO, SRC.TERMS],
   },
   {
@@ -75,6 +81,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험료 절약·꿀팁",
     intent: "유입",
     keywords: ["병원비 지원", "본인부담상한제", "재난적 의료비", "의료비 지원제도"],
+    searchTerms: ["병원비", "의료비", "본인부담"],
     sources: [SRC.TALKTALK, SRC.KKULTIP],
   },
 
@@ -85,6 +92,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험금 청구·보상",
     intent: "유입",
     keywords: ["실손보험 청구", "실손 청구 서류", "실손24", "보험금 청구 방법"],
+    searchTerms: ["실손", "청구", "실손24"],
     sources: [SRC.KKULTIP, SRC.MINWON],
   },
   {
@@ -93,6 +101,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험금 청구·보상",
     intent: "유입",
     keywords: ["보험금 청구 서류", "진단서", "진료비 세부내역서", "소액 청구"],
+    searchTerms: ["청구", "진단서", "보험금"],
     sources: [SRC.KKULTIP, SRC.TERMS],
   },
   {
@@ -101,6 +110,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험금 청구·보상",
     intent: "유입",
     keywords: ["숨은 보험금", "내보험찾아줌", "휴면보험금", "미청구 보험금"],
+    searchTerms: ["숨은", "내보험찾아줌", "휴면"],
     sources: [SRC.MY_INSURANCE, SRC.KKULTIP],
   },
   {
@@ -109,6 +119,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험금 청구·보상",
     intent: "유입",
     keywords: ["실손 대리청구", "부모님 보험금 청구", "지정대리청구인"],
+    searchTerms: ["대리청구", "지정대리", "청구"],
     sources: [SRC.KKULTIP, SRC.MINWON],
   },
   {
@@ -117,6 +128,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험금 청구·보상",
     intent: "유입",
     keywords: ["보험금 부지급", "보험금 거절", "고지의무 위반", "부지급 사유"],
+    searchTerms: ["부지급", "고지의무", "보험금"],
     sources: [SRC.MINWON, SRC.ALERT],
   },
 
@@ -127,6 +139,7 @@ export const EVERGREEN_SEEDS = [
     category: "실손·보장성 가이드",
     intent: "유입",
     keywords: ["실손보험 세대", "실손 세대 확인", "4세대 실손", "실손 전환"],
+    searchTerms: ["실손", "실손의료보험"],
     sources: [SRC.TERMS, SRC.INS_INTRO],
   },
   {
@@ -135,6 +148,7 @@ export const EVERGREEN_SEEDS = [
     category: "실손·보장성 가이드",
     intent: "유입",
     keywords: ["3대 질병 보험", "암 진단비", "뇌혈관질환 보장", "허혈성 심장질환"],
+    searchTerms: ["진단비", "암보험", "질병"],
     sources: [SRC.TERMS, SRC.KKULTIP],
   },
   {
@@ -143,6 +157,7 @@ export const EVERGREEN_SEEDS = [
     category: "실손·보장성 가이드",
     intent: "유입",
     keywords: ["자녀보험", "어린이보험", "태아보험", "자녀보험 가입 시기"],
+    searchTerms: ["어린이", "자녀", "태아"],
     sources: [SRC.KKULTIP, SRC.TALKTALK],
   },
   {
@@ -151,6 +166,7 @@ export const EVERGREEN_SEEDS = [
     category: "실손·보장성 가이드",
     intent: "유입",
     keywords: ["간병보험", "치매보험", "장기요양", "간병비"],
+    searchTerms: ["치매", "간병", "장기요양"],
     sources: [SRC.TERMS, SRC.TALKTALK],
   },
 
@@ -161,6 +177,7 @@ export const EVERGREEN_SEEDS = [
     category: "연금·노후·세테크",
     intent: "유입",
     keywords: ["연금저축", "IRP", "ISA", "노후 준비 순서"],
+    searchTerms: ["연금저축", "IRP", "ISA"],
     sources: [SRC.LIFEPLAN, SRC.KKULTIP],
   },
   {
@@ -169,6 +186,7 @@ export const EVERGREEN_SEEDS = [
     category: "연금·노후·세테크",
     intent: "유입",
     keywords: ["연금 세액공제", "연금저축 세액공제", "IRP 세액공제 한도"],
+    searchTerms: ["세액공제", "연금저축", "절세"],
     sources: [SRC.LIFEPLAN, SRC.KKULTIP],
   },
   {
@@ -177,6 +195,7 @@ export const EVERGREEN_SEEDS = [
     category: "연금·노후·세테크",
     intent: "유입",
     keywords: ["노후 생활비", "노후 자금 계산", "연금 수령"],
+    searchTerms: ["노후", "은퇴", "연금"],
     sources: [SRC.LIFEPLAN, SRC.TALKTALK],
   },
 
@@ -187,6 +206,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험 리모델링",
     intent: "전환",
     keywords: ["보험 점검", "보험 리모델링 체크리스트", "보험 진단", "보장 분석"],
+    searchTerms: ["리모델링", "중복가입", "갱신", "해지환급"],
     sources: [SRC.MY_INSURANCE, SRC.KKULTIP, SRC.MINWON],
   },
   {
@@ -195,6 +215,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험 리모델링",
     intent: "전환",
     keywords: ["갱신형 비갱신형", "갱신 보험료 인상", "갱신형 전환"],
+    searchTerms: ["갱신", "갱신형", "비갱신"],
     sources: [SRC.TERMS, SRC.KKULTIP],
   },
   {
@@ -203,6 +224,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험 리모델링",
     intent: "전환",
     keywords: ["중복 가입", "과잉 설계", "보장 공백", "새는 보험"],
+    searchTerms: ["중복", "비례보상", "실손"],
     sources: [SRC.MY_INSURANCE, SRC.MINWON],
   },
   {
@@ -211,6 +233,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험 리모델링",
     intent: "전환",
     keywords: ["승환계약", "보험 갈아타기", "면책기간", "건강고지"],
+    searchTerms: ["승환", "갈아타기", "리모델링", "고지의무"],
     sources: [SRC.ALERT, SRC.MINWON],
   },
   {
@@ -219,6 +242,7 @@ export const EVERGREEN_SEEDS = [
     category: "보험 리모델링",
     intent: "전환",
     keywords: ["가족 보험 점검", "보험 정리", "보험 통합 관리"],
+    searchTerms: ["내보험다보여", "숨은", "가족"],
     sources: [SRC.MY_INSURANCE, SRC.KKULTIP],
   },
 ];

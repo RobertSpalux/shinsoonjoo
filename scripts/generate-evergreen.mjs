@@ -142,12 +142,30 @@ function withBoardSearch(listUrl, keyword) {
 }
 
 /**
- * 시드 키워드와 제목이 겹치는 게시글만 선별 (겹침 0 = 배제).
- * 최신글이 주제와 무관할 때 그것으로 그라운딩하는 오염을 막는다 — 관련 글이 없으면
- * 이 소스는 실패 처리(§9: 팩트 없는/엉뚱한 팩트 원고 금지).
+ * 불용 토큰 — 단독으로는 주제 정합 근거가 못 되는 범용 토큰 (M3-1 실측 결함:
+ * 리모델링 시드 키워드가 죄다 "…보험"이라 '보험' 토큰이 만능 매치가 되어
+ * 펫보험·일상생활배상책임보험 게시글이 통과, 허브 글에 무관 사실 3건이 섞임).
  */
-function pickRelevantPosts(items, keywords, n = 3) {
-  const tokens = keywords.flatMap((k) => k.split(/\s+/)).filter((t) => t.length >= 2);
+const STOP_TOKENS = new Set(["보험", "가입", "계약", "상품", "금융", "안내", "정보", "유익"]);
+
+/** 시드의 특이 토큰 — keywords 공백 분해 + searchTerms, 중복 제거(Set), 불용 토큰 제외 */
+function specificTokens(seed) {
+  const raw = [...seed.keywords.flatMap((k) => k.split(/\s+/)), ...(seed.searchTerms ?? [])];
+  return [...new Set(raw)].filter((t) => t.length >= 2 && !STOP_TOKENS.has(t));
+}
+
+/** 게시판 검색어 — 시드가 searchTerms로 직접 지정, 미지정 시 특이 토큰 사용 */
+function boardSearchTerms(seed) {
+  const terms = seed.searchTerms?.length ? seed.searchTerms : specificTokens(seed);
+  return terms.slice(0, 4);
+}
+
+/**
+ * 특이 토큰이 제목에 최소 1개 매치되어야 통과 — 0개면 탈락.
+ * 불용 토큰만 맞은 게시글(예: 제목에 '보험'만)은 근거가 되지 못한다.
+ */
+function pickRelevantPosts(items, seed, n = 3) {
+  const tokens = specificTokens(seed);
   return items
     .map((it) => ({ it, s: tokens.reduce((a, t) => a + (it.title.includes(t) ? 1 : 0), 0) }))
     .filter((x) => x.s > 0)
@@ -156,9 +174,14 @@ function pickRelevantPosts(items, keywords, n = 3) {
     .map((x) => x.it);
 }
 
-/** 게시판 목록 소스: 키워드 검색(최대 3개 시도) → 기본 목록 보충 → 관련 글 최대 3건 본문 확보 */
-async function extractBoardSource(url, keywords) {
+/**
+ * 게시판 목록 소스: searchTerms 검색(최대 4개) → 특이 토큰 스코어링 → 관련 글 최대 3건 본문 확보.
+ * ⚠️ 최신글 폴백 없음(M3-1) — 검색·스코어링 통과 게시글이 0건이면 이 소스는 실패.
+ * 무관한 최신글로 그라운딩하는 오염이 팩트 없는 원고보다 나쁘다(§9).
+ */
+async function extractBoardSource(url, seed) {
   const origin = new URL(url).origin;
+  const terms = boardSearchTerms(seed);
   const seen = new Set();
   const items = [];
   const addAll = (list) => {
@@ -170,20 +193,19 @@ async function extractBoardSource(url, keywords) {
     }
   };
 
-  for (const kw of keywords.slice(0, 3)) {
+  for (const term of terms) {
     try {
-      addAll(parseBoardList(await fetchText(withBoardSearch(url, kw)), origin));
+      addAll(parseBoardList(await fetchText(withBoardSearch(url, term)), origin));
     } catch {
-      /* 검색 실패는 무시 — 다음 키워드/기본 목록으로 */
+      /* 개별 검색 실패는 무시 — 다음 검색어로 */
     }
     if (items.length >= 8) break;
     await sleep(300);
   }
-  if (!items.length) addAll(parseBoardList(await fetchText(url), origin));
-  if (!items.length) throw new Error("게시판 목록 파싱 실패(페이지 구조 변경?)");
+  if (!items.length) throw new Error(`게시판 검색 결과 0건(검색어: ${terms.join("·")})`);
 
-  const picked = pickRelevantPosts(items, keywords);
-  if (!picked.length) throw new Error("시드 주제와 관련된 게시글 없음(키워드-제목 불일치)");
+  const picked = pickRelevantPosts(items, seed);
+  if (!picked.length) throw new Error("주제 정합 게시글 없음(특이 토큰 미매치)");
 
   const texts = [];
   for (const it of picked) {
@@ -236,7 +258,7 @@ async function buildGrounding(seed) {
   for (const url of seed.sources) {
     try {
       const text = url.includes("list.do")
-        ? await extractBoardSource(url, seed.keywords)
+        ? await extractBoardSource(url, seed)
         : await extractPageSource(url);
       parts.push(`[근거 소스: ${url}]\n${text}`);
       sourceStats.push({ url, ok: true, chars: text.length });
