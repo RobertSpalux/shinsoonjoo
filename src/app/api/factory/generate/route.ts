@@ -79,6 +79,13 @@ function scanHumanReviewTriggers(text: string): string[] {
   return HUMAN_REVIEW_TRIGGERS.filter(([re]) => re.test(text)).map(([, label]) => label);
 }
 
+/** 허브 시드 전용 FAQ 하한 (커밋 M3-3) — min 0이면 검사하지 않음 */
+function validateFaqCount(faq: unknown, min: number): string[] {
+  if (!min) return [];
+  const n = Array.isArray(faq) ? faq.length : 0;
+  return n < min ? [`FAQ ${n}개(허브 최소 ${min}개)`] : [];
+}
+
 /** 검증 최종 실패 시 텔레그램 플래그 (best-effort — env 없으면 조용히 스킵) */
 async function notifyValidationWarning(title: string, kind: string, issues: string[]) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -150,6 +157,7 @@ export async function POST(request: Request) {
       keywords: seed.keywords ?? [],
       sources: seed.sources ?? [],
       description: seed.description,
+      isHub: seed.isHub === true,
     };
     const { data: seedExisting } = await createAdminClient()
       .from("premium_articles")
@@ -242,10 +250,18 @@ export async function POST(request: Request) {
 
     // 검증 가드 — 카드(커밋 G) + 본진 원고(커밋 M0). 어느 쪽이든 실패 시 1회만 재생성
     // (가드별 재생성이면 최대 3회 호출이 되므로 합산 1회). 그래도 실패하면 그대로 저장하되 ⚠️ 플래그.
-    const mdMinH2 = mode === "evergreen" ? 5 : 4;
-    const mdMinChars = mode === "evergreen" ? 2300 : 1900;
+    // 하한: 뉴스 H2 4/1,900자 · 상록수 5/2,300자 · 허브(M3-3) 7/3,200자 + FAQ 8
+    const isHub = evergreenSeed?.isHub === true;
+    const mdMinH2 = mode === "evergreen" ? (isHub ? 7 : 5) : 4;
+    const mdMinChars = mode === "evergreen" ? (isHub ? 3200 : 2300) : 1900;
+    const minFaq = isHub ? 8 : 0;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const validateArticleBody = (a: any) => [
+      ...validateMainMarkdown(a.main_website_markdown, mdMinH2, mdMinChars),
+      ...validateFaqCount(a.faq_json, minFaq),
+    ];
     let carouselIssues = validateCarousel(article.carousel_json);
-    let markdownIssues = validateMainMarkdown(article.main_website_markdown, mdMinH2, mdMinChars);
+    let markdownIssues = validateArticleBody(article);
     if (carouselIssues.length + markdownIssues.length > 0) {
       console.warn(
         `생성물 검증 실패 — 1회 재생성: ${[...carouselIssues, ...markdownIssues].join(" / ")}`
@@ -255,12 +271,10 @@ export async function POST(request: Request) {
         if (!("error" in retry)) {
           usage.input_tokens += retry.usage.input_tokens;
           usage.output_tokens += retry.usage.output_tokens;
-          const retryArticle = retry.article as {
-            carousel_json?: unknown;
-            main_website_markdown?: unknown;
-          };
-          const retryCarousel = validateCarousel(retryArticle.carousel_json);
-          const retryMarkdown = validateMainMarkdown(retryArticle.main_website_markdown, mdMinH2, mdMinChars);
+          const retryCarousel = validateCarousel(
+            (retry.article as { carousel_json?: unknown }).carousel_json
+          );
+          const retryMarkdown = validateArticleBody(retry.article);
           // 위반 합계가 더 적은 쪽 채택 (재시도 통과 시 0건 → 경고 해제)
           if (retryCarousel.length + retryMarkdown.length < carouselIssues.length + markdownIssues.length) {
             article = retry.article;

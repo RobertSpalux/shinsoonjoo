@@ -290,6 +290,7 @@ async function generateEvergreen(seed, groundingText) {
         keywords: seed.keywords,
         sources: seed.sources,
         description: seed.description,
+        isHub: seed.isHub === true,
       },
       source_url: seed.sources[0],
       source_name: "금감원·파인 공공 1차 소스",
@@ -304,6 +305,11 @@ async function generateEvergreen(seed, groundingText) {
   try {
     json = JSON.parse(raw);
   } catch {
+    // 진단용: status·Vercel 에러 헤더·본문 전문 (일시 오류/타임아웃 원인 식별)
+    console.error(
+      `[generate 비JSON 응답] HTTP ${res.status} · x-vercel-error: ${res.headers.get("x-vercel-error") ?? "-"} · x-vercel-id: ${res.headers.get("x-vercel-id") ?? "-"}`
+    );
+    console.error(raw);
     const err = new Error(`generate 응답이 JSON 아님(HTTP ${res.status}): ${raw.slice(0, 200)}`);
     err.status = res.status;
     throw err;
