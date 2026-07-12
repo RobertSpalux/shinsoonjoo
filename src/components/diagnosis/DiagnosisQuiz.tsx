@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BRAND, getCareer } from "@/lib/brand";
 import { getDiagnosisPatterns } from "@/lib/diagnosis-patterns";
 import { gaEvent } from "@/lib/ga";
+import CoverageMockup from "@/components/CoverageMockup";
 
 /**
  * 4단계 자산 방어력 진단 퀴즈.
@@ -347,9 +348,16 @@ export default function DiagnosisQuiz() {
                   대부분입니다.
                 </p>
               </div>
+            </div>
 
-              {/* 해결 — 정밀분석 다리 + 주 CTA(카카오톡) */}
-              <div className="mt-7 border-t border-[var(--color-ink)]/15 pt-7 text-center">
+            {/* 담보 합산 목업 + 잔여 공백 경고 (커밋 N1) — 크림 배경. 딥그린 밴드 연속 금지(DESIGN-SPEC) */}
+            <div className="mb-8">
+              <CoverageMockup />
+            </div>
+
+            {/* 해결 — 정밀분석 다리 + 주 CTA(카카오톡). 별도 딥그린 밴드 */}
+            <div className="mb-8 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-8 md:p-10">
+              <div className="text-center">
                 <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-ink)]/90">
                   상담 시 가입된{" "}
                   <strong className="font-semibold text-[var(--color-ink)]">
