@@ -12,7 +12,10 @@ import { BRAND, getCareer } from "@/lib/brand";
 import ReadingProgress from "@/components/news/ReadingProgress";
 import ArticleCard from "@/components/news/ArticleCard";
 
-export const revalidate = 300;
+export const revalidate = 60;
+// 빌드 시점에 없던 slug(빌드 후 발행된 초안)도 요청 시 렌더 — SSG 404 방지.
+// 초안은 getArticleBySlug의 발행 게이트(is_main_published AND published_at<=now)가 null을 돌려 계속 404.
+export const dynamicParams = true;
 
 export async function generateStaticParams() {
   const articles = await getPublishedArticles(undefined, 100);

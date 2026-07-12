@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { isAdminAuthed } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase-admin";
 
@@ -46,5 +47,24 @@ export async function POST(request: Request) {
     console.error("admin update error:", error);
     return NextResponse.json({ error: "수정 실패" }, { status: 500 });
   }
+
+  // 발행 상태 변경은 정적 캐시에 즉시 반영 — 발행 후 상세 404(빌드 시점 초안이라 미생성)·
+  // 초안 회수 후 잔존 노출 방지. 실패해도 저장은 성공이므로 응답은 성공 유지.
+  if (table === "premium_articles" && ("is_main_published" in patch || "published_at" in patch)) {
+    try {
+      const { data: row } = await supabase
+        .from("premium_articles")
+        .select("slug")
+        .eq("id", id)
+        .maybeSingle();
+      revalidatePath("/");
+      revalidatePath("/news");
+      revalidatePath("/sitemap.xml");
+      if (row?.slug) revalidatePath(`/news/${row.slug}`);
+    } catch (e) {
+      console.warn("revalidate 실패(저장은 완료):", e);
+    }
+  }
+
   return NextResponse.json({ success: true });
 }
