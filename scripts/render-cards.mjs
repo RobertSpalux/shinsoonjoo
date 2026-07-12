@@ -154,14 +154,15 @@ function buildHook(c) {
 
 // points: 크림. num=딥그린 원+번호 / check=골드 체크, title+sub 세로 나열
 // (items는 points·steps·cta 공용 스키마 — points에선 tag가 "num"|"check")
+// ⚠️ 마커는 카드 단위로 통일 — 항목별 tag가 섞여 오면(첫 항목만 check 등) 첫 항목 기준으로 전체 통일 (M3-6)
 function buildPoints(c) {
   const items = Array.isArray(c.items) ? c.items : [];
+  const useCheck = items[0]?.tag === "check";
   const rows = items
     .map((it, i) => {
-      const marker =
-        it.tag === "check"
-          ? `<span class="mk mk-check">✓</span>`
-          : `<span class="mk mk-num">${i + 1}</span>`;
+      const marker = useCheck
+        ? `<span class="mk mk-check">✓</span>`
+        : `<span class="mk mk-num">${i + 1}</span>`;
       const hlWord = it.highlight ?? c.highlight; // 카드 레벨 highlight가 items 텍스트에 적용됨
       return `<div class="item">${marker}
         <div class="itext">
@@ -329,13 +330,14 @@ function buildQuote(c) {
   };
 }
 
-// cta: 딥그린. 행동 행 나열(마지막 행 카드골드) + handle 강조 (items 공용 스키마: tag=이모지, title=행동 문구)
+// cta: 딥그린. 행동 행 나열(마지막 행 카드골드) + handle 강조
+// ⚠️ 이모지 아이콘 미사용(M3-6) — DESIGN-SPEC(골드 헤어라인·작은 마크만). 스키마의 tag(이모지)는 무시한다.
 function buildCta(c) {
   const actions = Array.isArray(c.items) ? c.items : Array.isArray(c.actions) ? c.actions : [];
   const rows = actions
     .map(
       (a, i) => `<div class="act ${i === actions.length - 1 ? "act-hero" : ""}">
-        <span class="aicon">${esc(a.tag ?? a.icon)}</span><span>${esc(a.title ?? a.text)}</span>
+        <span class="amark"></span><span>${esc(a.title ?? a.text)}</span>
       </div>`
     )
     .join("");
@@ -350,7 +352,8 @@ function buildCta(c) {
           padding:34px 44px; }
         .act + .act { margin-top:26px; }
         .act-hero { background:${GOLD}; border-color:${GOLD}; color:${CHARCOAL}; font-weight:800; }
-        .aicon { font-size:48px; }
+        .amark { flex:none; width:28px; height:4px; background:${GOLD}; }
+        .act-hero .amark { background:${CHARCOAL}; }
         .handle { margin-top:64px; font-size:46px; font-weight:800; color:${GOLD}; }
       </style>
       <h1 class="cta-h">${esc(c.headline)}</h1>
@@ -471,8 +474,10 @@ function naverDiagramHtml(c) {
   if (c.type === "points" || c.type === "steps") {
     const items = Array.isArray(c.items) ? c.items : [];
     const isSteps = c.type === "steps";
+    // 마커 카드 단위 통일 (M3-6) — 세로 카드(buildPoints)와 동일 규칙
+    const useCheck = !isSteps && items[0]?.tag === "check";
     const cells = items.slice(0, 4).map((it, i) => {
-      const mark = !isSteps && it.tag === "check"
+      const mark = useCheck
         ? `<span style="display:flex; width:40px; height:40px; border-radius:12px; background:${GOLD}; color:${CHARCOAL}; font-size:24px; font-weight:800; align-items:center; justify-content:center;">✓</span>`
         : `<span style="display:flex; width:40px; height:40px; border-radius:50%; background:${GREEN}; color:${CREAM}; font-size:21px; font-weight:800; align-items:center; justify-content:center;">${i + 1}</span>`;
       return `<div style="flex:1; min-width:0;">

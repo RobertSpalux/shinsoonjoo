@@ -46,6 +46,7 @@ interface Article {
   slug: string;
   category: string;
   summary: string | null;
+  tags: string[] | null;
   key_points: string[] | null;
   remodeling_bridge: string | null;
   main_website_markdown: string | null;
@@ -411,11 +412,15 @@ export default function AdminDashboard({
                         <button
                           onClick={() =>
                             copy(
-                              `${a.naver_title ?? a.title}\n\n${toNaverText(a.naver_blog_content ?? "")}`,
-                              "네이버 원고 (네이버 제목 + 에디터용 텍스트 변환)"
+                              `${a.naver_title ?? a.title}\n\n${toNaverText(a.naver_blog_content ?? "", {
+                                articleTitle: a.title,
+                                slug: a.slug,
+                                tags: a.tags,
+                              })}`,
+                              "네이버 원고 (네이버 제목 + 본진 링크 + 태그 첨부)"
                             )
                           }
-                          title="네이버 전용 제목 포함 · 마크다운 기호 제거 · [이미지] 마커 유지 · 진단 링크 삽입"
+                          title="네이버 전용 제목 포함 · 마크다운 기호 제거 · [이미지] 마커 유지 · 본진 기사 링크 + 진단 링크 + 해시태그 자동 첨부"
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
                         >
                           네이버 복사 <span className="text-slate-400">· 텍스트 변환</span>
@@ -425,11 +430,11 @@ export default function AdminDashboard({
                         <button
                           onClick={() =>
                             copy(
-                              toBlogspotHtml(a.blogspot_content ?? "", a.slug),
+                              toBlogspotHtml(a.blogspot_content ?? "", a.slug, a.tags),
                               "블로그스팟 HTML (Blogger 'HTML 보기'에 붙여넣기)"
                             )
                           }
-                          title="마크다운→HTML 변환 · 이미지 마커 제거 · 본진 링크 삽입. 제목은 Blogger 제목란에 별도 입력"
+                          title="마크다운→HTML 변환 · 이미지 마커 제거 · 본진 링크 + 해시태그 삽입. 제목은 Blogger 제목란에 별도 입력"
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
                         >
                           블로그스팟 복사 <span className="text-slate-400">· HTML 변환</span>
