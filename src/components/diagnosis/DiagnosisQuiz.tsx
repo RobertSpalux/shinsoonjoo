@@ -10,8 +10,10 @@ import CoverageMockup from "@/components/CoverageMockup";
 
 /**
  * 4단계 자산 방어력 진단 퀴즈.
- * 무거운 개인정보 없이 가볍게 시작 → 결과 리포트 직전에 리드 폼.
- * 카카오싱크 도입 시 LeadForm 부분만 교체하면 되는 구조.
+ * ⚠️ 리드 게이트 없음(커밋 N2) — 4문항 완료 즉시 점수·담보 합산 목업·잔여 공백 경고를 전부 공개한다.
+ * "웹의 KPI는 리드 수집이 아니라 상담 성사"(CLAUDE.md) — 주 CTA는 카톡 상담,
+ * 리포트 신청 폼은 하단 보조(접힌 섹션)로만 둔다.
+ * 카카오싱크 도입 시 리포트 폼 부분만 교체하면 되는 구조.
  * (데이터 흐름은 유지, 시각은 라이트/에디토리얼 + 딥그린 밴드)
  */
 
@@ -61,12 +63,13 @@ function computeScore(a: Answers): number {
 
 export default function DiagnosisQuiz() {
   const { years } = getCareer();
-  const [step, setStep] = useState(0); // 0~3 질문, 4 리드폼, 5 완료
+  const [step, setStep] = useState(0); // 0~3 질문, 4 결과(즉시 공개 — 게이트 없음)
   const [answers, setAnswers] = useState<Answers>({});
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false); // 리포트 폼 제출 완료 (보조 흐름)
   const [error, setError] = useState("");
 
   const score = useMemo(() => computeScore(answers), [answers]);
@@ -129,7 +132,7 @@ export default function DiagnosisQuiz() {
       });
       if (!res.ok) throw new Error();
       gaEvent("lead_created", { score, lead_source: leadSource });
-      setStep(5);
+      setSubmitted(true);
     } catch {
       setError("전송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
@@ -138,15 +141,15 @@ export default function DiagnosisQuiz() {
   };
 
   const current = step < 4 ? STEPS[step] : null;
-  const pct = Math.min(Math.round(((step + 1) / 5) * 100), 100);
+  const pct = Math.min(Math.round(((step + 1) / 4) * 100), 100);
 
   return (
     <div className="mx-auto w-full max-w-xl">
       {/* 진행 바 */}
-      {step < 5 && (
+      {step < 4 && (
         <div className="mb-10">
           <div className="mb-2 flex justify-between text-[11px] font-medium tracking-wider text-[var(--color-text-muted)]">
-            <span>{step < 4 ? `STEP ${step + 1} / 4` : "리포트 준비 완료"}</span>
+            <span>{`STEP ${step + 1} / 4`}</span>
             <span className="tabular-nums">{pct}%</span>
           </div>
           <div className="h-1 overflow-hidden rounded-full bg-[var(--color-line)]">
@@ -219,83 +222,8 @@ export default function DiagnosisQuiz() {
           </motion.div>
         )}
 
-        {/* 리드 폼 (결과 확인 직전) */}
+        {/* 결과 — 게이트 없이 즉시 공개: 점수(딥그린) → 패턴 → 목업(크림) → 카톡 CTA(딥그린) → 보조 폼(크림) */}
         {step === 4 && (
-          <motion.div
-            key="lead"
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -24 }}
-            transition={{ duration: 0.4 }}
-          >
-            {/* 점수 티저 — 딥그린 밴드 + 블러로 궁금증 유발 */}
-            <div className="relative mb-8 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-8 text-center">
-              <span aria-hidden className="mx-auto mb-4 block h-px w-6 bg-[var(--color-gold)]" />
-              <p className="text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]/70">
-                나의 자산 방어력
-              </p>
-              <p
-                className="mt-3 font-serif text-5xl font-semibold tabular-nums text-[var(--color-ink)] blur-md select-none"
-                aria-hidden
-              >
-                {score}점
-              </p>
-              <p className="mt-3 text-sm leading-relaxed text-[var(--color-ink)]/80">
-                진단이 완료되었습니다. 아래 정보를 남기시면
-                <br />
-                <strong className="font-semibold text-[var(--color-ink)]">
-                  {years}년 차 GA명장의 맞춤 해설 리포트
-                </strong>
-                를 보내드립니다.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="성함"
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-sm text-[var(--color-text-strong)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-forest)]"
-              />
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="연락처 (010-0000-0000)"
-                className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-sm text-[var(--color-text-strong)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-forest)]"
-              />
-              <label className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-4 py-3.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                <input
-                  type="checkbox"
-                  checked={agreed}
-                  onChange={(e) => setAgreed(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 accent-[var(--color-forest)]"
-                />
-                <span>
-                  개인정보 수집·이용에 동의합니다. 수집 항목(성함, 연락처, 진단 응답)은 진단
-                  리포트 발송과 상담 연결 목적으로만 사용되며, 목적 달성 후 즉시 파기됩니다.
-                </span>
-              </label>
-
-              {error && <p className="text-xs text-red-600">{error}</p>}
-
-              <button
-                onClick={submit}
-                disabled={submitting}
-                className="w-full rounded-[var(--radius-sm)] bg-[var(--color-forest)] py-4 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)] disabled:opacity-40 disabled:hover:translate-y-0"
-              >
-                {submitting ? "전송 중..." : "무료 리포트 받고 결과 확인하기"}
-              </button>
-              <p className="text-center text-[11px] text-[var(--color-text-muted)]">
-                상담 강요는 없습니다. 리포트만 받아보셔도 됩니다.
-              </p>
-            </div>
-          </motion.div>
-        )}
-
-        {/* 완료 — 점수 공개 + 정밀분석 다리 (딥그린 밴드) */}
-        {step === 5 && (
           <motion.div
             key="done"
             initial={{ opacity: 0, scale: 0.95 }}
@@ -318,6 +246,7 @@ export default function DiagnosisQuiz() {
                   {score}
                   <span className="text-2xl">점</span>
                 </motion.p>
+                <p className="mt-2 text-xs text-[var(--color-ink)]/60">설문 기반 추정입니다.</p>
                 <p className="mx-auto mt-5 max-w-sm text-sm leading-relaxed text-[var(--color-ink)]/85">
                   {score >= 70
                     ? "기본기가 탄탄하시네요. 다만 선택하신 리스크 영역은 정밀 점검이 필요합니다."
@@ -355,15 +284,16 @@ export default function DiagnosisQuiz() {
               <CoverageMockup />
             </div>
 
-            {/* 해결 — 정밀분석 다리 + 주 CTA(카카오톡). 별도 딥그린 밴드 */}
+            {/* 해결 — 정밀분석 다리 + 주 CTA(카카오톡, 화면당 주 CTA 1개). 별도 딥그린 밴드 */}
             <div className="mb-8 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-8 md:p-10">
               <div className="text-center">
-                <p className="mx-auto max-w-md text-sm leading-relaxed text-[var(--color-ink)]/90">
-                  상담 시 가입된{" "}
-                  <strong className="font-semibold text-[var(--color-ink)]">
-                    전체 계약을 한 번에 조회
-                  </strong>
-                  해 중복·과설계·보장 공백을 정밀 분석해 드립니다.
+                <span aria-hidden className="mx-auto mb-4 block h-px w-6 bg-[var(--color-gold)]" />
+                <p className="mx-auto max-w-md font-serif text-lg font-semibold leading-snug text-[var(--color-ink)] md:text-xl">
+                  전 계약을 조회해, 담보 단위로 봐드립니다
+                </p>
+                <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[var(--color-ink)]/85">
+                  위와 같은 표는 상담에서 실제 계약을 조회해야 나옵니다. 중복·과설계·보장 공백을
+                  담보 단위로 정밀 분석해 드립니다.
                 </p>
                 <p className="mt-2 text-xs text-[var(--color-ink)]/60">
                   {years}년 경험을 담아 직접 개발한 분석 시스템으로 진행합니다.
@@ -388,11 +318,71 @@ export default function DiagnosisQuiz() {
               </div>
             </div>
 
-            <p className="text-center text-sm leading-relaxed text-[var(--color-text-body)]">
-              접수가 완료되었습니다.{" "}
-              <strong className="font-semibold text-[var(--color-text-strong)]">24시간 이내</strong>에{" "}
-              {years}년 차 GA명장 신순주 지사장이 직접 맞춤 리포트와 함께 연락드립니다.
-            </p>
+            {/* 리포트 신청 폼 — 게이트 아님·보조(크림 배경, 접힌 상태). 리드 저장·PIPA 동의 유지 */}
+            {submitted ? (
+              <p className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-6 py-6 text-center text-sm leading-relaxed text-[var(--color-text-body)]">
+                리포트 신청이 접수되었습니다.{" "}
+                <strong className="font-semibold text-[var(--color-text-strong)]">24시간 이내</strong>에{" "}
+                {years}년 차 GA명장 신순주 지사장이 직접 맞춤 리포트와 함께 연락드립니다.
+              </p>
+            ) : (
+              <details className="group rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-[var(--color-ink-card)]">
+                <summary className="cursor-pointer list-none px-6 py-5 text-sm font-semibold text-[var(--color-text-body)] transition-colors hover:text-[var(--color-text-strong)]">
+                  <span className="flex items-center justify-between gap-3">
+                    상담이 부담스러우시면, 리포트만 받아보셔도 됩니다
+                    <span
+                      aria-hidden
+                      className="shrink-0 text-xs text-[var(--color-text-muted)] transition-transform duration-200 group-open:rotate-180"
+                    >
+                      ▾
+                    </span>
+                  </span>
+                </summary>
+                <div className="space-y-4 border-t border-[var(--color-line)] px-6 py-6">
+                  <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
+                    남기신 연락처로 이번 진단 결과에 대한 맞춤 해설 리포트를 보내드립니다. 상담
+                    강요는 없습니다.
+                  </p>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="성함"
+                    className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink)] px-4 py-3.5 text-sm text-[var(--color-text-strong)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-forest)]"
+                  />
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="연락처 (010-0000-0000)"
+                    className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink)] px-4 py-3.5 text-sm text-[var(--color-text-strong)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-forest)]"
+                  />
+                  <label className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink)] px-4 py-3.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
+                    <input
+                      type="checkbox"
+                      checked={agreed}
+                      onChange={(e) => setAgreed(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 accent-[var(--color-forest)]"
+                    />
+                    <span>
+                      개인정보 수집·이용에 동의합니다. 수집 항목(성함, 연락처, 진단 응답)은 진단
+                      리포트 발송과 상담 연결 목적으로만 사용되며, 목적 달성 후 즉시 파기됩니다.
+                    </span>
+                  </label>
+
+                  {error && <p className="text-xs text-red-600">{error}</p>}
+
+                  {/* 보조 버튼 — 딥그린 채움이되 폭 좁게(주 CTA는 위 카톡 1개) */}
+                  <button
+                    onClick={submit}
+                    disabled={submitting}
+                    className="inline-flex rounded-[var(--radius-sm)] bg-[var(--color-forest)] px-8 py-3 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)] disabled:opacity-40 disabled:hover:translate-y-0"
+                  >
+                    {submitting ? "전송 중..." : "무료 리포트 신청하기"}
+                  </button>
+                </div>
+              </details>
+            )}
 
             {/* 관계 장치 — 아직 상담이 부담스러운 사람을 위한 약한 연결 */}
             <p className="mt-6 text-center">
