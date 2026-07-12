@@ -5,8 +5,8 @@ import { getCareer } from "@/lib/brand";
 const { years } = getCareer();
 
 export const metadata: Metadata = {
-  title: "자산 방어력 진단 — 3분 무료 진단",
-  description: `내 보험, 제대로 되어 있을까? 4개 질문으로 자산 방어력을 진단하고 ${years}년 차 GA명장의 맞춤 리포트를 무료로 받아보세요. 상담 강요 없음.`,
+  title: "자산 방어력 진단 — 2분 무료 진단",
+  description: `내 보험, 제대로 되어 있을까? 7개 질문으로 자산 방어력을 진단하고 항목별 근거까지 바로 확인하세요. 상담 강요 없음.`,
   alternates: { canonical: "/diagnosis" },
 };
 
@@ -28,7 +28,7 @@ export default function DiagnosisPage() {
             내 자산, 위기에 얼마나 버틸까?
           </h1>
           <p className="text-sm leading-relaxed text-[var(--color-text-body)]">
-            질문 4개, 3분이면 끝납니다.
+            질문 7개, 2분이면 끝납니다.
             <br className="hidden md:block" />
             {years}년 현장의 눈으로 직접 봐드립니다.
           </p>
