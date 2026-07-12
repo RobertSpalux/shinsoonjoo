@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { BRAND, getCareer } from "@/lib/brand";
 import { getDiagnosisPatterns } from "@/lib/diagnosis-patterns";
@@ -10,11 +9,11 @@ import CoverageMockup from "@/components/CoverageMockup";
 
 /**
  * 4단계 자산 방어력 진단 퀴즈.
- * ⚠️ 리드 게이트 없음(커밋 N2) — 4문항 완료 즉시 점수·담보 합산 목업·잔여 공백 경고를 전부 공개한다.
- * "웹의 KPI는 리드 수집이 아니라 상담 성사"(CLAUDE.md) — 주 CTA는 카톡 상담,
- * 리포트 신청 폼은 하단 보조(접힌 섹션)로만 둔다.
- * 카카오싱크 도입 시 리포트 폼 부분만 교체하면 되는 구조.
- * (데이터 흐름은 유지, 시각은 라이트/에디토리얼 + 딥그린 밴드)
+ * ⚠️ 리드 게이트 없음(N2) — 4문항 완료 즉시 점수·담보 합산 목업·잔여 공백 경고를 전부 공개한다.
+ * ⚠️ 결과 화면 CTA는 카카오톡 상담 단 1개(N3) — 리포트 폼·전화 링크·채널추가 등
+ * 빠져나갈 구멍을 두지 않는다. "웹의 KPI는 리드 수집이 아니라 상담 성사"(CLAUDE.md).
+ * 리드 대신 4문항 완료 시점에 익명 진단 로그(응답+점수+유입, PII 없음)를 저장한다.
+ * (시각은 라이트/에디토리얼 + 딥그린 밴드)
  */
 
 const STEPS = [
@@ -42,7 +41,7 @@ const STEPS = [
   {
     key: "profile",
     question: "마지막으로, 어디쯤 계신가요?",
-    hint: "정확한 리포트 산출을 위한 마지막 질문입니다.",
+    hint: "정확한 결과 산출을 위한 마지막 질문입니다.",
     multi: false,
     options: ["2030 · 싱글", "3040 · 신혼/영유아 자녀", "4050 · 학령기 자녀", "5060 · 자녀 독립 준비", "60+ · 은퇴 전후", "법인 대표·사업자"],
   },
@@ -65,17 +64,11 @@ export default function DiagnosisQuiz() {
   const { years } = getCareer();
   const [step, setStep] = useState(0); // 0~3 질문, 4 결과(즉시 공개 — 게이트 없음)
   const [answers, setAnswers] = useState<Answers>({});
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [agreed, setAgreed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false); // 리포트 폼 제출 완료 (보조 흐름)
-  const [error, setError] = useState("");
 
   const score = useMemo(() => computeScore(answers), [answers]);
   const patterns = useMemo(() => getDiagnosisPatterns(answers), [answers]);
 
-  // GA4 전환 퍼널: diagnosis_start(첫 응답) → diagnosis_complete(4문항 완료) → lead_created(제출)
+  // GA4 전환 퍼널: diagnosis_start(첫 응답) → diagnosis_complete(4문항 완료) → kakao_cta_click(상담 전환)
   const startedRef = useRef(false);
   const completedRef = useRef(false);
   const markStart = () => {
@@ -87,8 +80,27 @@ export default function DiagnosisQuiz() {
     if (step === 4 && !completedRef.current) {
       completedRef.current = true;
       gaEvent("diagnosis_complete", { score });
+
+      // 익명 진단 완료 로그 (커밋 N3) — 응답+점수+유입만 저장, 이름·연락처 null (PII 없음).
+      // 어떤 프로필이 몇 점을 받고 이탈/전환하는지 추적용. 실패해도 사용자 흐름과 무관(fire-and-forget).
+      const params = new URLSearchParams(window.location.search);
+      // 채널 유입 구분: utm_source/medium/campaign을 lead_source(기존 필드)에 압축 저장
+      const utm = [params.get("utm_source"), params.get("utm_medium"), params.get("utm_campaign")]
+        .filter(Boolean)
+        .join("/");
+      const leadSource = utm || params.get("ref") || "direct";
+      fetch("/api/diagnosis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          anonymous: true,
+          quiz_responses: answers,
+          quiz_score: score,
+          lead_source: leadSource,
+        }),
+      }).catch(() => undefined);
     }
-  }, [step, score]);
+  }, [step, score, answers]);
 
   const selectSingle = (key: string, value: string) => {
     markStart();
@@ -102,42 +114,6 @@ export default function DiagnosisQuiz() {
       const cur = prev[key] ?? [];
       return { ...prev, [key]: cur.includes(value) ? cur.filter((v) => v !== value) : [...cur, value] };
     });
-  };
-
-  const submit = async () => {
-    if (!name.trim() || !phone.trim() || !agreed) {
-      setError("이름, 연락처, 개인정보 동의는 필수입니다.");
-      return;
-    }
-    setSubmitting(true);
-    setError("");
-    try {
-      const params = new URLSearchParams(window.location.search);
-      // 채널 유입 구분: utm_source/medium/campaign을 lead_source(기존 필드)에 압축 저장
-      const utm = [params.get("utm_source"), params.get("utm_medium"), params.get("utm_campaign")]
-        .filter(Boolean)
-        .join("/");
-      const leadSource = utm || params.get("ref") || "direct";
-      const res = await fetch("/api/diagnosis", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          phone,
-          quiz_responses: answers,
-          quiz_score: score,
-          lead_source: leadSource,
-          privacy_agreed: agreed,
-        }),
-      });
-      if (!res.ok) throw new Error();
-      gaEvent("lead_created", { score, lead_source: leadSource });
-      setSubmitted(true);
-    } catch {
-      setError("전송에 실패했습니다. 잠시 후 다시 시도해 주세요.");
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const current = step < 4 ? STEPS[step] : null;
@@ -305,97 +281,10 @@ export default function DiagnosisQuiz() {
                   onClick={() => gaEvent("kakao_cta_click", { position: "diagnosis_result" })}
                   className="mt-6 inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-ink)] px-7 py-3.5 text-sm font-semibold text-[var(--color-forest)] transition-transform duration-300 hover:-translate-y-px"
                 >
-                  카카오톡으로 정밀 진단 상담하기
+                  카카오톡으로 상담 신청하기
                 </a>
-                <p className="mt-3">
-                  <Link
-                    href="/#consultation"
-                    className="text-xs text-[var(--color-ink)]/70 underline underline-offset-4 transition-colors hover:text-[var(--color-ink)]"
-                  >
-                    전화 상담이 편하시면 — 상담 폼으로 신청하기
-                  </Link>
-                </p>
               </div>
             </div>
-
-            {/* 리포트 신청 폼 — 게이트 아님·보조(크림 배경, 접힌 상태). 리드 저장·PIPA 동의 유지 */}
-            {submitted ? (
-              <p className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-[var(--color-ink-card)] px-6 py-6 text-center text-sm leading-relaxed text-[var(--color-text-body)]">
-                리포트 신청이 접수되었습니다.{" "}
-                <strong className="font-semibold text-[var(--color-text-strong)]">24시간 이내</strong>에{" "}
-                {years}년 차 GA명장 신순주 지사장이 직접 맞춤 리포트와 함께 연락드립니다.
-              </p>
-            ) : (
-              <details className="group rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-[var(--color-ink-card)]">
-                <summary className="cursor-pointer list-none px-6 py-5 text-sm font-semibold text-[var(--color-text-body)] transition-colors hover:text-[var(--color-text-strong)]">
-                  <span className="flex items-center justify-between gap-3">
-                    상담이 부담스러우시면, 리포트만 받아보셔도 됩니다
-                    <span
-                      aria-hidden
-                      className="shrink-0 text-xs text-[var(--color-text-muted)] transition-transform duration-200 group-open:rotate-180"
-                    >
-                      ▾
-                    </span>
-                  </span>
-                </summary>
-                <div className="space-y-4 border-t border-[var(--color-line)] px-6 py-6">
-                  <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
-                    남기신 연락처로 이번 진단 결과에 대한 맞춤 해설 리포트를 보내드립니다. 상담
-                    강요는 없습니다.
-                  </p>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="성함"
-                    className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink)] px-4 py-3.5 text-sm text-[var(--color-text-strong)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-forest)]"
-                  />
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="연락처 (010-0000-0000)"
-                    className="w-full rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink)] px-4 py-3.5 text-sm text-[var(--color-text-strong)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-forest)]"
-                  />
-                  <label className="flex items-start gap-3 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-ink)] px-4 py-3.5 text-xs leading-relaxed text-[var(--color-text-muted)]">
-                    <input
-                      type="checkbox"
-                      checked={agreed}
-                      onChange={(e) => setAgreed(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 accent-[var(--color-forest)]"
-                    />
-                    <span>
-                      개인정보 수집·이용에 동의합니다. 수집 항목(성함, 연락처, 진단 응답)은 진단
-                      리포트 발송과 상담 연결 목적으로만 사용되며, 목적 달성 후 즉시 파기됩니다.
-                    </span>
-                  </label>
-
-                  {error && <p className="text-xs text-red-600">{error}</p>}
-
-                  {/* 보조 버튼 — 딥그린 채움이되 폭 좁게(주 CTA는 위 카톡 1개) */}
-                  <button
-                    onClick={submit}
-                    disabled={submitting}
-                    className="inline-flex rounded-[var(--radius-sm)] bg-[var(--color-forest)] px-8 py-3 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)] disabled:opacity-40 disabled:hover:translate-y-0"
-                  >
-                    {submitting ? "전송 중..." : "무료 리포트 신청하기"}
-                  </button>
-                </div>
-              </details>
-            )}
-
-            {/* 관계 장치 — 아직 상담이 부담스러운 사람을 위한 약한 연결 */}
-            <p className="mt-6 text-center">
-              <a
-                href={BRAND.social.kakao}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => gaEvent("kakao_cta_click", { position: "channel_add" })}
-                className="text-xs text-[var(--color-text-muted)] underline underline-offset-4 transition-colors hover:text-[var(--color-text-body)]"
-              >
-                아직 상담은 부담스러우시다면 — 카카오톡 채널 추가하고 보험 꿀팁만 받아보세요 →
-              </a>
-            </p>
           </motion.div>
         )}
       </AnimatePresence>

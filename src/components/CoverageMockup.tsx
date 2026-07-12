@@ -27,12 +27,14 @@ export default function CoverageMockup() {
       </p>
       <span aria-hidden className="mt-2 block h-px w-6 bg-[var(--color-gold)]" />
 
+      {/* '남의 사례'임이 첫 줄에서 즉시 전달되게 (N3 — 라벨은 안 읽는다는 전제) */}
       <h3 className="mt-5 font-serif text-xl font-semibold tracking-[-0.01em] text-[var(--color-text-strong)] md:text-2xl">
-        상담하면 이런 표를 받으십니다
+        다른 분의 표는 이렇게 나왔습니다
       </h3>
-      <p className="mt-2 text-sm text-[var(--color-text-muted)]">
-        {MOCKUP_PROFILE.desc} · 금액 단위: 만원
+      <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-muted)]">
+        당신의 표는 상담에서 실제 계약을 조회해야 나옵니다.
       </p>
+      <p className="mt-1 text-sm text-[var(--color-text-muted)]">{MOCKUP_PROFILE.desc}</p>
 
       {/* 담보 합산표 — md 이상: 표 */}
       <div className="mt-6 hidden overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-[var(--color-ink-card)] md:block">

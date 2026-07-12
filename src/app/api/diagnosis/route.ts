@@ -1,11 +1,34 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 
-/** 자산 진단 퀴즈 리드 수집 — lead_consultings 저장 + 텔레그램 즉시 알림 */
+/**
+ * 자산 진단 퀴즈 — lead_consultings 저장.
+ * 두 모드(커밋 N3):
+ * - anonymous: 4문항 완료 시점의 익명 진단 로그 (응답+점수+유입만, 이름·연락처 null — PII 없음).
+ *   텔레그램 알림 없음(연락처가 없어 액션 불가 — 프로필별 이탈/전환 추적용).
+ * - 리드(이름·연락처): 기존 경로 그대로 보존 (현재 호출 지점 없음 — 폼 제거됨).
+ */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, phone, quiz_responses, quiz_score, lead_source, privacy_agreed } = body;
+    const { name, phone, quiz_responses, quiz_score, lead_source, privacy_agreed, anonymous } = body;
+
+    if (anonymous === true) {
+      const { error: dbError } = await createAdminClient().from("lead_consultings").insert({
+        name: null,
+        phone: null,
+        quiz_responses: quiz_responses ?? null,
+        quiz_score: typeof quiz_score === "number" ? quiz_score : null,
+        lead_source: lead_source ?? "direct",
+        privacy_agreed: false, // 수집한 개인정보가 없음
+      });
+      if (dbError) {
+        // 익명 로그는 best-effort — 실패해도 사용자 흐름에 영향 없음 (클라이언트는 fire-and-forget)
+        console.error("anonymous diagnosis log insert error:", dbError);
+        return NextResponse.json({ error: "로그 저장 실패" }, { status: 500 });
+      }
+      return NextResponse.json({ success: true });
+    }
 
     if (!name?.trim() || !phone?.trim() || !privacy_agreed) {
       return NextResponse.json({ error: "필수 항목을 입력해 주세요." }, { status: 400 });
