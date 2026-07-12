@@ -298,7 +298,16 @@ async function generateEvergreen(seed, groundingText) {
       auto_publish: false,
     }),
   });
-  const json = await res.json();
+  // Vercel 함수 타임아웃/에러 페이지는 JSON이 아닌 텍스트를 반환 (실측: "An error occurred…")
+  const raw = await res.text();
+  let json;
+  try {
+    json = JSON.parse(raw);
+  } catch {
+    const err = new Error(`generate 응답이 JSON 아님(HTTP ${res.status}): ${raw.slice(0, 200)}`);
+    err.status = res.status;
+    throw err;
+  }
   if (!res.ok) {
     const err = new Error(`generate 실패(${res.status}): ${json.error ?? "unknown"}`);
     err.status = res.status;
