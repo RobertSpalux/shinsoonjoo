@@ -23,43 +23,199 @@ const {
 
 const DAILY_LIMIT = Number(process.env.DAILY_ARTICLE_LIMIT ?? 2);
 
-/** 원천 소스 — 실패해도 다음 소스로 넘어감 */
+/**
+ * 원천 소스 — 실패해도 다음 소스로 넘어감. 소스 규칙은 CONTENT-STRATEGY §9(공공 1차 소스만 재가공,
+ * 민간 보험 매체 금지). 금감원·파인 게시판은 RSS가 없어 목록 HTML 파싱(구 RSS는 죽어 HTML 에러 페이지 반환).
+ * boost: 선정 순서에서 보험 특화 소스를 상위로 (게이트 점수에는 불포함 — RELEVANCE_MIN 판정은 원점수).
+ * category: 팩토리에 주는 분류 힌트 (최종 분류는 모델의 6-카테고리 enum).
+ */
 const SOURCES = [
-  { name: "금융감독원 보도자료", url: "https://www.fss.or.kr/fss/kr/rss/fss_news.xml", category: "금융·경제 뉴스" },
-  { name: "연합뉴스 경제", url: "https://www.yna.co.kr/rss/economy.xml", category: "금융·경제 뉴스" },
-  { name: "연합뉴스 금융", url: "https://www.yna.co.kr/rss/market.xml", category: "금융·경제 뉴스" },
+  // 보험 특화 공공 소스 (인증키 불필요 · 공개 게시판)
+  { name: "금융꿀팁 200선", type: "board", url: "https://www.fss.or.kr/fss/bbs/B0000173/list.do?menuNo=200498", category: "보험료 절약·꿀팁", boost: 6 },
+  { name: "금융소비자경보", type: "board", url: "https://www.fss.or.kr/fss/bbs/B0000175/list.do?menuNo=200204", category: "보험금 청구·보상", boost: 6 },
+  { name: "파인 생활금융톡톡", type: "board", url: "https://fine.fss.or.kr/fine/bbs/B0000341/list.do?menuNo=900023", category: "보험료 절약·꿀팁", boost: 5 },
+  { name: "파인 민원사례", type: "board", url: "https://fine.fss.or.kr/fine/bbs/B0000343/list.do?menuNo=900025", category: "보험금 청구·보상", boost: 5 },
+  { name: "금감원 보도자료", type: "board", url: "https://www.fss.or.kr/fss/bbs/B0000188/list.do?menuNo=200218", category: "금융·경제 뉴스", boost: 4 },
+  // 일반 경제 RSS (신선도용 — 보험 소스보다 후순위)
+  { name: "연합뉴스 경제", type: "rss", url: "https://www.yna.co.kr/rss/economy.xml", category: "금융·경제 뉴스", boost: 0 },
+  { name: "연합뉴스 금융", type: "rss", url: "https://www.yna.co.kr/rss/market.xml", category: "금융·경제 뉴스", boost: 0 },
 ];
 
 const supabase = createClient(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 const parser = new Parser({ timeout: 15000 });
+
+const UA = "Mozilla/5.0 (compatible; GoodFinancePipeline/1.0)";
+const PER_SOURCE_LIMIT = 8;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** charset 대응 fetch — 금감원/파인 일부 페이지는 EUC-KR (res.text()로 읽으면 한글 깨짐) */
+async function fetchText(url) {
+  const res = await fetch(url, {
+    headers: { "User-Agent": UA },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const buf = new Uint8Array(await res.arrayBuffer());
+  const ct = res.headers.get("content-type") ?? "";
+  let charset = (ct.match(/charset=([\w-]+)/i)?.[1] ?? "").toLowerCase();
+  if (!charset) {
+    const head = new TextDecoder("latin1").decode(buf.slice(0, 2000));
+    charset = (head.match(/charset=["']?([\w-]+)/i)?.[1] ?? "utf-8").toLowerCase();
+  }
+  try {
+    return new TextDecoder(charset).decode(buf);
+  } catch {
+    return new TextDecoder("utf-8").decode(buf);
+  }
+}
+
+/** HTML 엔티티 최소 디코드 (게시판 제목·본문용) */
+function decodeEntities(s) {
+  const named = {
+    amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ",
+    rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“",
+    middot: "·", rarr: "→", hellip: "…",
+  };
+  return String(s ?? "")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16)))
+    .replace(/&([a-zA-Z]+);/g, (_, name) => named[name] ?? `&${name};`);
+}
+
+/**
+ * 깨진 RSS 방어 — ① HTML 에러 페이지 응답 감지(구 금감원 RSS 사례) ② 파싱 실패 시
+ * 불량 엔티티(& 미이스케이프)를 sanitize 후 1회 재파싱. 그래도 실패하면 throw → 소스 "실패" 기록.
+ */
+async function fetchRssItems(url) {
+  const raw = await fetchText(url);
+  if (/^\s*(<!DOCTYPE\s+html|<html)/i.test(raw)) {
+    throw new Error("RSS 대신 HTML 응답(피드 사망/에러 페이지)");
+  }
+  try {
+    return (await parser.parseString(raw)).items ?? [];
+  } catch {
+    const sanitized = raw.replace(/&(?!(?:#\d+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);)/g, "&amp;");
+    return (await parser.parseString(sanitized)).items ?? [];
+  }
+}
+
+/**
+ * 금감원/파인 게시판 목록 파싱 — <td class="title"><a href="…view.do?nttId=…">제목</a></td>
+ * + 행 뒤쪽의 YYYY-MM-DD를 날짜로. 본문은 나중에(hydrate) 상세 페이지에서 채움.
+ */
+async function fetchBoardItems(source) {
+  const html = await fetchText(source.url);
+  const origin = new URL(source.url).origin;
+  const items = [];
+  const re = /<td class="title">\s*<a href="([^"]*view\.do[^"]*)"[^>]*>([\s\S]*?)<\/a>\s*<\/td>/g;
+  let m;
+  while ((m = re.exec(html)) !== null && items.length < PER_SOURCE_LIMIT) {
+    const href = decodeEntities(m[1]);
+    const title = decodeEntities(m[2].replace(/<[^>]*>/g, "")).replace(/\s+/g, " ").trim();
+    if (!title) continue;
+    const dateMatch = html.slice(m.index, m.index + 800).match(/\d{4}-\d{2}-\d{2}/);
+    items.push({
+      title,
+      link: href.startsWith("http") ? href : `${origin}${href}`,
+      content: "", // hydrate 단계에서 상세 본문 채움 (신규 항목만 — 요청 절약)
+      needsDetail: true,
+      source: source.name,
+      category: source.category,
+      boost: source.boost,
+      pubDate: dateMatch ? dateMatch[0] : null,
+    });
+  }
+  if (!items.length) throw new Error("목록에서 게시글을 찾지 못함(페이지 구조 변경?)");
+  return items;
+}
+
+/**
+ * 게시글 상세 본문 추출 — <div class="dbdata"> 내부 텍스트.
+ * "첨부파일 참고" 스텁(꿀팁 200선 등 PDF 첨부형)·이미지형(파인 톡톡·민원사례)은 빈 문자열 반환
+ * → 호출부에서 스킵. 본문 없는 기사를 제목만으로 생성하면 팩트 없는 원고(컴플라이언스 리스크).
+ * (꿀팁 200선 텍스트는 금감원 오픈API 인증키 도착 후 API로 확보 예정)
+ */
+async function fetchBoardBody(link) {
+  const html = await fetchText(link);
+  const start = html.indexOf('class="dbdata"');
+  if (start === -1) return "";
+  const chunk = html.slice(start, start + 20000);
+  const end = chunk.search(/class="bd-view-nav"|담당부서/);
+  const scoped = end > 0 ? chunk.slice(0, end) : chunk;
+  const text = decodeEntities(
+    scoped
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]*>/g, " ")
+  )
+    .replace(/\s+/g, " ")
+    .replace(/^class="dbdata">\s*/, "")
+    .replace(/\s*목록\s*$/, "")
+    .trim()
+    .slice(0, 4000);
+  // 스텁 판정: 사실상 "첨부파일 보세요"뿐인 본문
+  if (text.length < 80 || (/첨부\s*파일.*(참고|참조)/.test(text) && text.length < 200)) return "";
+  return text;
+}
 
 async function collectCandidates() {
   const items = [];
   const sourceStats = []; // 관측용: 소스별 수집 건수·실패 (텔레그램 요약에 실림)
   for (const source of SOURCES) {
     try {
-      const feed = await parser.parseURL(source.url);
-      let count = 0;
-      for (const item of (feed.items ?? []).slice(0, 8)) {
-        if (!item.link || !item.title) continue;
-        items.push({
-          title: item.title.trim(),
-          link: item.link,
-          content: (item.contentSnippet || item.content || item.summary || "").trim(),
-          source: source.name,
-          category: source.category,
-          pubDate: item.isoDate ?? item.pubDate ?? null,
-        });
-        count++;
+      let collected = [];
+      if (source.type === "board") {
+        collected = await fetchBoardItems(source);
+      } else {
+        const feedItems = await fetchRssItems(source.url);
+        for (const item of feedItems.slice(0, PER_SOURCE_LIMIT)) {
+          if (!item.link || !item.title) continue;
+          collected.push({
+            title: item.title.trim(),
+            link: item.link,
+            content: (item.contentSnippet || item.content || item.summary || "").trim(),
+            needsDetail: false,
+            source: source.name,
+            category: source.category,
+            boost: source.boost,
+            pubDate: item.isoDate ?? item.pubDate ?? null,
+          });
+        }
       }
-      sourceStats.push({ name: source.name, count, failed: false });
-      console.log(`[수집] ${source.name}: ${feed.items?.length ?? 0}건`);
+      items.push(...collected);
+      sourceStats.push({ name: source.name, count: collected.length, failed: false });
+      console.log(`[수집] ${source.name}: ${collected.length}건`);
+      await sleep(300); // 소스 간 딜레이 (공공 사이트 예의)
     } catch (err) {
       sourceStats.push({ name: source.name, count: 0, failed: true });
       console.warn(`[수집 실패] ${source.name}: ${err.message}`);
     }
   }
   return { items, sourceStats };
+}
+
+/**
+ * 게시판 항목 본문 채우기 — 기처리·중복 제거 후 남은 신규 항목만 (요청 최소화 + 딜레이).
+ * 본문 확보 실패(첨부형·이미지형·오류)한 항목은 noBody 마킹 → 후보에서 제외(호출부).
+ */
+async function hydrateBoardItems(items) {
+  for (const item of items) {
+    if (!item.needsDetail) continue;
+    try {
+      const body = await fetchBoardBody(item.link);
+      if (body) {
+        item.content = body;
+      } else {
+        item.noBody = true;
+        console.warn(`[본문 없음 → 스킵] ${item.title} (첨부/이미지형)`);
+      }
+    } catch (err) {
+      item.noBody = true;
+      console.warn(`[본문 실패 → 스킵] ${item.title}: ${err.message}`);
+    }
+    await sleep(400); // 상세 요청 간 딜레이
+  }
+  return items;
 }
 
 async function filterProcessed(items) {
@@ -108,7 +264,18 @@ function dedupeBatch(items) {
   const seenTitle = new Set();
   const out = [];
   for (const it of items) {
-    const urlKey = (it.link || "").split("?")[0].trim();
+    // ⚠️ 게시판 링크는 쿼리(nttId)가 곧 식별자 — 쿼리 전체를 버리면 게시판당 1건만 남는 버그.
+    // pageIndex 같은 비식별 파라미터만 제거하고 나머지는 유지한다.
+    const urlKey = (() => {
+      try {
+        const u = new URL(it.link);
+        u.searchParams.delete("pageIndex");
+        u.searchParams.sort();
+        return `${u.origin}${u.pathname}?${u.searchParams.toString()}`;
+      } catch {
+        return (it.link || "").trim();
+      }
+    })();
     const titleKey = (it.title || "").replace(/\s+/g, "").slice(0, 40);
     if (seenUrl.has(urlKey) || seenTitle.has(titleKey)) continue;
     seenUrl.add(urlKey);
@@ -163,7 +330,7 @@ async function sendTelegramDoc(filename, text, caption) {
 }
 
 /** 파이프라인 요약 알림 — 매일 아침 이것만 보고 "왜 글이 없는지/소스가 부실한지" 판단 가능해야 함 */
-function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, picked, cut, results, failures }) {
+function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, noBodySkipped, passed, picked, cut, results, failures }) {
   const today = new Date().toLocaleDateString("ko-KR", {
     month: "numeric", day: "numeric", timeZone: "Asia/Seoul",
   });
@@ -180,10 +347,10 @@ function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, pi
   const srcLine = sourceStats
     .map((s) => `${s.name.replace(/^연합뉴스 /, "연합")} ${s.failed ? "실패" : s.count}`)
     .join(" · ");
-  lines.push(`📥 수집: RSS ${collected}건 (${srcLine})`);
+  lines.push(`📥 수집: ${collected}건 (${srcLine})`);
   lines.push(
-    `🚧 게이트(하한 ${RELEVANCE_MIN}점): 통과 ${picked.length} / 컷 ${cut.length}` +
-      ` — 중복 제외 ${alreadyProcessed + batchDupes}건(기처리 ${alreadyProcessed}·배치 ${batchDupes})`
+    `🚧 게이트(하한 ${RELEVANCE_MIN}점): 통과 ${passed.length} → 선정 ${picked.length}(한도 ${DAILY_LIMIT}) / 컷 ${cut.length}` +
+      ` — 제외 ${alreadyProcessed + batchDupes + noBodySkipped}건(기처리 ${alreadyProcessed}·중복 ${batchDupes}·본문없음 ${noBodySkipped})`
   );
   if (cut.length) {
     lines.push(`✂️ 컷 상위 ${Math.min(cut.length, 5)}건:`);
@@ -212,12 +379,21 @@ async function main() {
   const deduped = dedupeBatch(fresh);
   const alreadyProcessed = candidates.length - fresh.length; // DB에 이미 있는 URL
   const batchDupes = fresh.length - deduped.length; // 이번 배치 내 URL·제목 중복
-  const scoredAll = deduped.map((i) => ({ ...i, score: relevanceScore(i) }));
+  // 게시판 항목은 여기서 상세 본문을 채운다 (중복 제거 후 신규만 → 요청 최소화, 스코어는 본문 포함으로)
+  await hydrateBoardItems(deduped);
+  const usable = deduped.filter((i) => !i.noBody);
+  const noBodySkipped = deduped.length - usable.length; // 첨부/이미지형 — 본문 없어 생성 불가
+  const scoredAll = usable.map((i) => ({ ...i, score: relevanceScore(i) }));
 
-  const picked = scoredAll
+  // 게이트 판정은 원점수(RELEVANCE_MIN) — boost는 통과분의 '선정 순서'에만 반영(보험 특화 소스 우선)
+  const passed = scoredAll
     .filter((i) => i.score >= RELEVANCE_MIN)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, DAILY_LIMIT);
+    .sort((a, b) => (b.score + (b.boost ?? 0)) - (a.score + (a.boost ?? 0)));
+  const picked = passed.slice(0, DAILY_LIMIT);
+  if (passed.length) {
+    console.log(`[게이트 통과] ${passed.length}건 (오늘 한도 ${DAILY_LIMIT}건 선정):`);
+    passed.forEach((i) => console.log(`  · ${i.score}점 [${i.source}] ${i.title}`));
+  }
 
   // 관측용 로그: 컷된 것도 남겨 임계값 튜닝에 활용
   const cut = scoredAll
@@ -279,6 +455,8 @@ async function main() {
     collected: candidates.length,
     alreadyProcessed,
     batchDupes,
+    noBodySkipped,
+    passed,
     picked,
     cut,
     results,
