@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createAdminClient } from "@/lib/supabase-admin";
-import { factorySystemPrompt, FACTORY_OUTPUT_SCHEMA } from "@/lib/factory-prompt";
+import {
+  factorySystemPrompt,
+  evergreenSystemPrompt,
+  FACTORY_OUTPUT_SCHEMA,
+  EVERGREEN_OUTPUT_SCHEMA,
+  type EvergreenSeed,
+} from "@/lib/factory-prompt";
 
 export const maxDuration = 300; // Fluid Compute: 멀티 원고 생성은 수 분 소요 가능
 
@@ -43,15 +49,34 @@ function validateCarousel(cards: unknown): string[] {
 /**
  * 원고 검증 가드 — 커밋 M0. 실측: 프롬프트의 글자수 지시(2,000~3,200자)가 안 먹혀
  * 1,749자/1,302자 미달 생성물 관측 → 글자수가 아니라 구조(H2 개수)로 강제하고 여기서 검증.
+ * 임계값은 모드별(뉴스 4개/1,900자, 상록수 5개/2,300자 — 커밋 M2).
  */
-function validateMainMarkdown(md: unknown): string[] {
+function validateMainMarkdown(md: unknown, minH2 = 4, minChars = 1900): string[] {
   const issues: string[] = [];
   const text = typeof md === "string" ? md : "";
   if (!text.trim()) return ["main_website_markdown 없음/비어 있음"];
   const h2Count = (text.match(/^##\s/gm) ?? []).length;
-  if (h2Count < 4) issues.push(`H2 소제목 ${h2Count}개(최소 4개)`);
-  if (text.length < 1900) issues.push(`본문 ${text.length}자(1,900자 미만)`);
+  if (h2Count < minH2) issues.push(`H2 소제목 ${h2Count}개(최소 ${minH2}개)`);
+  if (text.length < minChars) issues.push(`본문 ${text.length}자(${minChars}자 미만)`);
   return issues;
+}
+
+/**
+ * 하드 룰 needs_human_review 트리거 — 커밋 M2 (상록수 전용).
+ * 틀리면 치명적인 사실 유형(세율·법령·금액·의료 수치)이 본문에 섞이면 사람 검수를 강제한다.
+ * ⚠️ 자동 웹검증은 하지 않는다 — 검증기 오류가 오정보에 근거를 붙이는 게 더 위험.
+ * 생성=자동 / 검수=사람 1회 원칙.
+ */
+const HUMAN_REVIEW_TRIGGERS: [pattern: RegExp, label: string][] = [
+  [/\d+(\.\d+)?\s*%/, "세율·퍼센트"],
+  // "법" 단독 매치는 방법·기법 등 일반어 오탐이 커서 대표적 비법령 접미어만 룩비하인드로 제외
+  [/(?<![방기문화요수어편해])법|시행령|제\d+조/, "법령·조문"],
+  [/\d+\s*(만원|억|천만원)/, "금액 한도"],
+  [/기수|병기|\d\s*(㎎|mg|cc)/, "의료 수치"],
+];
+
+function scanHumanReviewTriggers(text: string): string[] {
+  return HUMAN_REVIEW_TRIGGERS.filter(([re]) => re.test(text)).map(([, label]) => label);
 }
 
 /** 검증 최종 실패 시 텔레그램 플래그 (best-effort — env 없으면 조용히 스킵) */
@@ -89,6 +114,9 @@ export async function POST(request: Request) {
     source_name?: string;
     content?: string;
     auto_publish?: boolean;
+    /** 커밋 M2 — 미지정 = 'news' = 현행 그대로 */
+    mode?: "news" | "evergreen";
+    seed?: Partial<EvergreenSeed>;
   };
   try {
     body = await request.json();
@@ -97,25 +125,70 @@ export async function POST(request: Request) {
   }
 
   // 발행 통제: 생성 = 초안(auto_publish 기본 false). 발행은 /admin에서 사람이 1클릭.
-  const { title, category, source_url, source_name, content, auto_publish = false } = body;
+  const { title, category, source_url, source_name, content, auto_publish = false, mode = "news", seed } = body;
+  if (mode !== "news" && mode !== "evergreen") {
+    return NextResponse.json({ error: "mode는 'news' | 'evergreen'만 허용됩니다." }, { status: 400 });
+  }
   if (!content?.trim()) {
     return NextResponse.json({ error: "content(원천 자료)가 필요합니다." }, { status: 400 });
   }
 
+  // 상록수: 시드 정규화 + seed_key 중복 선차단 (unique index — 토큰 쓰기 전에 걸러낸다)
+  let evergreenSeed: EvergreenSeed | null = null;
+  if (mode === "evergreen") {
+    if (!seed?.key?.trim() || !seed?.title?.trim()) {
+      return NextResponse.json(
+        { error: "evergreen 모드에는 seed.key와 seed.title이 필요합니다." },
+        { status: 400 }
+      );
+    }
+    evergreenSeed = {
+      key: seed.key.trim(),
+      title: seed.title.trim(),
+      category: seed.category ?? category ?? "",
+      intent: seed.intent === "전환" ? "전환" : "유입",
+      keywords: seed.keywords ?? [],
+      sources: seed.sources ?? [],
+    };
+    const { data: seedExisting } = await createAdminClient()
+      .from("premium_articles")
+      .select("id, slug")
+      .eq("seed_key", evergreenSeed.key)
+      .maybeSingle();
+    if (seedExisting) {
+      return NextResponse.json(
+        { error: `이미 생성된 시드입니다(seed_key=${evergreenSeed.key}, slug=${seedExisting.slug})` },
+        { status: 409 }
+      );
+    }
+  }
+
   const anthropic = new Anthropic(); // ANTHROPIC_API_KEY
 
-  const userContent = [
-    "다음 원천 자료로 4개 채널 원고를 생성하라.",
-    title ? `제안 제목: ${title}` : "",
-    category ? `카테고리 힌트: ${category}` : "",
-    source_name ? `출처: ${source_name}` : "",
-    source_url ? `원문 URL: ${source_url}` : "",
-    "",
-    "--- 원천 자료 ---",
-    content.trim().slice(0, 30000),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const userContent =
+    mode === "evergreen"
+      ? [
+          "아래 근거 자료만을 사실 근거로 삼아, 시스템 프롬프트의 시드 기획에 따라 상록수 원고를 생성하라.",
+          "",
+          "--- 근거 자료 (groundingText — 구체적 사실은 이 안에 있는 것만) ---",
+          content.trim().slice(0, 30000),
+        ].join("\n")
+      : [
+          "다음 원천 자료로 4개 채널 원고를 생성하라.",
+          title ? `제안 제목: ${title}` : "",
+          category ? `카테고리 힌트: ${category}` : "",
+          source_name ? `출처: ${source_name}` : "",
+          source_url ? `원문 URL: ${source_url}` : "",
+          "",
+          "--- 원천 자료 ---",
+          content.trim().slice(0, 30000),
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+  // 모드별 프롬프트·스키마 — 뉴스는 현행 그대로
+  const systemPrompt = evergreenSeed ? evergreenSystemPrompt(evergreenSeed) : factorySystemPrompt();
+  const outputSchema = evergreenSeed ? EVERGREEN_OUTPUT_SCHEMA : FACTORY_OUTPUT_SCHEMA;
 
   // 1회 생성 — 카드 검증 가드의 재생성에서도 동일하게 호출
   const generateOnce = async (): Promise<
@@ -125,11 +198,11 @@ export async function POST(request: Request) {
     const stream = anthropic.messages.stream({
       model: MODEL,
       max_tokens: 32000,
-      system: factorySystemPrompt(),
+      system: systemPrompt,
       output_config: {
         format: {
           type: "json_schema",
-          schema: FACTORY_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+          schema: outputSchema as unknown as Record<string, unknown>,
         },
       },
       messages: [{ role: "user", content: userContent }],
@@ -168,8 +241,10 @@ export async function POST(request: Request) {
 
     // 검증 가드 — 카드(커밋 G) + 본진 원고(커밋 M0). 어느 쪽이든 실패 시 1회만 재생성
     // (가드별 재생성이면 최대 3회 호출이 되므로 합산 1회). 그래도 실패하면 그대로 저장하되 ⚠️ 플래그.
+    const mdMinH2 = mode === "evergreen" ? 5 : 4;
+    const mdMinChars = mode === "evergreen" ? 2300 : 1900;
     let carouselIssues = validateCarousel(article.carousel_json);
-    let markdownIssues = validateMainMarkdown(article.main_website_markdown);
+    let markdownIssues = validateMainMarkdown(article.main_website_markdown, mdMinH2, mdMinChars);
     if (carouselIssues.length + markdownIssues.length > 0) {
       console.warn(
         `생성물 검증 실패 — 1회 재생성: ${[...carouselIssues, ...markdownIssues].join(" / ")}`
@@ -184,7 +259,7 @@ export async function POST(request: Request) {
             main_website_markdown?: unknown;
           };
           const retryCarousel = validateCarousel(retryArticle.carousel_json);
-          const retryMarkdown = validateMainMarkdown(retryArticle.main_website_markdown);
+          const retryMarkdown = validateMainMarkdown(retryArticle.main_website_markdown, mdMinH2, mdMinChars);
           // 위반 합계가 더 적은 쪽 채택 (재시도 통과 시 0건 → 경고 해제)
           if (retryCarousel.length + retryMarkdown.length < carouselIssues.length + markdownIssues.length) {
             article = retry.article;
@@ -202,6 +277,25 @@ export async function POST(request: Request) {
       if (markdownIssues.length > 0) {
         console.warn(`본진 원고 검증 최종 실패 — 그대로 저장: ${markdownIssues.join(" / ")}`);
         await notifyValidationWarning(String(article.title ?? "(제목 없음)"), "본진 원고", markdownIssues);
+      }
+    }
+
+    // 상록수 사실검증 게이트(커밋 M2) — 원고 검증 최종 실패 또는 민감 사실 포함이면 사람 검수 강제.
+    // 뉴스 모드는 needs_human_review를 건드리지 않는다(DB 디폴트 false).
+    let needsHumanReview = false;
+    const reviewReasons: string[] = [];
+    if (mode === "evergreen") {
+      if (markdownIssues.length > 0) {
+        needsHumanReview = true;
+        reviewReasons.push("원고 검증 최종 실패");
+      }
+      const triggers = scanHumanReviewTriggers(String(article.main_website_markdown ?? ""));
+      if (triggers.length > 0) {
+        needsHumanReview = true;
+        reviewReasons.push(`민감 사실 포함(${triggers.join("·")})`);
+      }
+      if (needsHumanReview) {
+        console.warn(`needs_human_review=true — ${reviewReasons.join(" / ")}`);
       }
     }
 
@@ -236,6 +330,15 @@ export async function POST(request: Request) {
         blogspot_content: article.blogspot_content,
         carousel_json: article.carousel_json,
         faq_json: article.faq_json,
+        // 상록수 전용 컬럼 — 뉴스 insert는 기존과 동일(DB 디폴트 content_type='news')
+        ...(evergreenSeed
+          ? {
+              content_type: "evergreen",
+              seed_key: evergreenSeed.key,
+              verify_claims: article.verify_claims ?? null,
+              needs_human_review: needsHumanReview,
+            }
+          : {}),
         is_main_published: auto_publish,
         // 초안이어도 published_at은 생성 시각으로 기록(정렬용). 노출 게이트는 is_main_published를
         // 함께 보므로 초안(false)은 웹에 뜨지 않음. 발행 시 admin이 published_at을 재기록.
@@ -255,6 +358,9 @@ export async function POST(request: Request) {
       // 재시도 후에도 남은 검증 위반 — 파이프라인이 텔레그램 요약에 플래그로 실음
       carousel_warning: carouselIssues.length > 0 ? carouselIssues.join(" / ") : undefined,
       markdown_warning: markdownIssues.length > 0 ? markdownIssues.join(" / ") : undefined,
+      // 상록수 전용 — 사람 검수 필요 플래그와 사유 (뉴스는 undefined)
+      needs_human_review: mode === "evergreen" ? needsHumanReview : undefined,
+      review_reasons: reviewReasons.length > 0 ? reviewReasons.join(" / ") : undefined,
       usage, // 재생성 포함 합산
     });
   } catch (err) {

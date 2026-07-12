@@ -58,6 +58,77 @@ export function factorySystemPrompt() {
 - tags: 검색 키워드 3~6개.`;
 }
 
+/** 상록수 시드 — 키워드 소유용 기획 콘텐츠의 기획서 (커밋 M2) */
+export interface EvergreenSeed {
+  key: string;
+  title: string;
+  category: string;
+  intent: "유입" | "전환";
+  keywords: string[];
+  sources: string[];
+}
+
+/**
+ * 상록수(evergreen) 시스템 프롬프트 — 커밋 M2.
+ * 뉴스 프롬프트(factorySystemPrompt)를 그대로 베이스로 깔고, 아래 상록수 블록이
+ * 충돌 지점(본문 구조·FAQ 개수·시의성)만 오버라이드한다. 채널별 지시·컴플라이언스·
+ * 브랜드 톤은 싱글소스 유지 — 뉴스 프롬프트를 고치면 상록수에도 자동 반영된다.
+ * 근거 자료(groundingText)는 사용자 메시지로 전달된다(route.ts).
+ */
+export function evergreenSystemPrompt(seed: EvergreenSeed) {
+  return `${factorySystemPrompt()}
+
+════════════════════════════════
+[상록수(evergreen) 모드 — 아래 규칙이 위 지침과 충돌하면 아래가 우선한다]
+
+이번 원고는 시의성 뉴스가 아니라, 검색 키워드를 장기 소유하기 위한 기획 콘텐츠(상록수)다.
+1년 뒤에 읽어도 유효해야 한다 — "최근"·"올해"·"이번 달" 같은 시점 의존 표현을 쓰지 않는다.
+
+[시드 기획]
+- 시드 키: ${seed.key}
+- 제목 방향: ${seed.title}
+- 카테고리: ${seed.category || "(미지정 — 스키마의 6개 분류 중 스스로 판단)"}
+- 의도: ${seed.intent} (유입=검색 유입용 정보 허브 / 전환=리모델링 진단 상담으로 잇는 글)
+- 노려야 할 검색 키워드: ${seed.keywords.join(", ") || "(미지정)"}
+- 근거 출처: ${seed.sources.join(", ") || "(사용자 메시지의 근거 자료 참조)"}
+
+[main_website_markdown 구조 — 뉴스 규칙 대신 이것을 따른다. 길이는 글자수가 아니라 구조가 만든다]
+① "## "로 시작하는 H2 소제목 5~7개 필수 — 대주제를 총망라하는 허브형 글이면 7개
+② 각 H2 섹션 = 최소 2개 문단 (사실 전달 문단 + 독자 실익/해석 문단)
+③ 각 H2 섹션마다 표(|) / 번호 목록 / 체크리스트 중 최소 1개 포함
+④ 마지막 H2 섹션 = 리모델링 다리 — "그래서 내 보험은 어떤가" 점검 관점의 마무리 (remodeling_bridge 필드도 별도로 채운다)
+⑤ 목표 분량 공백 포함 2,500~4,000자 — 구조 ①~③을 지키면 자연히 도달한다
+⑥ 물타기 금지 — 같은 말 반복·수식어 늘리기로 분량을 채우지 말 것. 분량은 근거를 깊게 푸는 것(배경, 수치의 의미, 현장 사례)과 독자 실익(내가 지금 무엇을 확인해야 하는가)으로만 늘린다
+
+[그라운딩 — 상록수의 최대 리스크. 가장 중요한 규칙]
+- 구체적 사실(숫자·세율·금액·제도명·절차·법령·조문)은 사용자 메시지의 근거 자료 안에 있는 것만 쓴다.
+- 근거에 없는 숫자는 절대 지어내지 않는다. 그럴듯한 수치를 기억에서 꺼내 쓰는 것도 금지다.
+- 근거가 부족한 부분은 일반적 원칙 서술("보장 범위는 상품·가입 시기에 따라 다르므로 약관 확인이 필요합니다" 류)로 대체하고 숫자를 쓰지 않는다.
+
+[faq_json] 5개 필수 (허브형 글이면 8개). 이 주제로 실제 검색될 질문으로.
+
+[verify_claims — 사실검증 자가 플래그, 필수 출력]
+본문에 쓴 구체적 사실(숫자·제도·절차·법령)을 하나도 빠짐없이 나열한다. 각 항목:
+- claim: 본문에 쓴 사실 문장
+- basis: 그 사실의 근거 (근거 자료의 어느 부분인지, 예: "근거 자료 3문단 — 금감원 보도자료")
+- confidence: high(근거에 명시) | medium(근거에서 합리적 추론) | low(일반 지식 — 이 경우 본문에서 해당 숫자를 빼는 쪽을 우선 검토)
+
+[컴플라이언스 — 위반 시 원고 폐기 수준의 하드 룰]
+- 특정 보험사·특정 설계사 실명 비방 금지
+- "무조건 해지" 금지 → 항상 "점검·재설계" 프레임 (승환계약 신중론)
+- 상품·보험사 비교/추천/순위 금지
+- 수익률·환급 보장·과장 표현 금지
+- 실제 고객 사례는 익명 목업만 ("50대 고객님" 수준 — 특정 가능한 정보 금지)
+- 감정어·과장 배제, 담담한 서술
+
+[브랜드]
+- 브랜드명 "${BRAND.siteName}"은 다른 표현으로 치환하지 않는다.
+- 경력 연차·일수 등 숫자는 위 지침에 이미 주입된 값만 사용 — 임의 숫자 금지.
+- 말미 "${BRAND.personName} ${BRAND.title}의 한 줄 조언" 블록인용은 상록수에도 유지.
+
+[carousel_json 힌트] 상록수는 정보 밀도가 높으므로 table/steps/points 타입을 우선 사용한다 (기존 8종 타입 시스템 그대로).`;
+}
+
 export const FACTORY_OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -193,6 +264,38 @@ export const FACTORY_OUTPUT_SCHEMA = {
     instagram_caption: {
       type: "string",
       description: "인스타/스레드 캡션 (5블록: 후크·공감·✔요약3·CTA질문·해시태그5)",
+    },
+  },
+} as const;
+
+/**
+ * 상록수 출력 스키마 = 뉴스 스키마 + verify_claims (커밋 M2).
+ * ⚠️ Anthropic structured output 복잡도 제약: optional 필드 총량 ~24 초과 시
+ * "Schema is too complex" 400 (carousel 스키마에서 실측). verify_claims는 전 필드
+ * required라 optional 증가 0 — 여기에 타입별 전용 필드를 더 얹지 말 것.
+ */
+export const EVERGREEN_OUTPUT_SCHEMA = {
+  ...FACTORY_OUTPUT_SCHEMA,
+  required: [...FACTORY_OUTPUT_SCHEMA.required, "verify_claims"],
+  properties: {
+    ...FACTORY_OUTPUT_SCHEMA.properties,
+    verify_claims: {
+      type: "array",
+      description: "본문에 쓴 구체적 사실(숫자·제도·절차·법령)의 자가 검증 목록 — 빠짐없이 나열",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["claim", "basis", "confidence"],
+        properties: {
+          claim: { type: "string", description: "본문에 쓴 사실 문장" },
+          basis: { type: "string", description: "근거 자료의 어느 부분에서 온 사실인지" },
+          confidence: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+            description: "high=근거에 명시 | medium=근거에서 합리적 추론 | low=일반 지식(사람 재검토 필요)",
+          },
+        },
+      },
     },
   },
 } as const;
