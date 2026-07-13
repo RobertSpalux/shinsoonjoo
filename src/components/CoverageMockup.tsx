@@ -71,22 +71,34 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
             </p>
             <p className="mt-1 text-sm font-medium text-[var(--color-text-body)]">{c.premiumDelta}</p>
 
-            <p className="mt-4 font-serif text-[15px] font-semibold leading-snug text-[var(--color-text-strong)]">
+            {/* 헤드라인 3줄 기준 고정(O6-1) — 좌우 카드의 행 시작 Y를 맞춘다. 모바일은 해제(세로 스택) */}
+            <p className="mt-4 font-serif text-[15px] font-semibold leading-snug text-[var(--color-text-strong)] md:min-h-[62px]">
               {c.headline}
             </p>
 
-            {/* 담보 행 스택 — [담보명] … [기존 → ⭐신규]. 신규 금액 = 딥그린 세리프(결론값 — O5) */}
+            {/* 담보 행 스택 — [담보명(+note)] … [기존 → ⭐신규(+판단)]. 신규 금액 = 딥그린 세리프(O5).
+                모든 행 동일 min-h(O6-1) — note 유무와 무관하게 좌우 카드의 행 Y가 맞는다.
+                ⚠️ 여백을 하단으로 밀어내는 flex-1/justify-between 금지 — 행이 맞아야 정렬이다.
+                모바일은 min-h 해제(나란히 놓이지 않음) */}
             <div className="mt-4 border-t border-[var(--color-line)]">
               {c.rows.map((r) => {
-                // after가 verdict와 같으면('조정'·'유지') 금액이 아님 → muted + 판단 줄 생략(중복 방지)
+                // after가 verdict와 같으면('조정'·'유지') 금액이 아님 → muted + 판단 캡션 생략(중복 방지)
                 const isAmount = r.after !== r.verdict;
                 return (
-                  <div key={r.name} className="border-b border-[var(--color-line)] py-4 last:border-b-0">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <p className="min-w-0 text-sm font-medium text-[var(--color-text-body)]">
-                        {r.name}
-                      </p>
-                      <p className="shrink-0 text-right">
+                  <div
+                    key={r.name}
+                    className="flex items-start justify-between gap-3 border-b border-[var(--color-line)] py-4 last:border-b-0 md:min-h-[78px]"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-[var(--color-text-body)]">{r.name}</p>
+                      {r.note && (
+                        <p className="mt-0.5 text-[11px] leading-snug text-[var(--color-text-muted)]">
+                          {r.note}
+                        </p>
+                      )}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p>
                         <span className="whitespace-nowrap text-xs tabular-nums text-[var(--color-text-muted)]">
                           {r.before}
                         </span>
@@ -103,19 +115,12 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
                           </span>
                         )}
                       </p>
-                    </div>
-                    {(r.note || isAmount) && (
-                      <div className="mt-0.5 flex items-baseline justify-between gap-3">
-                        <p className="min-w-0 text-[11px] text-[var(--color-text-muted)]">
-                          {r.note ?? ""}
+                      {isAmount && (
+                        <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-body)]">
+                          {r.verdict}
                         </p>
-                        {isAmount && (
-                          <p className="shrink-0 text-[11px] font-semibold text-[var(--color-text-body)]">
-                            {r.verdict}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -124,27 +129,29 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
         ))}
       </div>
 
-      {/* 결론 — 크림 유지(딥그린 밴드 아님). 이 세 줄이 위 표(정리+채움)와 정확히 일치한다 */}
-      <div className="mt-8">
-        <p className="font-serif text-lg font-semibold leading-snug tracking-[-0.01em] text-[var(--color-text-strong)] md:text-xl">
+      {/* 결론 — 3단 위계 (O6): 1단이 확실히 크고 3단이 확실히 작아야 한다. 크림 유지(딥그린 아님) */}
+
+      {/* [1단 · 결론] — 이 페이지의 결론. 여백을 크게 줘서 숨 쉬게 한다 */}
+      <div className="py-8 md:py-10">
+        <p className="font-serif text-2xl font-semibold leading-snug tracking-[-0.015em] text-[var(--color-text-strong)] md:text-[1.75rem]">
           {MOCKUP_CONCLUSION.headline}
         </p>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--color-text-body)]">
+        <p className="mt-3 text-base leading-relaxed text-[var(--color-text-body)]">
           {MOCKUP_CONCLUSION.body}
-        </p>
-        <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
-          {MOCKUP_CONCLUSION.note}
-        </p>
-        {/* 잔여 고지 — 한 줄만. 세부는 상담에서 지사장이 직접 (O4) */}
-        <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
-          {MOCKUP_CONCLUSION.disclosure}
         </p>
       </div>
 
-      {/* 하단 각주 — 가상 사례 명시 2회차 */}
-      <p className="mt-6 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
-        실제 표는 상담에서 전 계약을 조회해 담보 단위로 산출됩니다. 위 화면은 실제 분석 결과를
-        익명화한 가상 샘플이며, 결과는 개인의 계약 구성에 따라 완전히 달라집니다.
+      {/* [2단 · 보강] — 골드 헤어라인으로 구분 */}
+      <div>
+        <span aria-hidden className="block h-px w-6 bg-[var(--color-gold)]" />
+        <p className="mt-4 text-[15px] leading-relaxed text-[var(--color-text-body)]">
+          {MOCKUP_CONCLUSION.note}
+        </p>
+      </div>
+
+      {/* [3단 · 각주] — 가장 약하게. 잔여 고지 + 상담 산출 + 가상 샘플(PIPA 2회차) 통합 */}
+      <p className="mt-6 text-[13px] leading-relaxed text-[var(--color-text-muted)]">
+        {MOCKUP_CONCLUSION.footnote}
       </p>
     </section>
   );
