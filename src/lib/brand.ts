@@ -30,8 +30,8 @@ export const BRAND = {
     ref: "창세기 45:5",
     tagline: "당신의 위기보다 항상 한 발 앞서, 가장 선한 금융의 통로가 되겠습니다.",
   },
-  // 도메인 구매 시 Vercel 환경변수 NEXT_PUBLIC_SITE_URL만 바꾸면 전체 반영
-  siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://soonjoo.vercel.app",
+  // fallback = 실운영 도메인 — env 누락 시에도 유령 도메인이 새지 않게 한다
+  siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://goodfinance.kr",
 } as const;
 
 /** 입사일 기준 경력 계산 → { years, days } (하드코딩 금지, 항상 이 함수로 파생) */
