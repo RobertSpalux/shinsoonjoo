@@ -17,7 +17,7 @@ export default async function AdminPage() {
   }
 
   const supabase = createAdminClient();
-  const [leads, consultations, articles] = await Promise.all([
+  const [leads, consultations, articles, kinAnswers] = await Promise.all([
     supabase
       .from("lead_consultings")
       .select("id, name, phone, quiz_responses, quiz_score, lead_source, status, memo, created_at")
@@ -35,6 +35,13 @@ export default async function AdminPage() {
       )
       .order("created_at", { ascending: false })
       .limit(100),
+    supabase
+      .from("kin_answers")
+      .select(
+        "id, question_url, question_title, question_body, answer_draft, linked_article_id, status, created_at, posted_at"
+      )
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
 
   return (
@@ -42,6 +49,7 @@ export default async function AdminPage() {
       leads={leads.data ?? []}
       consultations={consultations.data ?? []}
       articles={articles.data ?? []}
+      kinAnswers={kinAnswers.data ?? []}
     />
   );
 }

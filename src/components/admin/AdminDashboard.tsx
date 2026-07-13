@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toBlogspotHtml, toNaverText } from "@/lib/osmu-format";
+import KinTab, { type KinAnswer } from "@/components/admin/KinTab";
 
 /**
  * 관리자 운영 콘솔 — 매일 아침 5분 운영 도구 (검수 → 발행 → 4채널 배포 → 리드 관리).
@@ -118,15 +119,18 @@ export default function AdminDashboard({
   leads: initialLeads,
   consultations: initialConsults,
   articles: initialArticles,
+  kinAnswers: initialKinAnswers,
 }: {
   leads: Lead[];
   consultations: Consultation[];
   articles: Article[];
+  kinAnswers: KinAnswer[];
 }) {
-  const [tab, setTab] = useState<"leads" | "consults" | "articles">("articles");
+  const [tab, setTab] = useState<"leads" | "consults" | "articles" | "kin">("articles");
   const [leads, setLeads] = useState(initialLeads);
   const [consults, setConsults] = useState(initialConsults);
   const [articles, setArticles] = useState(initialArticles);
+  const [kinAnswers, setKinAnswers] = useState(initialKinAnswers);
 
   // 토스트
   const [toast, setToast] = useState("");
@@ -302,6 +306,7 @@ export default function AdminDashboard({
               ["articles", `콘텐츠 ${articles.length}`],
               ["leads", `진단 리드 ${leads.length}`],
               ["consults", `상담 신청 ${consults.length}`],
+              ["kin", `지식iN ${kinAnswers.length}`],
             ] as const).map(([key, label]) => (
               <button key={key} onClick={() => setTab(key)} className={chipBtn(tab === key)}>
                 {label}
@@ -593,6 +598,21 @@ export default function AdminDashboard({
               ))}
             </div>
           </>
+        )}
+
+        {/* ─── 지식iN 어시스트 탭 (커밋 P2 — 게시는 100% 수동) ─── */}
+        {tab === "kin" && (
+          <KinTab
+            answers={kinAnswers}
+            setAnswers={setKinAnswers}
+            articleOptions={articles
+              .filter((a) => a.is_naver_published)
+              .map((a) => ({ id: a.id, title: a.title, naver_title: a.naver_title }))}
+            onCopy={copy}
+            onToast={showToast}
+            selectCls={selectCls}
+            chipBtn={chipBtn}
+          />
         )}
 
         {/* ─── 상담 신청 탭 ─── */}

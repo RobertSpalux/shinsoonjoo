@@ -14,6 +14,8 @@ const ALLOWED: Record<string, string[]> = {
     "is_blogspot_published",
     "is_instagram_published",
   ],
+  // 지식iN 어시스트(커밋 P2) — 상태 전환 + 게시 시각. 게시 자체는 100% 수동.
+  kin_answers: ["status", "posted_at", "answer_draft"],
 };
 
 export async function POST(request: Request) {
