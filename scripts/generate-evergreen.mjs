@@ -15,6 +15,7 @@
  * 필요 환경변수: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
  *   SITE_URL, FACTORY_SECRET, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
  */
+import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { EVERGREEN_SEEDS } from "./seeds/evergreen-seeds.mjs";
 
@@ -276,6 +277,32 @@ async function buildGrounding(seed) {
 // 생성 호출 + 텔레그램
 // ────────────────────────────────────────────────────────────────────
 
+export const HUB_SEED_KEY = "remodeling-hub";
+
+/**
+ * 허브글 내부링크 결정적 삽입(M4-2) — 시드 기사 → 허브글 토피컬 어소리티 클러스터.
+ * 모델 프롬프트에 맡기지 않고 저장된 원고를 후처리로 고친다(N6 CTA 마커 철학 —
+ * 모델에게 맡기면 누락·변형된다). 첫 H2(## ) 직전에 연작 안내 블록을 넣고,
+ * H2가 없으면(비정상) 본문 맨 앞에 넣는다. 이미 같은 slug 링크가 본문에 있으면
+ * null 반환(멱등 — 재실행해도 중복 삽입 없음). 링크는 상대경로 /news/… (본진 전용).
+ *
+ * ⚠️ 채널 원고(naver_blog_content/blogspot_content)에는 삽입하지 않는다:
+ *  - 네이버: 본문 링크 과다 = 스팸 판정 위험 (링크 첨부는 toNaverText 변환기가 말미에 최소로)
+ *  - 블로그스팟: toBlogspotHtml 변환기의 본진 앵커 원칙이 이미 커버
+ */
+export function injectHubLink(markdown, hubSlug) {
+  const md = String(markdown ?? "");
+  const href = `/news/${hubSlug}`;
+  if (md.includes(href)) return null;
+  const block = [
+    `> 📌 이 글은 [보험 리모델링 완벽 가이드](${href}) 연작입니다.`,
+    `> 전체 그림이 필요하시면 가이드부터 읽어보세요.`,
+  ].join("\n");
+  const firstH2 = md.match(/^##\s/m);
+  if (!firstH2) return `${block}\n\n${md}`;
+  return `${md.slice(0, firstH2.index)}${block}\n\n${md.slice(firstH2.index)}`;
+}
+
 async function generateEvergreen(seed, groundingText) {
   const res = await fetch(`${SITE_URL}/api/factory/generate`, {
     method: "POST",
@@ -361,6 +388,21 @@ async function main() {
   const intent = resolveIntent();
   console.log(`[상록수] intent=${intent}`);
 
+  // 허브글 slug — 시드글 내부링크 대상(M4-2). 미발행/삭제면 삽입만 생략(생성은 계속).
+  const { data: hubRow, error: hubErr } = await supabase
+    .from("premium_articles")
+    .select("slug")
+    .eq("seed_key", HUB_SEED_KEY)
+    .eq("is_main_published", true)
+    .limit(1)
+    .maybeSingle();
+  const hubSlug = hubRow?.slug ?? null;
+  if (!hubSlug) {
+    console.warn(
+      `[허브링크] 허브 발행본 없음${hubErr ? `(조회 실패: ${hubErr.message})` : ""} — 내부링크 생략`
+    );
+  }
+
   // 미생성 시드 = 시드뱅크 − DB에 이미 있는 seed_key
   const { data: doneRows, error: doneErr } = await supabase
     .from("premium_articles")
@@ -428,6 +470,32 @@ async function main() {
       .eq("id", gen.article.id)
       .single();
 
+    // 허브 내부링크 삽입(M4-2) — 허브글 자신은 제외. 실측 지표·발행 대기함이 삽입본 기준이 되도록
+    // 지표 계산 전에 수행하고, 성공 시 full.main_website_markdown을 삽입본으로 교체한다.
+    let hubLinkNote = "";
+    if (seed.key !== HUB_SEED_KEY && full) {
+      if (!hubSlug) {
+        hubLinkNote = "⚠️ 허브 미발행 — 내부링크 생략";
+      } else {
+        const injected = injectHubLink(full.main_website_markdown, hubSlug);
+        if (injected === null) {
+          hubLinkNote = `🔗 허브 내부링크 이미 있음(/news/${hubSlug}) — 삽입 생략`;
+        } else {
+          const { error: linkErr } = await supabase
+            .from("premium_articles")
+            .update({ main_website_markdown: injected })
+            .eq("id", gen.article.id);
+          if (linkErr) {
+            hubLinkNote = `⚠️ 허브 내부링크 UPDATE 실패: ${linkErr.message}`;
+          } else {
+            full.main_website_markdown = injected;
+            hubLinkNote = `🔗 허브 내부링크 삽입(/news/${hubSlug})`;
+          }
+        }
+      }
+      console.log(`[허브링크] ${hubLinkNote}`);
+    }
+
     const md = full?.main_website_markdown ?? "";
     const h2 = (md.match(/^##\s/gm) ?? []).length;
     const cards = Array.isArray(full?.carousel_json) ? full.carousel_json.length : 0;
@@ -444,6 +512,7 @@ async function main() {
       ),
       `📝 본문 ${md.length.toLocaleString()}자 · H2 ${h2}개 · 카드 ${cards}장 · FAQ ${faqs}개 · verify_claims ${claims.length}건${lowClaims ? ` (low ${lowClaims}건⚠️)` : ""}`,
     ];
+    if (hubLinkNote) lines.push(hubLinkNote);
     if (gen.carousel_warning) lines.push(`⚠️ 카드 검증: ${gen.carousel_warning}`);
     if (gen.markdown_warning) lines.push(`⚠️ 원고 검증: ${gen.markdown_warning}`);
     lines.push(
@@ -491,7 +560,10 @@ async function main() {
   await sendTelegramMessage(summary);
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// 직접 실행일 때만 main 구동 — injectHubLink를 import해도 파이프라인이 돌지 않게(검증용)
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
