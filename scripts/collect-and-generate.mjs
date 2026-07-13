@@ -36,6 +36,14 @@ const SOURCES = [
   { name: "파인 생활금융톡톡", type: "board", url: "https://fine.fss.or.kr/fine/bbs/B0000341/list.do?menuNo=900023", category: "보험료 절약·꿀팁", boost: 5 },
   { name: "파인 민원사례", type: "board", url: "https://fine.fss.or.kr/fine/bbs/B0000343/list.do?menuNo=900025", category: "보험금 청구·보상", boost: 5 },
   { name: "금감원 보도자료", type: "board", url: "https://www.fss.or.kr/fss/bbs/B0000188/list.do?menuNo=200218", category: "금융·경제 뉴스", boost: 4 },
+  // 커밋 O10-B — 정찰(O10-A) '붙인다' 판정 2종. 손보협회·보험연구원은 보류(O9 통과율 관찰 후),
+  // 생보협회(JS POST·월 0~1건)·건보공단(robots가 /nhis/ 전체 Disallow)은 탈락 확정.
+  // ⚠️ 복지부는 의료 제도·의료비 기사 원료 — 검수 배율 원칙(의료 수치 = 사람검수 필수) 적용 대상.
+  //    RSS description이 1,400자대 실본문(2026-07-13 실측). robots에 이 RSS 경로가 명시 허용됨.
+  { name: "복지부 보도자료", type: "rss", url: "https://www.mohw.go.kr/rss/board.es?mid=a10503000000&bid=0027", category: "보험료 절약·꿀팁", boost: 1 },
+  // 금융위: 상세 HTML 본문 직수확(실측 2,291~8,132자), 짧으면 PDF 폴백(O3). 소비자 정책 발원지 —
+  // 무관 기사(MOU·총회·인사)는 O9 게이트가 거른다. 카드뉴스(no040101)는 보도자료 안착 후 검토.
+  { name: "금융위 보도자료", type: "fsc-board", url: "https://www.fsc.go.kr/no010101", category: "금융·경제 뉴스", boost: 2 },
   // 일반 경제 RSS (신선도용 — 보험 소스보다 후순위)
   { name: "연합뉴스 경제", type: "rss", url: "https://www.yna.co.kr/rss/economy.xml", category: "금융·경제 뉴스", boost: 0 },
   { name: "연합뉴스 금융", type: "rss", url: "https://www.yna.co.kr/rss/market.xml", category: "금융·경제 뉴스", boost: 0 },
@@ -130,6 +138,75 @@ async function fetchBoardItems(source) {
 }
 
 /**
+ * 금융위 보도자료 목록 파싱 (커밋 O10-B) — 금감원 계열(view.do?nttId=)과 달리
+ * 상세 링크가 경로형(/no010101/{id})이라 파서를 분기한다.
+ * 링크의 쿼리(srchCtgry·curPage 등)는 비식별 파라미터 — 제거하고 경로만 남겨 URL을 정규화
+ * (raw_source_url 중복제거·blocked_sources 대조가 실행마다 흔들리지 않게).
+ */
+async function fetchFscBoardItems(source) {
+  const html = await fetchText(source.url);
+  const origin = new URL(source.url).origin;
+  const basePath = new URL(source.url).pathname; // /no010101
+  const items = [];
+  const seen = new Set();
+  const re = new RegExp(`<a[^>]+href="(${basePath}/(\\d+)[^"]*)"[^>]*>([\\s\\S]{0,250}?)</a>`, "g");
+  let m;
+  while ((m = re.exec(html)) !== null && items.length < PER_SOURCE_LIMIT) {
+    const id = m[2];
+    const title = decodeEntities(m[3].replace(/<[^>]*>/g, "")).replace(/\s+/g, " ").trim();
+    if (title.length < 10 || seen.has(id)) continue; // 첨부파일명 앵커 등 잡음 제외
+    seen.add(id);
+    const dateMatch = html.slice(m.index, m.index + 3000).match(/\d{4}-\d{2}-\d{2}/);
+    items.push({
+      title,
+      link: `${origin}${basePath}/${id}`, // 쿼리 제거한 정규화 URL
+      content: "",
+      needsDetail: true,
+      fscDetail: true, // hydrate에서 금융위 전용 본문 추출로 분기
+      source: source.name,
+      category: source.category,
+      boost: source.boost,
+      pubDate: dateMatch ? dateMatch[0] : null,
+    });
+  }
+  if (!items.length) throw new Error("목록에서 게시글을 찾지 못함(페이지 구조 변경?)");
+  return items;
+}
+
+/**
+ * 금융위 상세 본문 — HTML 직수확 (커밋 O10-B, 정찰 실측 2,291~8,132자).
+ * 본문 구간: 페이지 텍스트에서 마지막 "인쇄하기"(공유 툴바 끝) 이후 ~ 첨부/목록 블록 이전.
+ * 마커가 없으면 전체 텍스트로 폴백. 300자 미만이면 첨부 PDF 폴백(O3 공용) 시도.
+ */
+async function fetchFscBody(link) {
+  const html = await fetchText(link);
+  const full = decodeEntities(
+    html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<[^>]*>/g, " ")
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const start = full.lastIndexOf("인쇄하기");
+  let scoped = start >= 0 ? full.slice(start + "인쇄하기".length) : full;
+  let end = scoped.length;
+  for (const marker of ["첨부파일 (", "목록으로", "콘텐츠 내용에 만족하셨나요"]) {
+    const i = scoped.indexOf(marker);
+    if (i > 0 && i < end) end = i;
+  }
+  const body = scoped.slice(0, end).trim().slice(0, 4000);
+
+  if (body.length < 300) {
+    const pdf = await extractPdfAttachment(html, link);
+    if (pdf) return pdf;
+    return body.length >= 80 ? body : ""; // fetchBoardBody와 동일한 80자 스텁 하한 — 미달이면 noBody 스킵
+  }
+  return body;
+}
+
+/**
  * 게시글 상세 본문 추출 — <div class="dbdata"> 내부 텍스트 + img alt 폴백 (커밋 O2).
  * 파인 게시판(톡톡·민원사례·꿀팁)은 이미지형이지만 img alt에 전문이 들어 있다(2026-07-12 실측,
  * CONTENT-STRATEGY §9-2). 텍스트 본문이 최소 길이 미달일 때만 alt를 폴백으로 수확한다.
@@ -185,7 +262,8 @@ async function fetchBoardBody(link) {
  * ⚠️ raw_source_url은 게시글 URL 그대로다(호출부 불변) — 중복제거·차단목록이 계속 작동한다.
  */
 async function extractPdfAttachment(detailHtml, pageUrl) {
-  const anchors = [...detailHtml.matchAll(/href="([^"]*fileDown\.do[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)]
+  // fileDown.do = 금감원 계열 / /comm/getFile = 금융위 (커밋 O10-B)
+  const anchors = [...detailHtml.matchAll(/href="([^"]*(?:fileDown\.do|\/comm\/getFile)[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)]
     .map((m) => ({
       href: decodeEntities(m[1]),
       label: decodeEntities(m[2].replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim(),
@@ -242,6 +320,8 @@ async function collectCandidates() {
       let collected = [];
       if (source.type === "board") {
         collected = await fetchBoardItems(source);
+      } else if (source.type === "fsc-board") {
+        collected = await fetchFscBoardItems(source);
       } else {
         const feedItems = await fetchRssItems(source.url);
         for (const item of feedItems.slice(0, PER_SOURCE_LIMIT)) {
@@ -278,7 +358,7 @@ async function hydrateBoardItems(items) {
   for (const item of items) {
     if (!item.needsDetail) continue;
     try {
-      const body = await fetchBoardBody(item.link);
+      const body = item.fscDetail ? await fetchFscBody(item.link) : await fetchBoardBody(item.link);
       if (body) {
         item.content = body;
       } else {
