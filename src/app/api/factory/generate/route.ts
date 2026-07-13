@@ -80,6 +80,16 @@ function scanHumanReviewTriggers(text: string): string[] {
   return HUMAN_REVIEW_TRIGGERS.filter(([re]) => re.test(text)).map(([, label]) => label);
 }
 
+/**
+ * 일화 날조 하드 게이트(일화뱅크) — '특정 시점 + 특정 고객' 결합 서사 감지.
+ * CLAUDE.md 일화 날조 금지: "어제 만난 50대 고객님이…" 류는 지어낸 단건 서사 의심.
+ * "상담하다 보면 ~하시는 분이 많습니다" 반복 패턴 화법은 시점 결합이 없어 통과한다.
+ * 컷이 아니라 플래그 — 오탐 가능성이 있으므로 needs_human_review로 사람 판단에 넘긴다.
+ * 뉴스·상록수 공통 게이트(규칙은 공통 원칙 — O8).
+ */
+const FABRICATED_ANECDOTE =
+  /(어제|그저께|엊그제|오늘|지난\s*주|지난\s*달|이번\s*주)[^.\n]{0,20}(만난|만났던|찾아온|찾아오신|방문한|방문하신|상담한|상담했던|전화\s*주신)[^.\n]{0,12}(고객|분|님)/;
+
 /** 허브 시드 전용 FAQ 하한 (커밋 M3-3) — min 0이면 검사하지 않음 */
 function validateFaqCount(faq: unknown, min: number): string[] {
   if (!min) return [];
@@ -120,6 +130,21 @@ async function notifyValidationWarning(title: string, kind: string, issues: stri
     body: JSON.stringify({
       chat_id: chatId,
       text: `⚠️ ${kind} 검증 실패(재시도 후에도) — 저장은 됨, /admin에서 확인 필요\n${title}\n· ${issues.join("\n· ")}`.slice(0, 4000),
+    }),
+  }).catch(() => undefined);
+}
+
+/** 일화 날조 의심 플래그 알림 (일화뱅크 — best-effort, 뉴스 모드 전용) */
+async function notifyAnecdoteFlag(title: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: `⚠️ 일화 날조 의심('특정 시점+특정 고객' 서사 감지) — needs_human_review 플래그, /admin에서 확인\n${title}`.slice(0, 4000),
     }),
   }).catch(() => undefined);
 }
@@ -351,10 +376,21 @@ export async function POST(request: Request) {
       );
     }
 
-    // 상록수 사실검증 게이트(커밋 M2) — 원고 검증 최종 실패 또는 민감 사실 포함이면 사람 검수 강제.
-    // 뉴스 모드는 needs_human_review를 건드리지 않는다(DB 디폴트 false).
+    // 사람 검수 게이트 — 감지 시 needs_human_review=true (컷이 아니라 플래그).
     let needsHumanReview = false;
     const reviewReasons: string[] = [];
+
+    // 일화 날조 의심(일화뱅크) — 뉴스·상록수 공통
+    if (FABRICATED_ANECDOTE.test(String(article.main_website_markdown ?? ""))) {
+      needsHumanReview = true;
+      reviewReasons.push("특정 시점+특정 고객 일화 의심(날조 금지 게이트)");
+      // 상록수는 파이프라인 요약의 🔴 라인이 사유를 실어 나르므로 뉴스만 별도 알림
+      if (mode === "news") {
+        await notifyAnecdoteFlag(String(article.title ?? title ?? "(제목 없음)"));
+      }
+    }
+
+    // 상록수 사실검증 게이트(커밋 M2) — 원고 검증 최종 실패 또는 민감 사실 포함이면 사람 검수 강제.
     if (mode === "evergreen") {
       if (markdownIssues.length > 0) {
         needsHumanReview = true;
@@ -365,9 +401,9 @@ export async function POST(request: Request) {
         needsHumanReview = true;
         reviewReasons.push(`민감 사실 포함(${triggers.join("·")})`);
       }
-      if (needsHumanReview) {
-        console.warn(`needs_human_review=true — ${reviewReasons.join(" / ")}`);
-      }
+    }
+    if (needsHumanReview) {
+      console.warn(`needs_human_review=true — ${reviewReasons.join(" / ")}`);
     }
 
     // slug 중복 방지 — 이미 있으면 날짜 접미사
@@ -409,9 +445,10 @@ export async function POST(request: Request) {
               content_type: "evergreen",
               seed_key: evergreenSeed.key,
               verify_claims: article.verify_claims ?? null,
-              needs_human_review: needsHumanReview,
             }
           : {}),
+        // 사람 검수 플래그 — 뉴스·상록수 공통(일화 날조 게이트는 두 모드 모두 적용)
+        needs_human_review: needsHumanReview,
         is_main_published: auto_publish,
         // 초안이어도 published_at은 생성 시각으로 기록(정렬용). 노출 게이트는 is_main_published를
         // 함께 보므로 초안(false)은 웹에 뜨지 않음. 발행 시 admin이 published_at을 재기록.

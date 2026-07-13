@@ -18,6 +18,7 @@
 import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { EVERGREEN_SEEDS } from "./seeds/evergreen-seeds.mjs";
+import { buildAnecdoteSection } from "./anecdote-bank.mjs";
 
 const {
   NEXT_PUBLIC_SUPABASE_URL,
@@ -444,10 +445,18 @@ async function main() {
       continue;
     }
 
+    // 일화뱅크 — 검증된 실제 상담 패턴만 재료로 주입. 매칭 0건이면 '일화 사용 금지' 지시
+    // (모델이 일화를 지어내지 않도록 — CLAUDE.md 일화 날조 금지). 근거 자료 뒤에 붙여
+    // route.ts의 사용자 메시지("구체적 사실은 이 안에 있는 것만")에 함께 실린다.
+    const anecdote = buildAnecdoteSection(seed.key);
+    const contentWithAnecdotes = `${groundingText}\n\n────\n\n${anecdote.section}`;
+
     let gen;
     try {
-      console.log(`[생성] groundingText ${groundingText.length}자로 팩토리 호출`);
-      gen = await generateEvergreen(seed, groundingText);
+      console.log(
+        `[생성] groundingText ${groundingText.length}자 + 일화 ${anecdote.count}건으로 팩토리 호출`
+      );
+      gen = await generateEvergreen(seed, contentWithAnecdotes);
     } catch (err) {
       if (err.status === 409) {
         // 시드 중복(경합 등) — 소모된 것으로 보고 다음 시드로
@@ -513,6 +522,7 @@ async function main() {
       `📝 본문 ${md.length.toLocaleString()}자 · H2 ${h2}개 · 카드 ${cards}장 · FAQ ${faqs}개 · verify_claims ${claims.length}건${lowClaims ? ` (low ${lowClaims}건⚠️)` : ""}`,
     ];
     if (hubLinkNote) lines.push(hubLinkNote);
+    lines.push(anecdote.count ? `🧾 일화: ${anecdote.count}건 주입` : "🧾 일화: 없음(금지 지시)");
     if (gen.carousel_warning) lines.push(`⚠️ 카드 검증: ${gen.carousel_warning}`);
     if (gen.markdown_warning) lines.push(`⚠️ 원고 검증: ${gen.markdown_warning}`);
     lines.push(
