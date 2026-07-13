@@ -130,19 +130,23 @@ async function fetchBoardItems(source) {
 }
 
 /**
- * 게시글 상세 본문 추출 — <div class="dbdata"> 내부 텍스트.
- * "첨부파일 참고" 스텁(꿀팁 200선 등 PDF 첨부형)·이미지형(파인 톡톡·민원사례)은 빈 문자열 반환
- * → 호출부에서 스킵. 본문 없는 기사를 제목만으로 생성하면 팩트 없는 원고(컴플라이언스 리스크).
- * (꿀팁 200선 텍스트는 금감원 오픈API 인증키 도착 후 API로 확보 예정)
+ * 게시글 상세 본문 추출 — <div class="dbdata"> 내부 텍스트 + img alt 폴백 (커밋 O2).
+ * 파인 게시판(톡톡·민원사례·꿀팁)은 이미지형이지만 img alt에 전문이 들어 있다(2026-07-12 실측,
+ * CONTENT-STRATEGY §9-2). 텍스트 본문이 최소 길이 미달일 때만 alt를 폴백으로 수확한다.
+ * ⚠️ 장식용 alt('이미지'·'사진' 등)는 20자 필터로 걸러지며, 그래도 짧으면 빈 문자열 반환
+ * → 호출부에서 스킵(폴백 금지 원칙 — 팩트 없는 원고 방지). PDF 첨부형(alt도 없음)은 여전히 스킵.
+ * ⚠️ generate-evergreen.mjs의 fetchBoardBody와 같은 로직 — 한쪽을 고치면 함께 갱신할 것.
+ * (금감원 오픈API는 2026-07-13 실측 결과 contentsKor가 비어 있어 본문 소스로 쓸 수 없음)
  */
 async function fetchBoardBody(link) {
   const html = await fetchText(link);
   const start = html.indexOf('class="dbdata"');
   if (start === -1) return "";
-  const chunk = html.slice(start, start + 20000);
+  const chunk = html.slice(start, start + 60000); // 이미지형은 dbdata div가 여러 개 이어짐
   const end = chunk.search(/class="bd-view-nav"|담당부서/);
   const scoped = end > 0 ? chunk.slice(0, end) : chunk;
-  const text = decodeEntities(
+
+  const stripped = decodeEntities(
     scoped
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -151,9 +155,19 @@ async function fetchBoardBody(link) {
     .replace(/\s+/g, " ")
     .replace(/^class="dbdata">\s*/, "")
     .replace(/\s*목록\s*$/, "")
-    .trim()
-    .slice(0, 4000);
-  // 스텁 판정: 사실상 "첨부파일 보세요"뿐인 본문
+    .trim();
+
+  // 텍스트 본문이 충분하면 그대로, 미달이면 img alt 수확 폴백 (소스 1건당 ~2,000자 실측)
+  let text = stripped;
+  if (stripped.length < 300) {
+    const altTexts = [...scoped.matchAll(/<img[^>]*\salt=["']([^"']+)["']/gi)]
+      .map((m) => decodeEntities(m[1]).replace(/\s+/g, " ").trim())
+      .filter((t) => t.length >= 20);
+    text = [stripped, ...altTexts].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  }
+  text = text.slice(0, 4000);
+
+  // 스텁 판정: 사실상 "첨부파일 보세요"뿐인 본문 (alt 폴백 후에도 짧으면 본문없음 유지)
   if (text.length < 80 || (/첨부\s*파일.*(참고|참조)/.test(text) && text.length < 200)) return "";
   return text;
 }
