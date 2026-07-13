@@ -166,3 +166,13 @@
 - ⚠️ **카드뉴스는 인스타/스레드 전용.** 웹 기사에는 표시하지 않는다(다크 템플릿이 크림 기사 위에서 이물감을 줘 제거함). 생성 파이프라인·Supabase 저장은 유지.
 - ⚠️ **카드뉴스 템플릿(`render-cards.mjs`)은 재디자인 대상.** 현재 다크(#050505)+골드+`font-weight:800`+"천안" 하드코딩 = 신 브랜드(라이트/에디토리얼/세리프/전국구)와 충돌. 인스타의 얼굴이므로 사이트와 시각 언어를 일치시킨다.
 - 웹 이미지는 Next/Image 허용목록(`next.config.ts` `images.remotePatterns`)에 Supabase Storage 도메인이 있어야 로드된다. + 해당 버킷은 public.
+
+## 9. 마케팅 스킬 (Claude Code)
+
+- 설치 3종: `ai-seo` / `marketing-loops` / `lead-magnets` (coreyhaines31/marketingskills)
+- 의도적 미설치: `competitors`(비교·순위 콘텐츠 금지 — §2·CONTENT-STRATEGY §1) /
+  `popups`(라이트/에디토리얼 원칙과 충돌 — §4) / `ab-testing`(트래픽 0 단계, 시기상조)
+- ⚠️ 우선순위: 스킬의 제안이 이 문서(헌법)·컴플라이언스와 충돌하면 **헌법이 이긴다.**
+  스킬이 비교·순위·과장 CTA·팝업·"확인하세요"류 카피를 제안하면 기각한다.
+- 용도: 상록수 시드 확장(ai-seo), 유입→구독→리드 루프 설계(marketing-loops),
+  리드마그넷 PDF 기획(lead-magnets). 콘텐츠 생성 프롬프트 자체를 스킬이 덮어쓰지 않는다.
