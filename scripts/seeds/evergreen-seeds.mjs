@@ -248,4 +248,53 @@ export const EVERGREEN_SEEDS = [
     searchTerms: ["내보험다보여", "숨은", "가족"],
     sources: [SRC.MY_INSURANCE, SRC.KKULTIP],
   },
+
+  // ── 전환: 생애 이벤트 리모델링 (커밋 P1 — 벤치마킹 환원) ──────────────
+  // 근거: "보험 리모델링" 검색 상위(시그널플래너·KB Think·언론)가 공통으로
+  // 생애 이벤트(결혼·출산·퇴직) 프레임을 쓰지만, 담보 '합산 금액'은 어디도
+  // 보여주지 못함 → 시드 본문 방향에 담보 합산 표(금액+합계)를 필수로 유지.
+  {
+    key: "newlywed-insurance-audit",
+    title: "결혼하면 보험부터 합쳐라? — 신혼부부 보험 점검 순서",
+    category: "보험 리모델링",
+    intent: "전환",
+    keywords: ["신혼부부 보험 점검", "결혼 보험 정리", "부부 보험 중복", "신혼 보험"],
+    searchTerms: ["신혼", "부부", "결혼", "중복가입", "실손"],
+    description:
+      "각자 들고 온 계약을 부부 합산으로 펼치면 중복(실손 비례보상)과 공백이 처음 드러난다. '합쳐라'가 답이 아니라 '펼쳐서 합산해봐야 안다'가 답. 부부 담보 합산 표(금액+합계) 필수 — 가상 예시 명시.",
+    sources: [SRC.KKULTIP, SRC.TALKTALK, SRC.MY_INSURANCE],
+  },
+  {
+    key: "postpartum-insurance-audit",
+    title: "출산 후 보험 점검 — 자녀보험 추가 전에 부모 보장부터",
+    category: "보험 리모델링",
+    intent: "전환",
+    keywords: ["출산 후 보험", "자녀보험 가입 전", "부모 보장 점검", "태아보험 이후"],
+    searchTerms: ["출산", "태아", "어린이", "자녀"],
+    description:
+      "출산 직후엔 자녀보험부터 알아보지만, 아이의 진짜 위험은 부모(가장)의 보장 공백이다. 부모 사망·진단 담보를 계약 가로질러 합산한 표(금액+합계) 필수 — 자녀보험 추가 판단은 그 다음이라는 순서를 세운다. 가상 예시 명시.",
+    sources: [SRC.KKULTIP, SRC.TALKTALK],
+  },
+  {
+    key: "pre-retirement-restructure",
+    title: "퇴직 전 5년, 보험 구조를 바꿔야 하는 이유",
+    category: "보험 리모델링",
+    intent: "전환",
+    keywords: ["퇴직 전 보험 점검", "은퇴 보험 정리", "갱신형 보험료 인상", "납입여력"],
+    searchTerms: ["은퇴", "노후", "갱신", "갱신형", "연금"],
+    description:
+      "소득이 멈추는 시점 이후에도 납입과 갱신 인상은 계속된다 — 퇴직 후 납입여력·갱신형 보험료 인상이 겹치는 구조 문제를 다룬다. 담보·납입 구조를 계약 가로질러 합산한 표(금액+합계) 필수. 개인별 결론(해지·전환)은 단정하지 않는다. 가상 예시 명시.",
+    sources: [SRC.KKULTIP, SRC.TERMS, SRC.TALKTALK],
+  },
+  {
+    key: "income-change-premium-ratio",
+    title: "이직·소득 변화 때 보험료 비율 다시 계산하는 법",
+    category: "보험 리모델링",
+    intent: "전환",
+    keywords: ["소득 대비 보험료", "보험료 비율", "이직 보험 점검", "보험료 부담 줄이기"],
+    searchTerms: ["보험료", "납입", "감액", "해지환급", "납입면제"],
+    description:
+      "소득이 바뀌면 보험료 총액의 비율부터 다시 계산해야 한다. 전 계약 보험료를 합산한 표(금액+합계) 필수 — 총액은 어느 증권에도 없다. 부담 조정 수단(감액·납입유예 등)은 제도 소개까지만, 개인별 처방은 단정하지 않는다. 가상 예시 명시.",
+    sources: [SRC.KKULTIP, SRC.TALKTALK],
+  },
 ];
