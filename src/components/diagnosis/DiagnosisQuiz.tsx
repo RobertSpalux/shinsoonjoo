@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { BRAND, getCareer } from "@/lib/brand";
 import { computeDiagnosis, type DiagnosisAnswers } from "@/lib/diagnosis-score";
 import { gaEvent } from "@/lib/ga";
@@ -89,8 +89,22 @@ const TRUST = [
 
 export default function DiagnosisQuiz() {
   const { years } = getCareer();
+  const reduceMotion = useReducedMotion(); // reduce면 전환 애니메이션 없이 즉시 교체 (O7)
   const [step, setStep] = useState(0); // 0~6 질문, 7 결과(즉시 공개 — 게이트 없음)
   const [answers, setAnswers] = useState<Answers>({});
+
+  /**
+   * 전환 중 입력 가드 (커밋 O7) — 연타 시 AnimatePresence exit 스톨(진행바만 가고 화면 고정) 방지.
+   * 시간 기반 ref 락: 상태·재렌더 없이 클릭만 조용히 무시되고(시각 변화 없음 — 비활성처럼 보이면 안 됨),
+   * 450ms(선택 피드백 150 + exit 150 + enter 150) 후 자동 만료라 영구 잠김이 불가능하다.
+   */
+  const stepLockUntilRef = useRef(0);
+  const acquireStepLock = () => {
+    const now = performance.now();
+    if (now < stepLockUntilRef.current) return false;
+    stepLockUntilRef.current = now + 450;
+    return true;
+  };
 
   const result = useMemo(() => computeDiagnosis(answers), [answers]);
   const score = result.total;
@@ -131,9 +145,10 @@ export default function DiagnosisQuiz() {
   }, [step, score, answers]);
 
   const selectSingle = (key: string, value: string) => {
+    if (!acquireStepLock()) return; // 전환 중 연타 무시 (O7)
     markStart();
     setAnswers((prev) => ({ ...prev, [key]: value }));
-    setTimeout(() => setStep((s) => s + 1), 250);
+    setTimeout(() => setStep((s) => s + 1), 150); // 선택 피드백만 짧게 — 빠른 응답이 정상 UX
   };
 
   const toggleMulti = (key: "coverages", value: string) => {
@@ -192,12 +207,14 @@ export default function DiagnosisQuiz() {
       <AnimatePresence mode="wait">
         {/* 질문 단계 */}
         {current && (
+          // 전환 = opacity 페이드 150ms만 (O7) — 슬라이드 제거. 여기서 화려한 전환은 가치가 없고,
+          // 짧을수록 빠른 응답 UX에 맞다. reduce면 즉시 교체.
           <motion.div
             key={step}
-            initial={{ opacity: 0, x: 32 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -32 }}
-            transition={{ duration: 0.35 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.15 }}
           >
             <h2 className="mb-2 font-serif text-xl font-semibold tracking-[-0.01em] text-[var(--color-text-strong)] md:text-2xl">
               {current.question}
@@ -248,7 +265,10 @@ export default function DiagnosisQuiz() {
 
             {current.multi && (
               <button
-                onClick={() => setStep((s) => s + 1)}
+                onClick={() => {
+                  if (!acquireStepLock()) return; // 연타 가드 (O7)
+                  setStep((s) => s + 1);
+                }}
                 disabled={(answers.coverages ?? []).length === 0}
                 className="mt-8 w-full rounded-[var(--radius-sm)] bg-[var(--color-forest)] py-3.5 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:translate-y-0"
               >
@@ -258,7 +278,10 @@ export default function DiagnosisQuiz() {
 
             {step > 0 && (
               <button
-                onClick={() => setStep((s) => s - 1)}
+                onClick={() => {
+                  if (!acquireStepLock()) return; // 뒤로가기 연타 가드 (O7)
+                  setStep((s) => s - 1);
+                }}
                 className="mt-4 w-full text-center text-xs text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text-body)]"
               >
                 ← 이전 질문으로
@@ -273,7 +296,7 @@ export default function DiagnosisQuiz() {
             key="done"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: reduceMotion ? 0 : 0.4 }}
           >
             <div className="mb-8 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-8 md:p-10">
               {/* 점수 */}
