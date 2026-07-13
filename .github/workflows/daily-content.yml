@@ -20,7 +20,7 @@ jobs:
           node-version: 22
 
       - name: Install pipeline deps
-        run: npm install --no-save rss-parser puppeteer @supabase/supabase-js
+        run: npm install --no-save rss-parser puppeteer @supabase/supabase-js pdf-parse@2
 
       - name: Collect news & generate multi-channel content
         env:

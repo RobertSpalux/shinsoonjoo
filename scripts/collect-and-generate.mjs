@@ -167,9 +167,71 @@ async function fetchBoardBody(link) {
   }
   text = text.slice(0, 4000);
 
-  // 스텁 판정: 사실상 "첨부파일 보세요"뿐인 본문 (alt 폴백 후에도 짧으면 본문없음 유지)
-  if (text.length < 80 || (/첨부\s*파일.*(참고|참조)/.test(text) && text.length < 200)) return "";
+  // 스텁 판정: 사실상 "첨부파일 보세요"뿐인 본문 → 3차 폴백(PDF 첨부)으로 마지막 시도
+  if (text.length < 80 || (/첨부\s*파일.*(참고|참조)/.test(text) && text.length < 200)) {
+    return await extractPdfAttachment(html, link);
+  }
   return text;
+}
+
+/**
+ * 3차 폴백 (커밋 O3): 상세 페이지의 .pdf 첨부에서 텍스트 추출 — 보도자료(PDF 첨부형) 회수.
+ * O2-B 실측: 보도자료 PDF는 텍스트 레이어 존재(2건 4,753~5,677자, 스캔 아님).
+ * - .pdf만 선별 (HWP/HWPX 스킵 — 꿀팁200선은 이 경로로 회수 불가, 별도 난제)
+ * - 첨부 여러 개면 라벨의 파일크기 힌트로 가장 큰 PDF 1개만 (보도자료 본문이 보통 최대 파일)
+ * - 다운로드 10초 / 파싱 10초 타임아웃 — 초과 시 스킵하고 다음 건으로
+ * - 300자 미만이면 여전히 '본문없음' 처리 (폴백 금지 원칙)
+ * - 자간 문제로 일부 공백이 붙지만 LLM 그라운딩 원료로는 지장 없어 정규화하지 않는다
+ * ⚠️ raw_source_url은 게시글 URL 그대로다(호출부 불변) — 중복제거·차단목록이 계속 작동한다.
+ */
+async function extractPdfAttachment(detailHtml, pageUrl) {
+  const anchors = [...detailHtml.matchAll(/href="([^"]*fileDown\.do[^"]*)"[^>]*>([\s\S]*?)<\/a>/g)]
+    .map((m) => ({
+      href: decodeEntities(m[1]),
+      label: decodeEntities(m[2].replace(/<[^>]*>/g, " ")).replace(/\s+/g, " ").trim(),
+    }))
+    .filter((a) => /\.pdf\b/i.test(a.label));
+  if (!anchors.length) return "";
+
+  // 라벨의 "파일크기 : n KB/MB" 힌트로 최대 PDF 선택 (힌트 없으면 첫 번째)
+  const sizeOf = (label) => {
+    const m = label.match(/파일크기\s*:?\s*([\d.,]+)\s*(KB|MB|GB)?/i);
+    if (!m) return 0;
+    const n = parseFloat(m[1].replace(/,/g, ""));
+    const unit = (m[2] ?? "").toUpperCase();
+    return n * (unit === "GB" ? 1024 ** 3 : unit === "MB" ? 1024 ** 2 : unit === "KB" ? 1024 : 1);
+  };
+  anchors.sort((a, b) => sizeOf(b.label) - sizeOf(a.label));
+  const pdfUrl = new URL(anchors[0].href, pageUrl).toString();
+
+  let timer;
+  let parser;
+  try {
+    const res = await fetch(pdfUrl, {
+      headers: { "User-Agent": UA },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return "";
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.subarray(0, 5).toString() !== "%PDF-") return "";
+    // pdf-parse v2 API (PDFParse 클래스) — 워크플로에서 pdf-parse@2로 버전 고정
+    const { PDFParse } = await import("pdf-parse");
+    parser = new PDFParse({ data: new Uint8Array(buf) });
+    const timeout = new Promise((_, rej) => {
+      timer = setTimeout(() => rej(new Error("PDF 파싱 10초 초과")), 10000);
+    });
+    const parsed = await Promise.race([parser.getText(), timeout]);
+    const text = String(parsed.text ?? "").replace(/\s+/g, " ").trim().slice(0, 4000);
+    if (text.length < 300) return ""; // 팩트 부족 — 본문없음 유지
+    console.log(`  [PDF 폴백 ✓] ${anchors[0].label.slice(0, 40)} (${text.length}자)`);
+    return text;
+  } catch (err) {
+    console.warn(`  [PDF 폴백 실패] ${pageUrl}: ${err.message}`);
+    return "";
+  } finally {
+    clearTimeout(timer);
+    await parser?.destroy?.().catch(() => undefined);
+  }
 }
 
 async function collectCandidates() {
