@@ -13,6 +13,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // 비UTF-8 인코딩 방어(버그픽스) — 요청 본문이 UTF-8이 아니면(예: Windows 셸 CP949)
+    // request.json()이 한글을 U+FFFD(�)로 디코딩한다. 그대로 두면 깨진 이름·내용이
+    // DB와 텔레그램 리드 알림까지 흘러간다(���� 증상). 유입 시점에 차단한다.
+    if ([name, phone, category, message].some((v) => typeof v === "string" && v.includes("�"))) {
+      return NextResponse.json(
+        { error: "문자 인코딩이 올바르지 않습니다. UTF-8로 다시 시도해 주세요." },
+        { status: 400 }
+      );
+    }
+
     // Supabase 클라이언트 (서버 런타임에서 환경변수 직접 사용)
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -62,9 +72,10 @@ export async function POST(request: Request) {
         .filter(Boolean)
         .join("\n");
 
+      // 크론 요약(collect-and-generate 등)과 동일한 전송 방식 — POST + JSON.stringify(UTF-8)
       await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: "POST",
-        headers: { "Content-Type": "application/json; charset=utf-8" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chat_id: chatId, text }),
       }).catch((err) => console.error("Telegram send error:", err));
     }
