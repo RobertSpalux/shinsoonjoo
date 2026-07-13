@@ -39,6 +39,9 @@ const DARK_TYPES = new Set(["hook", "stat", "quote", "cta"]);
 // ⚠️ src/lib/brand.ts의 getCareer() 시작일과 반드시 동일하게 유지할 것 (불일치 시 이미지/사이트 경력 어긋남)
 const CAREER_START = new Date("2003-07-01T00:00:00+09:00");
 const YEARS = Math.floor((Date.now() - CAREER_START.getTime()) / 86_400_000 / 365.25);
+// ⚠️ src/lib/brand.ts BRAND.siteName과 반드시 동일하게 유지할 것
+// (이 렌더러는 단독 .mjs — CI Node 22가 TS 싱글소스를 import 못해 CAREER_START와 같은 동기화 규약)
+const SITE_NAME = "신순주의 선한 금융";
 
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -502,16 +505,17 @@ function naverDiagramHtml(c) {
   return null;
 }
 
-/** 3) CTA 배너 800×250 */
+/** 3) CTA 배너 800×250 — 관계 장치: 카톡 채널 추가 (CONTENT-STRATEGY §10, 커밋 P3-3).
+ * 진단 CTA는 변환기(toNaverText)가 말미 텍스트 URL로 붙인다 — 배너는 채널 추가 하나에 집중. */
 function naverCtaHtml() {
   return naverDoc(800, 250, `background:${GREEN}; color:${CREAM}; display:flex; align-items:center;`, `
     <div style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:0 56px;">
       <div>
-        <p style="font-size:17px; font-weight:800; letter-spacing:0.1em; color:${GOLD};">비대면 · 전국 · 무료</p>
-        <p style="margin-top:10px; font-size:36px; font-weight:800; color:${CREAM}; letter-spacing:-0.02em;">내 보험, 새는 곳 없는지<br/>무료 리모델링 진단 받기</p>
+        <p style="font-size:17px; font-weight:800; letter-spacing:0.1em; color:${GOLD};">주 1회 · 부담 없이</p>
+        <p style="margin-top:10px; font-size:36px; font-weight:800; color:${CREAM}; letter-spacing:-0.02em;">새 글·보험 점검 소식,<br/>카카오톡 채널에서</p>
       </div>
-      <div style="background:${GOLD}; color:${CHARCOAL}; font-size:24px; font-weight:800; padding:20px 34px;
-        border-radius:14px; white-space:nowrap;">goodfinance.kr →</div>
+      <div style="background:${GOLD}; color:${CHARCOAL}; font-size:22px; font-weight:800; padding:20px 30px;
+        border-radius:14px; text-align:center; line-height:1.45;">'${SITE_NAME}'<br/>채널 추가 →</div>
     </div>`);
 }
 
@@ -539,7 +543,18 @@ async function main() {
     .limit(5);
 
   if (error) throw error;
-  if (!articles?.length) {
+
+  // 네이버 타깃을 먼저 조회 — 인스타 0건이어도 네이버 세트만 필요한 글(재생성 등)을 스킵하지 않게
+  // (P3-3 실측: 조기 return이 네이버 섹션까지 건너뛰어 naver_image_paths='{}' 글이 영영 미생성)
+  const { data: naverTargets, error: nvErr } = await supabase
+    .from("premium_articles")
+    .select("id, slug, title, carousel_json")
+    .not("carousel_json", "is", null)
+    .eq("naver_image_paths", "{}")
+    .limit(5);
+  if (nvErr) throw nvErr;
+
+  if (!articles?.length && !naverTargets?.length) {
     console.log("렌더링할 카드뉴스가 없습니다.");
     return;
   }
@@ -551,7 +566,7 @@ async function main() {
   await page.setViewport({ width: 1080, height: 1350, deviceScaleFactor: 1 });
   page.setDefaultTimeout(60000);
 
-  for (const article of articles) {
+  for (const article of articles ?? []) {
     const cards = Array.isArray(article.carousel_json) ? article.carousel_json : [];
     if (!cards.length) continue;
     console.log(`[${article.slug}] 카드 ${cards.length}장 렌더링...`);
@@ -592,15 +607,7 @@ async function main() {
     console.log(`[${article.slug}] 완료 — ${paths.length}장 업로드`);
   }
 
-  // ── 네이버 가로 이미지 세트 (썸네일 + 도식 0~2 + CTA) — carousel 있고 naver 세트 없는 글
-  const { data: naverTargets, error: nvErr } = await supabase
-    .from("premium_articles")
-    .select("id, slug, title, carousel_json")
-    .not("carousel_json", "is", null)
-    .eq("naver_image_paths", "{}")
-    .limit(5);
-  if (nvErr) throw nvErr;
-
+  // ── 네이버 가로 이미지 세트 (썸네일 + 도식 0~2 + CTA) — 타깃은 위에서 선조회
   for (const article of naverTargets ?? []) {
     const cards = Array.isArray(article.carousel_json) ? article.carousel_json : [];
     const specs = [{ w: 800, h: 450, html: naverThumbHtml(article.title) }];
@@ -615,7 +622,7 @@ async function main() {
     for (let i = 0; i < specs.length; i++) {
       const spec = specs[i];
       await page.setViewport({ width: spec.w, height: spec.h, deviceScaleFactor: 2 });
-      const fontText = `${article.title}${collectText(cards)}${YEARS}보험리모델링인사이트신순주지사장GA명장비대면전국무료진단핵심정리내새는곳없는지받기★✓→0123456789|`;
+      const fontText = `${article.title}${collectText(cards)}${YEARS}${SITE_NAME}보험리모델링인사이트신순주지사장GA명장비대면전국무료진단핵심정리내새는곳없는지받기주1회부담없이글점검소식카카오톡채널추가에서'★✓→0123456789|`;
       await page.setContent(spec.html, { waitUntil: "load", timeout: 60000 });
       await page.evaluate(async (text) => {
         const weights = ["500", "600", "700", "800"];

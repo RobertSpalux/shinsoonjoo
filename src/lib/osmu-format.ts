@@ -88,6 +88,11 @@ export function toNaverText(
     text += `\n\n무료 보험 리모델링 진단 👉 ${diagnosisUrl}`;
   }
 
+  // 관계 장치 — 카톡 채널 (CONTENT-STRATEGY §10, 커밋 P3-3). 진단 URL 바로 다음 줄에 1줄.
+  if (!text.includes(BRAND.social.kakao)) {
+    text += `\n🔔 새 글 알림: ${BRAND.social.kakao}`;
+  }
+
   const hashtags = toHashtags(opts?.tags);
   if (hashtags) {
     text += `\n\n${hashtags}`;
