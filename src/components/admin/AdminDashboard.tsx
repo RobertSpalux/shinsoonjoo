@@ -445,24 +445,35 @@ export default function AdminDashboard({
                           {a.category} · 조회 {a.view_count} · {fmtDate(a.created_at)}
                         </p>
                       </div>
+                      {/* 발행 컨트롤 — 무음 실패 금지: updateRow 실패(세션 만료 401 등)를 낙관적
+                          UI가 가리면 '눌러도 안 되는' 것처럼 보인다 → 실패 시 롤백+토스트, 성공도 토스트 */}
                       <PublishControls
                         article={a}
-                        onPublish={() => {
+                        onPublish={async () => {
                           if (!passReviewGate(a)) return;
                           const clearReview = a.needs_human_review === true ? { needs_human_review: false } : {};
                           const published_at = new Date().toISOString();
+                          const snapshot = articles;
                           setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at, ...clearReview } : x)));
-                          updateRow("premium_articles", a.id, { is_main_published: true, ...clearReview });
+                          const ok = await updateRow("premium_articles", a.id, { is_main_published: true, ...clearReview });
+                          if (!ok) setArticles(snapshot);
+                          showToast(ok ? "발행 완료" : "발행 실패 — 새로고침(재로그인) 후 다시 시도하세요");
                         }}
-                        onSchedule={(iso) => {
+                        onSchedule={async (iso) => {
                           if (!passReviewGate(a)) return;
                           const clearReview = a.needs_human_review === true ? { needs_human_review: false } : {};
+                          const snapshot = articles;
                           setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at: iso, ...clearReview } : x)));
-                          updateRow("premium_articles", a.id, { is_main_published: true, published_at: iso, ...clearReview });
+                          const ok = await updateRow("premium_articles", a.id, { is_main_published: true, published_at: iso, ...clearReview });
+                          if (!ok) setArticles(snapshot);
+                          showToast(ok ? "예약 발행 확정" : "예약 실패 — 새로고침(재로그인) 후 다시 시도하세요");
                         }}
-                        onDraft={() => {
+                        onDraft={async () => {
+                          const snapshot = articles;
                           setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: false } : x)));
-                          updateRow("premium_articles", a.id, { is_main_published: false });
+                          const ok = await updateRow("premium_articles", a.id, { is_main_published: false });
+                          if (!ok) setArticles(snapshot);
+                          showToast(ok ? "초안으로 회수 완료" : "회수 실패 — 새로고침(재로그인) 후 다시 시도하세요");
                         }}
                       />
                     </div>
