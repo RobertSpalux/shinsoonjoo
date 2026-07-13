@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import {
   factorySystemPrompt,
   evergreenSystemPrompt,
+  scanBannedTopics,
   FACTORY_OUTPUT_SCHEMA,
   EVERGREEN_OUTPUT_SCHEMA,
   type EvergreenSeed,
@@ -84,6 +85,28 @@ function validateFaqCount(faq: unknown, min: number): string[] {
   if (!min) return [];
   const n = Array.isArray(faq) ? faq.length : 0;
   return n < min ? [`FAQ ${n}개(허브 최소 ${min}개)`] : [];
+}
+
+/** 금지 소재 하드 게이트 발동 알림 (커밋 O1 — best-effort) */
+async function notifyBannedBlocked(title: string, terms: string[], sourceUrl?: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: [
+        `⚠️ 금지 소재 감지: ${terms.join("·")} — 저장하지 않음, 소스 차단목록 등록됨`,
+        title,
+        sourceUrl ? `소스: ${sourceUrl}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n")
+        .slice(0, 4000),
+    }),
+  }).catch(() => undefined);
 }
 
 /** 검증 최종 실패 시 텔레그램 플래그 (best-effort — env 없으면 조용히 스킵) */
@@ -262,9 +285,10 @@ export async function POST(request: Request) {
     ];
     let carouselIssues = validateCarousel(article.carousel_json);
     let markdownIssues = validateArticleBody(article);
-    if (carouselIssues.length + markdownIssues.length > 0) {
+    let bannedTerms = scanBannedTopics(article); // 금지 소재 하드 게이트 (커밋 O1)
+    if (carouselIssues.length + markdownIssues.length + bannedTerms.length > 0) {
       console.warn(
-        `생성물 검증 실패 — 1회 재생성: ${[...carouselIssues, ...markdownIssues].join(" / ")}`
+        `생성물 검증 실패 — 1회 재생성: ${[...carouselIssues, ...markdownIssues, ...bannedTerms.map((t) => `금지어:${t}`)].join(" / ")}`
       );
       try {
         const retry = await generateOnce();
@@ -275,11 +299,21 @@ export async function POST(request: Request) {
             (retry.article as { carousel_json?: unknown }).carousel_json
           );
           const retryMarkdown = validateArticleBody(retry.article);
-          // 위반 합계가 더 적은 쪽 채택 (재시도 통과 시 0건 → 경고 해제)
-          if (retryCarousel.length + retryMarkdown.length < carouselIssues.length + markdownIssues.length) {
+          const retryBanned = scanBannedTopics(retry.article);
+          // 채택 규칙: 금지어가 최우선 — 금지어를 없앤 재시도는 무조건 채택,
+          // 금지어를 새로 만든 재시도는 절대 채택하지 않는다. 그 외엔 위반 합계가 적은 쪽.
+          const preferRetry =
+            bannedTerms.length > 0 && retryBanned.length === 0
+              ? true
+              : bannedTerms.length === 0 && retryBanned.length > 0
+                ? false
+                : retryCarousel.length + retryMarkdown.length + retryBanned.length <
+                  carouselIssues.length + markdownIssues.length + bannedTerms.length;
+          if (preferRetry) {
             article = retry.article;
             carouselIssues = retryCarousel;
             markdownIssues = retryMarkdown;
+            bannedTerms = retryBanned;
           }
         }
       } catch (retryErr) {
@@ -293,6 +327,28 @@ export async function POST(request: Request) {
         console.warn(`본진 원고 검증 최종 실패 — 그대로 저장: ${markdownIssues.join(" / ")}`);
         await notifyValidationWarning(String(article.title ?? "(제목 없음)"), "본진 원고", markdownIssues);
       }
+    }
+
+    // 금지 소재 하드 게이트 (커밋 O1) — 재생성 후에도 감지되면 저장하지 않고 스킵.
+    // 해당 소스는 차단목록에 자동 등록 → 다음 수집부터 게이트 이전에 제외된다.
+    if (bannedTerms.length > 0) {
+      console.warn(`금지 소재 최종 감지(${bannedTerms.join("·")}) — 저장하지 않음`);
+      const gateSupabase = createAdminClient();
+      if (source_url) {
+        const { error: blockErr } = await gateSupabase
+          .from("blocked_sources")
+          .upsert({ url: source_url, reason: "금지소재" }, { onConflict: "url" });
+        if (blockErr) console.error("blocked_sources 등록 실패:", blockErr);
+      }
+      await notifyBannedBlocked(
+        String(article.title ?? title ?? "(제목 없음)"),
+        bannedTerms,
+        source_url ?? undefined
+      );
+      return NextResponse.json(
+        { error: `금지 소재 감지(${bannedTerms.join("·")}) — 저장하지 않음`, blocked: true },
+        { status: 422 }
+      );
     }
 
     // 상록수 사실검증 게이트(커밋 M2) — 원고 검증 최종 실패 또는 민감 사실 포함이면 사람 검수 강제.

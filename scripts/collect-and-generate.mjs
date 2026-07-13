@@ -15,7 +15,7 @@ import { createClient } from "@supabase/supabase-js";
 const {
   NEXT_PUBLIC_SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
-  SITE_URL = "https://soonjoo.vercel.app",
+  SITE_URL = "https://goodfinance.kr",
   FACTORY_SECRET,
   TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID,
@@ -225,6 +225,23 @@ async function filterProcessed(items) {
     .select("raw_source_url")
     .in("raw_source_url", urls);
   const seen = new Set((data ?? []).map((r) => r.raw_source_url));
+
+  // 소스 차단목록 (커밋 O1) — 기사를 삭제해도 재생성되지 않게 하는 영구 차단.
+  // raw_source_url 대조는 행 삭제 시 부활하는 버그가 있어(부당승환 재생성 사고) 별도 테이블로 막는다.
+  const { data: blocked, error: blockedErr } = await supabase
+    .from("blocked_sources")
+    .select("url")
+    .in("url", urls);
+  if (blockedErr) {
+    console.warn(`blocked_sources 조회 실패(차단 없이 진행): ${blockedErr.message}`);
+  }
+  let blockedCount = 0;
+  for (const b of blocked ?? []) {
+    if (!seen.has(b.url)) blockedCount++;
+    seen.add(b.url);
+  }
+  if (blockedCount > 0) console.log(`[차단목록] ${blockedCount}건 제외`);
+
   return items.filter((i) => !seen.has(i.link));
 }
 

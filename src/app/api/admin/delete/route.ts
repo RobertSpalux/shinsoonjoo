@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { table, id } = await request.json().catch(() => ({}));
+  const { table, id, blockSource } = await request.json().catch(() => ({}));
   if (!ALLOWED_TABLES.includes(table as AllowedTable) || !id) {
     return NextResponse.json({ error: "잘못된 요청" }, { status: 400 });
   }
@@ -24,19 +24,30 @@ export async function POST(request: Request) {
   const supabase = createAdminClient();
 
   let slug: string | null = null;
+  let rawSourceUrl: string | null = null;
   if (table === "premium_articles") {
     const { data: row } = await supabase
       .from("premium_articles")
-      .select("slug")
+      .select("slug, raw_source_url")
       .eq("id", id)
       .maybeSingle();
     slug = row?.slug ?? null;
+    rawSourceUrl = row?.raw_source_url ?? null;
   }
 
   const { error } = await supabase.from(table).delete().eq("id", id);
   if (error) {
     console.error("admin delete error:", error);
     return NextResponse.json({ error: "삭제 실패" }, { status: 500 });
+  }
+
+  // 소스 차단 (커밋 O1) — raw_source_url 대조 dedup은 행 삭제 시 같은 소스로 재생성되는
+  // 버그가 있어, 삭제와 함께 blocked_sources에 등록해 영구 차단한다.
+  if (table === "premium_articles" && blockSource === true && rawSourceUrl) {
+    const { error: blockErr } = await supabase
+      .from("blocked_sources")
+      .upsert({ url: rawSourceUrl, reason: "수동차단" }, { onConflict: "url" });
+    if (blockErr) console.error("blocked_sources 등록 실패(삭제는 완료):", blockErr);
   }
 
   if (table === "premium_articles" && slug) {

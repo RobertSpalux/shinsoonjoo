@@ -47,6 +47,7 @@ interface Article {
   category: string;
   summary: string | null;
   tags: string[] | null;
+  raw_source_url: string | null;
   key_points: string[] | null;
   remodeling_bridge: string | null;
   main_website_markdown: string | null;
@@ -104,11 +105,11 @@ async function updateRow(table: string, id: string, fields: Record<string, unkno
   return res.ok;
 }
 
-async function deleteRow(table: string, id: string) {
+async function deleteRow(table: string, id: string, blockSource = false) {
   const res = await fetch("/api/admin/delete", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ table, id }),
+    body: JSON.stringify({ table, id, blockSource }),
   });
   return res.ok;
 }
@@ -252,10 +253,16 @@ export default function AdminDashboard({
       )
     )
       return;
-    const ok = await deleteRow("premium_articles", a.id);
+    // 소스 차단 (커밋 O1) — 삭제만 하면 같은 raw_source_url로 크론이 재생성한다(부당승환 사고).
+    const blockSource =
+      !!a.raw_source_url &&
+      window.confirm(
+        `이 소스를 차단할까요?\n\n${a.raw_source_url}\n\n차단하면 같은 원문으로 다시 생성되지 않습니다.\n(금지 소재·회수 기사면 차단을 권합니다)`
+      );
+    const ok = await deleteRow("premium_articles", a.id, blockSource);
     if (ok) {
       setArticles((prev) => prev.filter((x) => x.id !== a.id));
-      showToast("기사 삭제 완료");
+      showToast(blockSource ? "기사 삭제 + 소스 차단 완료" : "기사 삭제 완료");
     } else showToast("삭제 실패");
   };
 

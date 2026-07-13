@@ -21,7 +21,7 @@ import { EVERGREEN_SEEDS } from "./seeds/evergreen-seeds.mjs";
 const {
   NEXT_PUBLIC_SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
-  SITE_URL = "https://soonjoo.vercel.app",
+  SITE_URL = "https://goodfinance.kr",
   FACTORY_SECRET,
   TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID,
