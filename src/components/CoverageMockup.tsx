@@ -58,14 +58,15 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
         {MOCKUP_CASES.map((c) => (
           <article
             key={c.id}
-            className="rounded-[var(--radius-lg)] border border-[var(--color-line)] bg-[var(--color-ink-card)] p-5 md:p-6"
+            // 상단 4px 딥그린 바 = 서류·리포트 질감 (배경 이미지 없이 — O5)
+            className="rounded-[var(--radius-lg)] border border-[var(--color-line)] border-t-4 border-t-[var(--color-forest)] bg-[var(--color-ink-card)] p-7 md:p-8"
           >
             <p className="text-[11px] font-semibold tracking-[0.06em] text-[var(--color-text-muted)]">
               {c.label} · 계약 {c.contractCount}건
             </p>
 
-            {/* ⭐ 보험료 변화 — 방향과 무관하게 동일한 색(둘 다 정답일 수 있으므로) */}
-            <p className="mt-3 text-xl font-bold tabular-nums tracking-[-0.01em] text-[var(--color-text-strong)]">
+            {/* ⭐ 보험료 변화 — 세리프 숫자(결론 숫자는 헤드라인급). 방향과 무관하게 동일한 색 */}
+            <p className="mt-3 font-serif text-xl font-bold tabular-nums tracking-[-0.01em] text-[var(--color-text-strong)]">
               {won(c.premiumBefore)} <span aria-hidden>→</span> {won(c.premiumAfter)}
             </p>
             <p className="mt-1 text-sm font-medium text-[var(--color-text-body)]">{c.premiumDelta}</p>
@@ -74,36 +75,50 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
               {c.headline}
             </p>
 
-            {/* 담보 행 스택 — [담보명] … [기존 → ⭐신규]. 신규값이 가장 강하다(여기가 결론) */}
+            {/* 담보 행 스택 — [담보명] … [기존 → ⭐신규]. 신규 금액 = 딥그린 세리프(결론값 — O5) */}
             <div className="mt-4 border-t border-[var(--color-line)]">
-              {c.rows.map((r) => (
-                <div key={r.name} className="border-b border-[var(--color-line)] py-3 last:border-b-0">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="min-w-0 text-sm font-medium text-[var(--color-text-body)]">
-                      {r.name}
-                    </p>
-                    <p className="shrink-0 text-right">
-                      <span className="whitespace-nowrap text-xs tabular-nums text-[var(--color-text-muted)]">
-                        {r.before}
-                      </span>
-                      <span aria-hidden className="mx-1.5 text-xs text-[var(--color-text-muted)]">
-                        →
-                      </span>
-                      <span className="whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text-strong)]">
-                        {r.after}
-                      </span>
-                    </p>
+              {c.rows.map((r) => {
+                // after가 verdict와 같으면('조정'·'유지') 금액이 아님 → muted + 판단 줄 생략(중복 방지)
+                const isAmount = r.after !== r.verdict;
+                return (
+                  <div key={r.name} className="border-b border-[var(--color-line)] py-4 last:border-b-0">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="min-w-0 text-sm font-medium text-[var(--color-text-body)]">
+                        {r.name}
+                      </p>
+                      <p className="shrink-0 text-right">
+                        <span className="whitespace-nowrap text-xs tabular-nums text-[var(--color-text-muted)]">
+                          {r.before}
+                        </span>
+                        <span aria-hidden className="mx-1.5 text-xs text-[var(--color-text-muted)]">
+                          →
+                        </span>
+                        {isAmount ? (
+                          <span className="whitespace-nowrap font-serif text-lg font-bold tabular-nums text-[var(--color-forest)]">
+                            {r.after}
+                          </span>
+                        ) : (
+                          <span className="whitespace-nowrap text-sm font-medium text-[var(--color-text-muted)]">
+                            {r.after}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {(r.note || isAmount) && (
+                      <div className="mt-0.5 flex items-baseline justify-between gap-3">
+                        <p className="min-w-0 text-[11px] text-[var(--color-text-muted)]">
+                          {r.note ?? ""}
+                        </p>
+                        {isAmount && (
+                          <p className="shrink-0 text-[11px] font-semibold text-[var(--color-text-body)]">
+                            {r.verdict}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="mt-0.5 flex items-baseline justify-between gap-3">
-                    <p className="min-w-0 text-[11px] text-[var(--color-text-muted)]">
-                      {r.note ?? ""}
-                    </p>
-                    <p className="shrink-0 text-[11px] font-semibold text-[var(--color-text-body)]">
-                      {r.verdict}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </article>
         ))}

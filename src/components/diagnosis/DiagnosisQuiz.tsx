@@ -297,11 +297,31 @@ export default function DiagnosisQuiz() {
               {/* ⭐ 점수 근거 공개 (N7) — 항목별 상태 서술 (점수 숫자는 노출 안 함) */}
               <div className="mt-7 border-t border-[var(--color-ink)]/15 pt-7 text-left">
                 <span aria-hidden className="mb-5 block h-px w-6 bg-[var(--color-gold)]" />
-                <dl className="space-y-2.5">
+                {/* 항목 위계 (O5) — critical은 밝고 굵게 떠오르고 ok는 가라앉는다.
+                    ⚠️ 신호등 색 금지: 딥그린 밴드 위 크림 불투명도·굵기 + 골드 세로 마크로만 */}
+                <dl className="space-y-3">
                   {result.breakdown.map((item) => (
-                    <div key={item.key} className="flex gap-4 text-sm leading-relaxed">
-                      <dt className="w-[4.5rem] shrink-0 text-[var(--color-ink)]/60">{item.label}</dt>
-                      <dd className="tabular-nums text-[var(--color-ink)]/85">{item.value}</dd>
+                    <div key={item.key} className="relative flex gap-4 leading-relaxed">
+                      {item.severity === "critical" && (
+                        <span
+                          aria-hidden
+                          className="absolute -left-3.5 top-1.5 h-3 w-[2px] bg-[var(--color-gold)]"
+                        />
+                      )}
+                      <dt className="w-[4.5rem] shrink-0 pt-px text-sm text-[var(--color-ink)]/60">
+                        {item.label}
+                      </dt>
+                      <dd
+                        className={`tabular-nums ${
+                          item.severity === "critical"
+                            ? "text-[1.0625rem] font-bold text-[var(--color-ink)]"
+                            : item.severity === "warn"
+                              ? "text-sm font-semibold text-[var(--color-ink)]/90"
+                              : "text-sm text-[var(--color-ink)]/65"
+                        }`}
+                      >
+                        {item.value}
+                      </dd>
                     </div>
                   ))}
                 </dl>

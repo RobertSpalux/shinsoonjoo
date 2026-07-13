@@ -19,11 +19,15 @@ export interface DiagnosisAnswers {
   profile?: string;
 }
 
+/** 항목 심각도 (커밋 O5) — 렌더 위계용. ⚠️ 신호등 색 금지: 크림 불투명도·굵기로만 구분 */
+export type Severity = "critical" | "warn" | "ok";
+
 export interface BreakdownItem {
   key: string;
   label: string;
   /** 상태 서술만 — 항목별 점수(숫자)는 노출하지 않는다(계산기처럼 보임) */
   value: string;
+  severity: Severity;
 }
 
 export interface DiagnosisResult {
@@ -104,15 +108,17 @@ export function computeDiagnosis(a: DiagnosisAnswers): DiagnosisResult {
   if (ratio != null) {
     const pct = Math.round(ratio * 100);
     let status: string;
-    if (ratio >= 0.05 && ratio <= 0.1) { scoreA = 25; status = "적정"; }
-    else if (ratio >= 0.03 && ratio < 0.05) { scoreA = 18; status = "다소 부족"; }
-    else if (ratio > 0.1 && ratio <= 0.13) { scoreA = 15; status = "다소 과다"; }
-    else if (ratio > 0.13) { scoreA = 8; status = "과다 구간"; }
-    else { scoreA = 8; status = "공백 의심"; } // 3% 미만
+    let sevA: Severity;
+    if (ratio >= 0.05 && ratio <= 0.1) { scoreA = 25; status = "적정"; sevA = "ok"; }
+    else if (ratio >= 0.03 && ratio < 0.05) { scoreA = 18; status = "다소 부족"; sevA = "warn"; }
+    else if (ratio > 0.1 && ratio <= 0.13) { scoreA = 15; status = "다소 과다"; sevA = "warn"; }
+    else if (ratio > 0.13) { scoreA = 8; status = "과다 구간"; sevA = "critical"; }
+    else { scoreA = 8; status = "공백 의심"; sevA = "critical"; } // 3% 미만
     breakdown.push({
       key: "ratio",
       label: "보험료 비율",
       value: `소득의 ${pct}% (권장 5~10%) → ${status}`,
+      severity: sevA,
     });
   }
 
@@ -124,7 +130,7 @@ export function computeDiagnosis(a: DiagnosisAnswers): DiagnosisResult {
   let missing: string[] = [];
   if (unknownCov) {
     scoreB = 0;
-    breakdown.push({ key: "gaps", label: "보장 공백", value: "보유 보장을 모르십니다" });
+    breakdown.push({ key: "gaps", label: "보장 공백", value: "보유 보장을 모르십니다", severity: "critical" });
   } else {
     const missingRows = GAP_DEDUCTIONS.filter(
       ([key]) => !cov.includes(key) && !(key === "간병·치매" && isYoungSingle)
@@ -136,6 +142,7 @@ export function computeDiagnosis(a: DiagnosisAnswers): DiagnosisResult {
       key: "gaps",
       label: "보장 공백",
       value: missing.length ? `${missing.join(" · ")} 없음` : "핵심 보장 확인됨",
+      severity: missing.length >= 3 ? "critical" : missing.length >= 1 ? "warn" : "ok",
     });
   }
 
@@ -147,16 +154,27 @@ export function computeDiagnosis(a: DiagnosisAnswers): DiagnosisResult {
     key: "contracts",
     label: "계약 파악",
     value: CONTRACT_STATUS[a.contracts ?? ""] ?? "—",
+    severity:
+      a.contracts === "10개 이상" || a.contracts === "잘 모르겠다"
+        ? "critical"
+        : a.contracts === "6~9개"
+          ? "warn"
+          : "ok",
   });
   breakdown.push({
     key: "check",
     label: "점검 이력",
     value: CHECK_STATUS[a.lastCheck ?? ""] ?? "—",
+    severity:
+      a.lastCheck === "1년 이내" ? "ok" : a.lastCheck === "1~3년 전" ? "warn" : "critical",
   });
   breakdown.push({
     key: "channel",
     label: "가입 경로",
     value: CHANNEL_STATUS[a.channel ?? ""] ?? "—",
+    // 경로는 critical 없음 — 채널 자체를 위험으로 낙인찍지 않는다(비방 금지 프레임)
+    severity:
+      a.channel === "다이렉트·온라인" || a.channel === "설계사 권유" ? "ok" : "warn",
   });
 
   // ── 총점 — [A] 제외 시 75점 만점 → 100점 환산 (이탈 방지: 소득 무응답 페널티 없음)
