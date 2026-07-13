@@ -30,6 +30,7 @@ interface Consultation {
   category: string;
   message: string | null;
   status: string;
+  memo: string | null;
   created_at: string;
 }
 interface CarouselCard {
@@ -78,7 +79,8 @@ interface Article {
 }
 
 const LEAD_STATUSES = ["new", "연락함", "상담예정", "전환", "보류"];
-const CONSULT_STATUSES = ["접수완료", "연락완료", "계약진행", "보류"];
+// 상담 신청도 리드와 같은 상태 어휘를 쓴다(운영자가 두 목록을 오가며 혼선 없게).
+// 기존 값('접수완료' 등)은 마이그레이션 없이 표시 호환(옵션 앞에 끼워 넣기)으로 유지.
 const ARTICLE_FILTERS = ["전체", "초안", "발행됨", "예약"] as const;
 
 function fmtDate(s: string) {
@@ -294,6 +296,16 @@ export default function AdminDashboard({
     if (ok) {
       setArticles((prev) => prev.filter((x) => x.id !== a.id));
       showToast(blockSource ? "기사 삭제 + 소스 차단 완료" : "기사 삭제 완료");
+    } else showToast("삭제 실패");
+  };
+
+  // 상담 신청 삭제 = 개인정보 파기 수단 (CLAUDE.md §6) — 리드 삭제와 같은 API 경로 재사용
+  const removeConsult = async (c: Consultation) => {
+    if (!window.confirm("상담 신청을 삭제합니다. 개인정보가 영구 파기됩니다.")) return;
+    const ok = await deleteRow("consultations", c.id);
+    if (ok) {
+      setConsults((prev) => prev.filter((x) => x.id !== c.id));
+      showToast("상담 신청 삭제 완료");
     } else showToast("삭제 실패");
   };
 
@@ -681,35 +693,32 @@ export default function AdminDashboard({
           />
         )}
 
-        {/* ─── 상담 신청 탭 ─── */}
+        {/* ─── 상담 신청 탭 — 리드(커밋 I)와 동등한 관리: 상태·메모·삭제·연락처 복사 ─── */}
         {tab === "consults" && (
           <div className="space-y-3">
             {consults.length === 0 && <Empty text="아직 상담 신청이 없습니다." />}
             {consults.map((c) => (
-              <div key={c.id} className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <span className="font-bold text-slate-900">{c.name}</span>
-                    <button onClick={() => copy(c.phone, "연락처")} className="ml-3 text-sm text-[var(--color-gold-light)] hover:underline">
-                      {c.phone}
-                    </button>
-                    <span className="ml-3 rounded-full border border-[var(--color-line)] px-2.5 py-0.5 text-[11px] text-slate-600">{c.category}</span>
-                    <span className="ml-3 text-xs text-slate-500">{fmtDate(c.created_at)}</span>
-                  </div>
-                  <select
-                    className={selectCls}
-                    value={c.status}
-                    onChange={(e) => {
-                      const status = e.target.value;
-                      setConsults((prev) => prev.map((x) => (x.id === c.id ? { ...x, status } : x)));
-                      updateRow("consultations", c.id, { status });
-                    }}
-                  >
-                    {CONSULT_STATUSES.map((s) => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
-                {c.message && <p className="mt-3 text-sm leading-relaxed text-slate-600">{c.message}</p>}
-              </div>
+              <ConsultCard
+                key={c.id}
+                consult={c}
+                onCopyPhone={() => copy(c.phone, "연락처")}
+                onStatus={async (status) => {
+                  const snapshot = consults;
+                  setConsults((prev) => prev.map((x) => (x.id === c.id ? { ...x, status } : x)));
+                  const ok = await updateRow("consultations", c.id, { status });
+                  if (!ok) setConsults(snapshot);
+                  showToast(ok ? "상태 변경 완료" : "상태 변경 실패 — 새로고침 후 다시 시도하세요");
+                }}
+                onMemo={async (memo) => {
+                  const snapshot = consults;
+                  setConsults((prev) => prev.map((x) => (x.id === c.id ? { ...x, memo } : x)));
+                  const ok = await updateRow("consultations", c.id, { memo });
+                  if (!ok) setConsults(snapshot);
+                  showToast(ok ? "메모 저장 완료" : "메모 저장 실패");
+                }}
+                onDelete={() => removeConsult(c)}
+                selectCls={selectCls}
+              />
             ))}
           </div>
         )}
@@ -954,6 +963,71 @@ function LeadCard({
         <button
           onClick={() => onMemo(memoDraft)}
           disabled={memoDraft === (l.memo ?? "")}
+          className="rounded-lg border border-[var(--color-line)] px-3 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)] disabled:opacity-30"
+        >
+          메모 저장
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── 상담 신청 카드 — LeadCard 패턴 재사용 (상태 어휘도 리드와 통일, 기존 값은 표시 호환) ── */
+function ConsultCard({
+  consult: c,
+  onCopyPhone,
+  onStatus,
+  onMemo,
+  onDelete,
+  selectCls,
+}: {
+  consult: Consultation;
+  onCopyPhone: () => void;
+  onStatus: (status: string) => void;
+  onMemo: (memo: string) => void;
+  onDelete: () => void;
+  selectCls: string;
+}) {
+  const [memoDraft, setMemoDraft] = useState(c.memo ?? "");
+  const statusOptions = LEAD_STATUSES.includes(c.status) ? LEAD_STATUSES : [c.status, ...LEAD_STATUSES];
+
+  return (
+    <div className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="font-bold text-slate-900">{c.name}</span>
+          <button onClick={onCopyPhone} title="클릭하면 복사" className="text-sm font-semibold text-[var(--color-gold-light)] hover:underline">
+            {c.phone}
+          </button>
+          <span className="rounded-full border border-[var(--color-line)] px-2.5 py-0.5 text-[11px] text-slate-600">{c.category}</span>
+          <span className="text-xs text-slate-500">{fmtDate(c.created_at)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <select className={selectCls} value={c.status} onChange={(e) => onStatus(e.target.value)}>
+            {statusOptions.map((s) => <option key={s}>{s}</option>)}
+          </select>
+          <button
+            onClick={onDelete}
+            className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600 hover:border-red-400 hover:bg-red-50"
+          >
+            삭제
+          </button>
+        </div>
+      </div>
+
+      {c.message && <p className="mt-3 text-sm leading-relaxed text-slate-600">{c.message}</p>}
+
+      <div className="mt-4 flex items-start gap-2">
+        <textarea
+          value={memoDraft}
+          onChange={(e) => setMemoDraft(e.target.value)}
+          placeholder="상담 이력 메모..."
+          rows={2}
+          className="min-h-[3rem] flex-1 rounded-lg border border-[var(--color-line)] bg-white px-3 py-2 text-xs text-slate-800 outline-none focus:border-[var(--color-gold)]"
+        />
+        <button
+          onClick={() => onMemo(memoDraft)}
+          disabled={memoDraft === (c.memo ?? "")}
           className="rounded-lg border border-[var(--color-line)] px-3 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)] disabled:opacity-30"
         >
           메모 저장

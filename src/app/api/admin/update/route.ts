@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 /** 관리자 전용 상태 변경 — 허용된 테이블·컬럼만 수정 가능 */
 const ALLOWED: Record<string, string[]> = {
   lead_consultings: ["status", "memo"],
-  consultations: ["status"],
+  consultations: ["status", "memo"],
   premium_articles: [
     "is_main_published",
     "published_at", // 예약발행: 관리자가 고른 미래 시각

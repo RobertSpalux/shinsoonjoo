@@ -8,7 +8,8 @@ import { createAdminClient } from "@/lib/supabase-admin";
  * premium_articles는 Storage의 카드 이미지(card-news/{slug}/*)도 함께 정리하고
  * 정적 캐시를 재검증한다(발행돼 있던 글의 잔존 노출 방지).
  */
-const ALLOWED_TABLES = ["premium_articles", "lead_consultings"] as const;
+// consultations 삭제 = 개인정보 파기 수단 (CLAUDE.md §6 — 보관정책대로 실제 파기 가능해야 함)
+const ALLOWED_TABLES = ["premium_articles", "lead_consultings", "consultations"] as const;
 type AllowedTable = (typeof ALLOWED_TABLES)[number];
 
 export async function POST(request: Request) {

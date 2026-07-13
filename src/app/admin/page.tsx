@@ -25,7 +25,7 @@ export default async function AdminPage() {
       .limit(100),
     supabase
       .from("consultations")
-      .select("id, name, phone, category, message, status, created_at")
+      .select("id, name, phone, category, message, status, memo, created_at")
       .order("created_at", { ascending: false })
       .limit(100),
     supabase
