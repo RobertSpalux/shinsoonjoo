@@ -1,11 +1,12 @@
 import { MOCKUP_CASES, MOCKUP_CONCLUSION } from "@/lib/mockup-analysis";
 
 /**
- * 담보 합산 목업 — 실제 분석 결과 2건(익명) + 잔여 공백 경고 (커밋 N4).
+ * 담보 리모델링 목업 — 실제 분석 결과 2건(익명), 기존 → 신규 2열 (커밋 O4).
+ * ⭐ 리모델링은 진단이 아니라 처방 — 화살표 오른쪽(신규값)이 본체이자 시선의 종착지.
  * ⭐ 사례 2건 병렬: 보험료가 준 사례와 는 사례를 나란히 — "결론이 미리 정해져 있지 않다"의 증명.
  * ⚠️ 손익 색상(빨강/초록) 금지 — 증가가 나쁜 결과처럼 보이면 이 설계가 무너진다. 둘 다 동일 톤.
- * ⚠️ 표 대신 행 스택 — 셀 줄바꿈 깨짐(판/단, 만/원) 원천 차단. 합계는 nowrap.
- * ⚠️ 숫자 색은 --color-text-strong/--color-text-body만. 골드는 헤어라인 전용.
+ * ⚠️ 표 대신 행 스택 — 셀 줄바꿈 깨짐 원천 차단. 금액 값은 nowrap.
+ * ⚠️ 숫자 색은 --color-text-strong/--color-text-body/--color-text-muted만. 골드는 헤어라인 전용.
  * 배경은 크림(--color-ink) 위에 놓는다 — 딥그린 밴드 사이의 대비 구간(DESIGN-SPEC).
  */
 
@@ -73,27 +74,33 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
               {c.headline}
             </p>
 
-            {/* 담보 행 스택 — 합계 좌측 골드 헤어라인 세로선 = "여기가 결론" */}
+            {/* 담보 행 스택 — [담보명] … [기존 → ⭐신규]. 신규값이 가장 강하다(여기가 결론) */}
             <div className="mt-4 border-t border-[var(--color-line)]">
               {c.rows.map((r) => (
-                <div
-                  key={r.name}
-                  className="flex items-stretch justify-between gap-6 border-b border-[var(--color-line)] py-3 last:border-b-0"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-[var(--color-text-body)]">{r.name}</p>
-                    <p className="mt-0.5 text-[11px] text-[var(--color-text-muted)]">{r.spread}</p>
+                <div key={r.name} className="border-b border-[var(--color-line)] py-3 last:border-b-0">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 text-sm font-medium text-[var(--color-text-body)]">
+                      {r.name}
+                    </p>
+                    <p className="shrink-0 text-right">
+                      <span className="whitespace-nowrap text-xs tabular-nums text-[var(--color-text-muted)]">
+                        {r.before}
+                      </span>
+                      <span aria-hidden className="mx-1.5 text-xs text-[var(--color-text-muted)]">
+                        →
+                      </span>
+                      <span className="whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text-strong)]">
+                        {r.after}
+                      </span>
+                    </p>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span aria-hidden className="w-px self-stretch bg-[var(--color-gold)]" />
-                    <div className="text-right">
-                      <p className="whitespace-nowrap text-sm font-bold tabular-nums text-[var(--color-text-strong)]">
-                        {r.total}
-                      </p>
-                      <p className="mt-0.5 text-[11px] font-semibold text-[var(--color-text-body)]">
-                        {r.verdict}
-                      </p>
-                    </div>
+                  <div className="mt-0.5 flex items-baseline justify-between gap-3">
+                    <p className="min-w-0 text-[11px] text-[var(--color-text-muted)]">
+                      {r.note ?? ""}
+                    </p>
+                    <p className="shrink-0 text-[11px] font-semibold text-[var(--color-text-body)]">
+                      {r.verdict}
+                    </p>
                   </div>
                 </div>
               ))}
@@ -102,7 +109,7 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
         ))}
       </div>
 
-      {/* 결론 — 크림 유지(딥그린 밴드 아님). 절감 프레이밍 금지의 핵심 카피 */}
+      {/* 결론 — 크림 유지(딥그린 밴드 아님). 이 세 줄이 위 표(정리+채움)와 정확히 일치한다 */}
       <div className="mt-8">
         <p className="font-serif text-lg font-semibold leading-snug tracking-[-0.01em] text-[var(--color-text-strong)] md:text-xl">
           {MOCKUP_CONCLUSION.headline}
@@ -113,28 +120,10 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
         <p className="mt-2 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
           {MOCKUP_CONCLUSION.note}
         </p>
-      </div>
-
-      {/* ⭐ 잔여 공백 경고 — 시스템이 자기 제안의 구멍을 먼저 보고한다 */}
-      <div className="mt-8 border-l-[3px] border-[var(--color-gold)] bg-[var(--color-ink-soft)] px-5 py-6 md:px-6">
-        <h4 className="font-serif text-base font-semibold text-[var(--color-text-strong)] md:text-lg">
-          두 사례 모두, 제안으로도 메워지지 않은 곳이 남았습니다
-        </h4>
-        <p className="mt-1 text-sm text-[var(--color-text-body)]">
-          저희는 제안이 못 메운 구멍을 먼저 보고합니다.
+        {/* 잔여 고지 — 한 줄만. 세부는 상담에서 지사장이 직접 (O4) */}
+        <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+          {MOCKUP_CONCLUSION.disclosure}
         </p>
-        <ul className="mt-4 space-y-3">
-          {MOCKUP_CASES.map((c) => (
-            <li key={c.id}>
-              <p className="text-sm font-semibold text-[var(--color-text-strong)]">
-                {c.label} — {c.gaps.length}건
-              </p>
-              <p className="mt-0.5 text-sm leading-relaxed text-[var(--color-text-body)]">
-                {c.gaps.join(" · ")}
-              </p>
-            </li>
-          ))}
-        </ul>
       </div>
 
       {/* 하단 각주 — 가상 사례 명시 2회차 */}
