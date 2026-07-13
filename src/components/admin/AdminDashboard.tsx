@@ -39,6 +39,12 @@ interface CarouselCard {
   body?: string;
   heading?: string; // 구형 호환
 }
+/** 상록수 사실검증 항목 — evergreen 파이프라인이 저장한 jsonb 형태 그대로 */
+interface VerifyClaim {
+  claim?: string;
+  basis?: string;
+  confidence?: string;
+}
 interface Article {
   id: string;
   title: string;
@@ -65,6 +71,10 @@ interface Article {
   view_count: number;
   published_at: string | null;
   created_at: string;
+  content_type: string | null;
+  seed_key: string | null;
+  verify_claims: VerifyClaim[] | null;
+  needs_human_review: boolean | null;
 }
 
 const LEAD_STATUSES = ["new", "연락함", "상담예정", "전환", "보류"];
@@ -149,6 +159,8 @@ export default function AdminDashboard({
   };
 
   // 필터
+  // 뉴스/상록수 분리(M4-1) — 기본은 뉴스(운영 빈도가 높음)
+  const [contentTab, setContentTab] = useState<"news" | "evergreen">("news");
   const [articleFilter, setArticleFilter] = useState<(typeof ARTICLE_FILTERS)[number]>("전체");
   const [undistributedOnly, setUndistributedOnly] = useState(false);
   const [search, setSearch] = useState("");
@@ -171,7 +183,11 @@ export default function AdminDashboard({
   const isUndistributed = (a: Article) =>
     !a.is_naver_published || !a.is_blogspot_published || !a.is_instagram_published;
 
+  const isEvergreen = (a: Article) => a.content_type === "evergreen";
+  const evergreenCount = articles.filter(isEvergreen).length;
+
   const filteredArticles = articles.filter((a) => {
+    if (isEvergreen(a) !== (contentTab === "evergreen")) return false;
     if (articleFilter !== "전체" && statusOf(a) !== articleFilter) return false;
     if (undistributedOnly && !isUndistributed(a)) return false;
     if (search.trim() && !a.title.toLowerCase().includes(search.trim().toLowerCase())) return false;
@@ -249,6 +265,17 @@ export default function AdminDashboard({
       setZipping("");
     }
   };
+
+  /**
+   * 상록수 발행 게이트(M4-1) — 검증 필요 기사는 사람 확인을 거쳐야 발행.
+   * 발행 = 사람 검수 완료의 기록이므로 확인 후 needs_human_review를 함께 해제한다.
+   * ([초안으로] 회수 시에는 되돌리지 않는다 — 이미 검수된 사실은 유지)
+   */
+  const passReviewGate = (a: Article): boolean =>
+    a.needs_human_review !== true ||
+    window.confirm(
+      `검증 항목 ${a.verify_claims?.length ?? 0}건을 모두 확인했습니까? 발행 시 검증 필요 플래그가 해제됩니다.`
+    );
 
   const removeArticle = async (a: Article) => {
     if (
@@ -342,6 +369,15 @@ export default function AdminDashboard({
         {tab === "articles" && (
           <>
             <div className="mb-4 flex flex-wrap items-center gap-2">
+              {([
+                ["news", `뉴스 (${articles.length - evergreenCount})`],
+                ["evergreen", `상록수 (${evergreenCount})`],
+              ] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setContentTab(key)} className={chipBtn(contentTab === key)}>
+                  {label}
+                </button>
+              ))}
+              <span className="mx-1 h-4 w-px bg-[var(--color-line)]" aria-hidden />
               {ARTICLE_FILTERS.map((f) => (
                 <button key={f} onClick={() => setArticleFilter(f)} className={chipBtn(articleFilter === f)}>
                   {f}
@@ -389,6 +425,21 @@ export default function AdminDashboard({
                               ⚠️ 카드 검증 {warnings.length}건
                             </span>
                           )}
+                          {isEvergreen(a) && a.seed_key && (
+                            <span className="rounded border border-[var(--color-line)] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
+                              {a.seed_key}
+                            </span>
+                          )}
+                          {isEvergreen(a) && a.needs_human_review === true && (
+                            <span className="rounded-full border border-red-500 bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                              🔴 검증 필요
+                            </span>
+                          )}
+                          {isEvergreen(a) && (a.verify_claims?.length ?? 0) > 0 && (
+                            <span className="text-[10px] font-semibold text-slate-500">
+                              검증 항목 {a.verify_claims?.length}건
+                            </span>
+                          )}
                         </div>
                         <p className="mt-1 text-xs text-slate-500">
                           {a.category} · 조회 {a.view_count} · {fmtDate(a.created_at)}
@@ -397,13 +448,17 @@ export default function AdminDashboard({
                       <PublishControls
                         article={a}
                         onPublish={() => {
+                          if (!passReviewGate(a)) return;
+                          const clearReview = a.needs_human_review === true ? { needs_human_review: false } : {};
                           const published_at = new Date().toISOString();
-                          setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at } : x)));
-                          updateRow("premium_articles", a.id, { is_main_published: true });
+                          setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at, ...clearReview } : x)));
+                          updateRow("premium_articles", a.id, { is_main_published: true, ...clearReview });
                         }}
                         onSchedule={(iso) => {
-                          setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at: iso } : x)));
-                          updateRow("premium_articles", a.id, { is_main_published: true, published_at: iso });
+                          if (!passReviewGate(a)) return;
+                          const clearReview = a.needs_human_review === true ? { needs_human_review: false } : {};
+                          setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at: iso, ...clearReview } : x)));
+                          updateRow("premium_articles", a.id, { is_main_published: true, published_at: iso, ...clearReview });
                         }}
                         onDraft={() => {
                           setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: false } : x)));
@@ -669,6 +724,40 @@ export default function AdminDashboard({
               </button>
             </div>
             <div className="overflow-y-auto px-6 py-5">
+              {/* 상록수 사실검증 체크리스트(M4-1) — 체크는 확인용 로컬 상태이며 저장하지 않는다 */}
+              {previewArticle.content_type === "evergreen" &&
+                (previewArticle.verify_claims?.length ?? 0) > 0 && (
+                  <details
+                    className="mb-4 rounded-lg border border-red-200 bg-red-50/70"
+                    open={previewArticle.needs_human_review === true}
+                  >
+                    <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-red-800">
+                      발행 전 사실검증 체크리스트 ({previewArticle.verify_claims?.length}건)
+                      {previewArticle.needs_human_review === true && (
+                        <span className="ml-2 rounded-full border border-red-500 bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                          🔴 검증 필요
+                        </span>
+                      )}
+                    </summary>
+                    <ol className="space-y-3 px-4 pb-4">
+                      {(previewArticle.verify_claims ?? []).map((c, i) => (
+                        <li key={i} className="flex items-start gap-2.5">
+                          <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-forest)]" />
+                          <div className="text-sm leading-relaxed text-slate-800">
+                            <span className="font-bold tabular-nums text-slate-500">{i + 1}.</span> {c.claim ?? "-"}
+                            {(c.basis || c.confidence) && (
+                              <p className="mt-0.5 text-xs text-slate-500">
+                                {c.basis && <>근거: {c.basis}</>}
+                                {c.basis && c.confidence && " · "}
+                                {c.confidence && <>확신도 {c.confidence}</>}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </details>
+                )}
               {previewArticle.summary && (
                 <div className="mb-4 rounded-lg bg-slate-50 p-4">
                   <p className="text-[11px] font-bold text-slate-400">SUMMARY</p>

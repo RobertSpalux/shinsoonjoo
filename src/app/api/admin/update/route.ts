@@ -13,6 +13,7 @@ const ALLOWED: Record<string, string[]> = {
     "is_naver_published",
     "is_blogspot_published",
     "is_instagram_published",
+    "needs_human_review", // 상록수 발행 게이트(M4-1): 발행 = 사람 검수 완료의 기록
   ],
   // 지식iN 어시스트(커밋 P2) — 상태 전환 + 게시 시각. 게시 자체는 100% 수동.
   kin_answers: ["status", "posted_at", "answer_draft"],
