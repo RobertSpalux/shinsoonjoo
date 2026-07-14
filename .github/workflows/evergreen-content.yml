@@ -7,7 +7,7 @@ name: Weekly Evergreen Content
 on:
   schedule:
     - cron: "0 22 * * 1,4" # UTC 월·목 22:00 = KST 화·금 07:00
-  workflow_dispatch: # 수동 실행 (intent 선택 가능)
+  workflow_dispatch: # 수동 실행 (intent 선택 / 특정 시드 지정)
     inputs:
       intent:
         description: "시드 의도 (auto = 요일 자동: 화=유입, 금=전환)"
@@ -17,6 +17,11 @@ on:
           - 유입
           - 전환
         default: auto
+      seed_key:
+        description: "특정 시드 키로 1편 생성 (비우면 자동 선택 — 허브 우선 → intent 일치 순)"
+        type: string
+        required: false
+        default: ""
 
 jobs:
   evergreen:
@@ -46,6 +51,10 @@ jobs:
           INTENT="${{ inputs.intent }}"
           if [ -n "$INTENT" ] && [ "$INTENT" != "auto" ]; then
             ARGS="--intent=$INTENT"
+          fi
+          SEED="${{ inputs.seed_key }}"
+          if [ -n "$SEED" ]; then
+            ARGS="$ARGS --seed=$SEED"
           fi
           node scripts/generate-evergreen.mjs $ARGS
 

@@ -33,6 +33,14 @@ const supabase = createClient(NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KE
 const UA = "Mozilla/5.0 (compatible; GoodFinancePipeline/1.0)";
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * --seed= 인자 — 특정 시드 1개를 지정해 생성한다(수동 실행 전용).
+ * 미지정 시 종전대로 요일·intent 기반 자동 선택(허브 우선 → intent 일치 시드 순).
+ */
+function resolveSeedKey() {
+  return process.argv.find((a) => a.startsWith("--seed="))?.split("=")[1]?.trim() || null;
+}
+
 /** --intent= 인자 우선, 없으면 KST 요일 자동 (화=유입, 금=전환, 그 외 수동 실행은 유입) */
 function resolveIntent() {
   const arg = process.argv.find((a) => a.startsWith("--intent="))?.split("=")[1];
@@ -393,7 +401,8 @@ const todayLabel = () =>
 
 async function main() {
   const intent = resolveIntent();
-  console.log(`[상록수] intent=${intent}`);
+  const seedKey = resolveSeedKey();
+  console.log(`[상록수] intent=${intent}${seedKey ? ` · seed=${seedKey}(수동 지정)` : ""}`);
 
   // 허브글 slug — 시드글 내부링크 대상(M4-2). 미발행/삭제면 삽입만 생략(생성은 계속).
   const { data: hubRow, error: hubErr } = await supabase
@@ -419,12 +428,34 @@ async function main() {
   const done = new Set((doneRows ?? []).map((r) => r.seed_key));
 
   const remaining = EVERGREEN_SEEDS.filter((s) => !done.has(s.key));
-  const hub = remaining.find((s) => s.isHub);
-  const candidates = [
-    ...(hub ? [hub] : []),
-    ...remaining.filter((s) => !s.isHub && s.intent === intent),
-  ];
-  console.log(`[시드] 전체 ${EVERGREEN_SEEDS.length} · 생성됨 ${done.size} · 오늘 후보 ${candidates.length}`);
+
+  // --seed 지정 시 그 시드 하나만 — 허브 우선·intent 필터를 모두 건너뛴다(수동 실행의 의도가 우선)
+  let candidates;
+  if (seedKey) {
+    const target = EVERGREEN_SEEDS.find((s) => s.key === seedKey);
+    if (!target) {
+      const msg = `❌ 상록수 파이프라인 — 알 수 없는 시드 키 '${seedKey}' (시드뱅크에 없음)`;
+      console.error(msg);
+      await sendTelegramMessage(msg);
+      process.exitCode = 1;
+      return;
+    }
+    if (done.has(seedKey)) {
+      const msg = `⚠️ 상록수 파이프라인 — 시드 '${seedKey}'는 이미 생성됨(seed_key 중복). 생성 0건`;
+      console.warn(msg);
+      await sendTelegramMessage(msg);
+      return;
+    }
+    candidates = [target];
+    console.log(`[시드] --seed 지정 — ${target.key} (${target.intent}) 단독 실행`);
+  } else {
+    const hub = remaining.find((s) => s.isHub);
+    candidates = [
+      ...(hub ? [hub] : []),
+      ...remaining.filter((s) => !s.isHub && s.intent === intent),
+    ];
+    console.log(`[시드] 전체 ${EVERGREEN_SEEDS.length} · 생성됨 ${done.size} · 오늘 후보 ${candidates.length}`);
+  }
 
   if (!candidates.length) {
     const others = remaining.length;
