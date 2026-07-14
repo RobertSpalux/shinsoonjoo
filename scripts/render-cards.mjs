@@ -505,17 +505,18 @@ function naverDiagramHtml(c) {
   return null;
 }
 
-/** 3) CTA 배너 800×250 — 관계 장치: 카톡 채널 추가 (CONTENT-STRATEGY §10, 커밋 P3-3).
- * 진단 CTA는 변환기(toNaverText)가 말미 텍스트 URL로 붙인다 — 배너는 채널 추가 하나에 집중. */
+/** 3) CTA 배너 800×250 — 진단 하나로 단일화.
+ * ⚠️ 카톡 채널 추가 배너는 되돌림(2026-07-14) — 채널에서 아직 아무 발송도 하지 않는다.
+ * 없는 서비스("주 1회 새 글 소식")를 약속하게 되므로, 실제 발송을 시작하기 전까지 쓰지 않는다. */
 function naverCtaHtml() {
   return naverDoc(800, 250, `background:${GREEN}; color:${CREAM}; display:flex; align-items:center;`, `
     <div style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:0 56px;">
       <div>
-        <p style="font-size:17px; font-weight:800; letter-spacing:0.1em; color:${GOLD};">주 1회 · 부담 없이</p>
-        <p style="margin-top:10px; font-size:36px; font-weight:800; color:${CREAM}; letter-spacing:-0.02em;">새 글·보험 점검 소식,<br/>카카오톡 채널에서</p>
+        <p style="font-size:17px; font-weight:800; letter-spacing:0.1em; color:${GOLD};">비대면 · 전국 · 무료</p>
+        <p style="margin-top:10px; font-size:36px; font-weight:800; color:${CREAM}; letter-spacing:-0.02em;">내 보험, 새는 곳 없는지<br/>무료 리모델링 진단 받기</p>
       </div>
       <div style="background:${GOLD}; color:${CHARCOAL}; font-size:22px; font-weight:800; padding:20px 30px;
-        border-radius:14px; text-align:center; line-height:1.45;">'${SITE_NAME}'<br/>채널 추가 →</div>
+        border-radius:14px; text-align:center; line-height:1.45;">goodfinance.kr<br/>→</div>
     </div>`);
 }
 
@@ -622,7 +623,9 @@ async function main() {
     for (let i = 0; i < specs.length; i++) {
       const spec = specs[i];
       await page.setViewport({ width: spec.w, height: spec.h, deviceScaleFactor: 2 });
-      const fontText = `${article.title}${collectText(cards)}${YEARS}${SITE_NAME}보험리모델링인사이트신순주지사장GA명장비대면전국무료진단핵심정리내새는곳없는지받기주1회부담없이글점검소식카카오톡채널추가에서'★✓→0123456789|`;
+      // 폰트 서브셋 로드 텍스트 — 배너·라벨의 고정 문구 글리프를 모두 포함해야 폴백 폰트로 새지 않는다
+      // (카톡 채널 배너 문구는 제거했고, 진단 배너의 goodfinance.kr 라틴 글리프를 추가함 — 2026-07-14)
+      const fontText = `${article.title}${collectText(cards)}${YEARS}${SITE_NAME}보험리모델링인사이트신순주지사장GA명장비대면전국무료진단핵심정리내새는곳없는지받기goodfinance.kr'★✓→0123456789|`;
       await page.setContent(spec.html, { waitUntil: "load", timeout: 60000 });
       await page.evaluate(async (text) => {
         const weights = ["500", "600", "700", "800"];

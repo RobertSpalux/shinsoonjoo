@@ -88,10 +88,9 @@ export function toNaverText(
     text += `\n\n무료 보험 리모델링 진단 👉 ${diagnosisUrl}`;
   }
 
-  // 관계 장치 — 카톡 채널 (CONTENT-STRATEGY §10, 커밋 P3-3). 진단 URL 바로 다음 줄에 1줄.
-  if (!text.includes(BRAND.social.kakao)) {
-    text += `\n🔔 새 글 알림: ${BRAND.social.kakao}`;
-  }
+  // ⚠️ 카톡 '새 글 알림' 줄은 제거함(2026-07-14) — 채널에서 아직 아무 발송도 하지 않는다.
+  // 없는 서비스를 약속하는 CTA가 되므로, 실제로 주 1회 발송을 시작하기 전까지 넣지 않는다.
+  // CTA는 진단 하나로 단일화(주 CTA 하나 원칙 — CLAUDE.md 4절).
 
   const hashtags = toHashtags(opts?.tags);
   if (hashtags) {

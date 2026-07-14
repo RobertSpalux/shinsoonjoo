@@ -1,15 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { BRAND } from "@/lib/brand";
 import { gaEvent } from "@/lib/ga";
 
 /**
  * 글 끝 CTA 딥그린 밴드 (커밋 N5) — 모든 기사에 자동 삽입 (뉴스·상록수 공통).
  * 주 목적지는 /diagnosis — 진단 페이지의 익명 사례 2건 + 잔여 공백 경고를 보고 오는 리드가
- * 더 좋은 리드다. 카톡은 보조 텍스트 링크(채움 버튼 2개 나란히 금지 — CLAUDE.md 4절).
- * 보조 링크는 상담이 아니라 '채널 추가'(관계 장치 — CONTENT-STRATEGY §10, 커밋 P3-2):
- * 진단까지 안 간 독자를 카톡 채널 친구로 저장해 주 1회 재노출로 되돌아오게 한다.
+ * 더 좋은 리드다.
+ * ⚠️ 카톡 채널 추가 보조 링크는 제거함(2026-07-14) — "새 글과 보험 점검 소식은 카카오톡 채널에서"라고
+ * 약속했지만 채널에서 아직 아무 발송도 하지 않는다. 없는 서비스를 약속하는 CTA는 신뢰를 깎는다.
+ * 실제로 주 1회 발송을 시작하면 그때 되살린다. 그때까지 CTA는 진단 하나에 집중(주 CTA 하나 원칙).
  */
 export default function ArticleCtaEnd({ slug }: { slug: string }) {
   return (
@@ -29,17 +29,6 @@ export default function ArticleCtaEnd({ slug }: { slug: string }) {
       >
         3분 진단 받아보기
       </Link>
-      <p className="mt-4">
-        <a
-          href={BRAND.social.kakao}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => gaEvent("kakao_channel_add_click", { article_slug: slug, location: "article_end" })}
-          className="text-xs text-[var(--color-ink)]/75 underline decoration-[var(--color-gold)]/60 underline-offset-4 transition-colors hover:text-[var(--color-ink)] hover:decoration-[var(--color-gold)]"
-        >
-          새 글과 보험 점검 소식은 카카오톡 채널에서 — 채널 추가 →
-        </a>
-      </p>
     </aside>
   );
 }
