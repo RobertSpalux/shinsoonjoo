@@ -24,6 +24,14 @@ const {
 const DAILY_LIMIT = Number(process.env.DAILY_ARTICLE_LIMIT ?? 2);
 
 /**
+ * 모델 입력용 원문 캡 — 종전 동작 그대로 유지한다(관련도 점수·생성 결과 불변).
+ * ⚠️ 검수용 원문 전문(item.contentFull)은 이 캡을 적용하지 않는다 — 잘린 원문으로는
+ * /admin 🔴 체크리스트의 "원문과 대조"가 성립하지 않는다(실측: 민원사례 원문 5,441자,
+ * 저장된 excerpt는 2,000자뿐이라 63%가 유실됐다).
+ */
+const MODEL_SOURCE_CAP = 4000;
+
+/**
  * 원천 소스 — 실패해도 다음 소스로 넘어감. 소스 규칙은 CONTENT-STRATEGY §9(공공 1차 소스만 재가공,
  * 민간 보험 매체 금지). 금감원·파인 게시판은 RSS가 없어 목록 HTML 파싱(구 RSS는 죽어 HTML 에러 페이지 반환).
  * boost: 선정 순서에서 보험 특화 소스를 상위로 (게이트 점수에는 불포함 — RELEVANCE_MIN 판정은 원점수).
@@ -196,7 +204,8 @@ async function fetchFscBody(link) {
     const i = scoped.indexOf(marker);
     if (i > 0 && i < end) end = i;
   }
-  const body = scoped.slice(0, end).trim().slice(0, 4000);
+  // 무절단 반환 — 모델 입력 캡(MODEL_SOURCE_CAP)은 hydrateBoardItems에서 한 번만 적용한다
+  const body = scoped.slice(0, end).trim();
 
   if (body.length < 300) {
     const pdf = await extractPdfAttachment(html, link);
@@ -242,7 +251,7 @@ async function fetchBoardBody(link) {
       .filter((t) => t.length >= 20);
     text = [stripped, ...altTexts].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
   }
-  text = text.slice(0, 4000);
+  // 무절단 반환 — 모델 입력 캡은 hydrateBoardItems에서 적용(스텁 판정 하한은 절단과 무관)
 
   // 스텁 판정: 사실상 "첨부파일 보세요"뿐인 본문 → 3차 폴백(PDF 첨부)으로 마지막 시도
   if (text.length < 80 || (/첨부\s*파일.*(참고|참조)/.test(text) && text.length < 200)) {
@@ -299,7 +308,7 @@ async function extractPdfAttachment(detailHtml, pageUrl) {
       timer = setTimeout(() => rej(new Error("PDF 파싱 10초 초과")), 10000);
     });
     const parsed = await Promise.race([parser.getText(), timeout]);
-    const text = String(parsed.text ?? "").replace(/\s+/g, " ").trim().slice(0, 4000);
+    const text = String(parsed.text ?? "").replace(/\s+/g, " ").trim(); // 무절단(캡은 hydrate에서)
     if (text.length < 300) return ""; // 팩트 부족 — 본문없음 유지
     console.log(`  [PDF 폴백 ✓] ${anchors[0].label.slice(0, 40)} (${text.length}자)`);
     return text;
@@ -360,7 +369,12 @@ async function hydrateBoardItems(items) {
     try {
       const body = item.fscDetail ? await fetchFscBody(item.link) : await fetchBoardBody(item.link);
       if (body) {
-        item.content = body;
+        // 원문 전문은 무절단 보존(검수 대조용), 모델·스코어링 입력은 종전 캡 그대로 → 생성 결과 불변
+        item.contentFull = body;
+        item.content = body.slice(0, MODEL_SOURCE_CAP);
+        if (body.length > MODEL_SOURCE_CAP) {
+          console.log(`  [원문 ${body.length}자 보존 — 모델 입력은 ${MODEL_SOURCE_CAP}자]`);
+        }
       } else {
         item.noBody = true;
         console.warn(`[본문 없음 → 스킵] ${item.title} (첨부/이미지형)`);
@@ -528,6 +542,8 @@ async function generateArticle(item) {
       source_url: item.link,
       source_name: item.source,
       content: `${item.title}\n\n${item.content}`,
+      // 검수 대조용 원문 전문 — 모델 입력(content)과 별개로 무절단 저장된다(raw_source_fulltext)
+      source_fulltext: item.contentFull ?? item.content,
       // 발행 통제: 자동 수집·생성분은 초안으로만 적재. 발행은 /admin에서 사람 검수 후 1클릭.
       auto_publish: false,
     }),

@@ -56,6 +56,9 @@ interface Article {
   summary: string | null;
   tags: string[] | null;
   raw_source_url: string | null;
+  raw_source_name: string | null;
+  /** 수집 시점 원문 전문(무절단) — 검수 대조용. null이면 원문 미보존(대조 불가) */
+  raw_source_fulltext: string | null;
   key_points: string[] | null;
   remodeling_bridge: string | null;
   main_website_markdown: string | null;
@@ -170,6 +173,8 @@ export default function AdminDashboard({
 
   // 모달
   const [previewArticle, setPreviewArticle] = useState<Article | null>(null);
+  // 원문 대조 뷰 — 검수자가 체크리스트를 보면서 원문 전문을 나란히 읽을 수 있게 한다
+  const [showSource, setShowSource] = useState(false);
   const [lightbox, setLightbox] = useState<{ images: string[]; slug: string; index: number } | null>(null);
   const [zipping, setZipping] = useState("");
 
@@ -204,11 +209,15 @@ export default function AdminDashboard({
   ).length;
   const newLeadCount = leads.filter((l) => l.status === "new").length;
 
-  // 미리보기 모달 ESC 닫기
+  // 미리보기 모달 ESC 닫기 — 다른 기사를 열 때 원문 패널 상태가 새어나가지 않게 함께 닫는다
+  const closePreview = () => {
+    setPreviewArticle(null);
+    setShowSource(false);
+  };
   useEffect(() => {
     if (!previewArticle) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPreviewArticle(null);
+      if (e.key === "Escape") closePreview();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -728,10 +737,12 @@ export default function AdminDashboard({
       {previewArticle && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={() => setPreviewArticle(null)}
+          onClick={closePreview}
         >
           <div
-            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            className={`flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl bg-white shadow-2xl ${
+              showSource ? "max-w-6xl" : "max-w-3xl"
+            }`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 border-b border-[var(--color-line)] px-6 py-4">
@@ -739,11 +750,23 @@ export default function AdminDashboard({
                 <p className="text-[11px] font-semibold text-slate-400">{previewArticle.category} · 발행 전 검수</p>
                 <h2 className="mt-0.5 font-bold text-slate-900">{previewArticle.title}</h2>
               </div>
-              <button onClick={() => setPreviewArticle(null)} className="rounded-full border border-[var(--color-line)] px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">
-                닫기 (ESC)
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                {/* 원문 대조 — 원문이 보존된 기사에서만 활성. 잘린 원문으로는 대조가 성립하지 않는다 */}
+                <button
+                  onClick={() => setShowSource((v) => !v)}
+                  disabled={!previewArticle.raw_source_fulltext}
+                  title={previewArticle.raw_source_fulltext ? "원문 전문을 나란히 열어 대조합니다" : "원문 미보존 — 대조 불가"}
+                  className="rounded-full border border-[var(--color-line)] px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {showSource ? "원문 닫기" : "원문 보기"}
+                </button>
+                <button onClick={closePreview} className="rounded-full border border-[var(--color-line)] px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">
+                  닫기 (ESC)
+                </button>
+              </div>
             </div>
-            <div className="overflow-y-auto px-6 py-5">
+            <div className="flex min-h-0 flex-1">
+            <div className="flex-1 overflow-y-auto px-6 py-5">
               {/* 사실검증 체크리스트(M4-1) — 체크는 확인용 로컬 상태이며 저장하지 않는다.
                   뉴스도 고위험 주제(분쟁·판례·세법·의료) 감지 시 항목이 실리므로 content_type을 가리지 않는다 */}
               {(previewArticle.verify_claims?.length ?? 0) > 0 && (
@@ -759,6 +782,20 @@ export default function AdminDashboard({
                       </span>
                     )}
                   </summary>
+                  {/* 원문이 없으면 체크리스트를 채울 근거 자체가 없다 — 체크 전에 그 사실을 먼저 알린다 */}
+                  {previewArticle.raw_source_fulltext ? (
+                    <button
+                      onClick={() => setShowSource(true)}
+                      className="mx-4 mb-3 block text-xs font-semibold text-red-700 underline underline-offset-2 hover:text-red-900"
+                    >
+                      원문 전문 열어서 대조하기 ({previewArticle.raw_source_fulltext.length.toLocaleString()}자)
+                    </button>
+                  ) : (
+                    <p className="mx-4 mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                      ⚠️ 원문 미보존 — 대조 불가. 이 기사는 원문 전문이 저장되기 전에 생성됐습니다.
+                      {previewArticle.raw_source_url && " 아래 원문 URL로 직접 확인하세요."}
+                    </p>
+                  )}
                   <ol className="space-y-3 px-4 pb-4">
                     {(previewArticle.verify_claims ?? []).map((c, i) => (
                       <li key={i} className="flex items-start gap-2.5">
@@ -803,6 +840,33 @@ export default function AdminDashboard({
                   {previewArticle.main_website_markdown ?? "_본문 없음_"}
                 </ReactMarkdown>
               </article>
+            </div>
+            {/* 우측 원문 패널 — 좌(생성 원고) / 우(수집 원문 전문) 대조. 독립 스크롤 */}
+            {showSource && previewArticle.raw_source_fulltext && (
+              <aside className="flex w-1/2 shrink-0 flex-col border-l border-[var(--color-line)] bg-slate-50">
+                <div className="flex items-baseline justify-between gap-2 border-b border-[var(--color-line)] px-5 py-3">
+                  <p className="text-[11px] font-bold text-slate-500">
+                    수집 원문 전문 · {previewArticle.raw_source_fulltext.length.toLocaleString()}자
+                    {previewArticle.raw_source_name && ` · ${previewArticle.raw_source_name}`}
+                  </p>
+                  {previewArticle.raw_source_url && (
+                    <a
+                      href={previewArticle.raw_source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="shrink-0 text-[11px] font-semibold text-slate-500 underline underline-offset-2 hover:text-slate-800"
+                    >
+                      원문 URL ↗
+                    </a>
+                  )}
+                </div>
+                <div className="overflow-y-auto px-5 py-4">
+                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-slate-700">
+                    {previewArticle.raw_source_fulltext}
+                  </p>
+                </div>
+              </aside>
+            )}
             </div>
           </div>
           {/* 모달 내부 마크다운 최소 스타일 (관리자 전용 스코프) */}

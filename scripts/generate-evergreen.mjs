@@ -304,7 +304,11 @@ export function injectHubLink(markdown, hubSlug) {
   return `${md.slice(0, firstH2.index)}${block}\n\n${md.slice(firstH2.index)}`;
 }
 
-async function generateEvergreen(seed, groundingText) {
+/**
+ * @param content 모델 입력 = 그라운딩 원문 + 일화뱅크 주입분
+ * @param sourceFulltext 검수 대조용 원문 전문 = 일화 주입분을 뺀 순수 그라운딩 원문
+ */
+async function generateEvergreen(seed, content, sourceFulltext) {
   const res = await fetch(`${SITE_URL}/api/factory/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-factory-secret": FACTORY_SECRET },
@@ -322,7 +326,9 @@ async function generateEvergreen(seed, groundingText) {
       },
       source_url: seed.sources[0],
       source_name: "금감원·파인 공공 1차 소스",
-      content: groundingText,
+      content,
+      // 검수 대조용 원문 전문 — 일화뱅크 주입분을 뺀 순수 그라운딩 원문만(원문 대조의 기준이어야 함)
+      source_fulltext: sourceFulltext ?? content,
       // 발행 통제: 초안으로만 적재(커밋 D 발행 게이트). 발행은 /admin에서 사람 검수 후 1클릭.
       auto_publish: false,
     }),
@@ -456,7 +462,7 @@ async function main() {
       console.log(
         `[생성] groundingText ${groundingText.length}자 + 일화 ${anecdote.count}건으로 팩토리 호출`
       );
-      gen = await generateEvergreen(seed, contentWithAnecdotes);
+      gen = await generateEvergreen(seed, contentWithAnecdotes, groundingText);
     } catch (err) {
       if (err.status === 409) {
         // 시드 중복(경합 등) — 소모된 것으로 보고 다음 시드로

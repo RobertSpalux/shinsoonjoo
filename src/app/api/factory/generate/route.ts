@@ -204,6 +204,8 @@ export async function POST(request: Request) {
     source_url?: string;
     source_name?: string;
     content?: string;
+    /** 검수 대조용 원문 전문(무절단) — 미지정 시 content로 폴백 */
+    source_fulltext?: string;
     auto_publish?: boolean;
     /** 커밋 M2 — 미지정 = 'news' = 현행 그대로 */
     mode?: "news" | "evergreen";
@@ -216,7 +218,17 @@ export async function POST(request: Request) {
   }
 
   // 발행 통제: 생성 = 초안(auto_publish 기본 false). 발행은 /admin에서 사람이 1클릭.
-  const { title, category, source_url, source_name, content, auto_publish = false, mode = "news", seed } = body;
+  const {
+    title,
+    category,
+    source_url,
+    source_name,
+    content,
+    source_fulltext,
+    auto_publish = false,
+    mode = "news",
+    seed,
+  } = body;
   if (mode !== "news" && mode !== "evergreen") {
     return NextResponse.json({ error: "mode는 'news' | 'evergreen'만 허용됩니다." }, { status: 400 });
   }
@@ -490,7 +502,10 @@ export async function POST(request: Request) {
         instagram_caption: article.instagram_caption ?? null,
         raw_source_url: source_url ?? null,
         raw_source_name: source_name ?? null,
+        // excerpt = 목록 미리보기용(2,000자). 검수 대조는 아래 fulltext로 한다 — 잘린 원문으로는
+        // 🔴 체크리스트의 "원문과 대조"가 성립하지 않는다.
         raw_source_excerpt: content.trim().slice(0, 2000),
+        raw_source_fulltext: (source_fulltext?.trim() || content.trim()) || null,
         main_website_markdown: article.main_website_markdown,
         naver_blog_content: article.naver_blog_content,
         blogspot_content: article.blogspot_content,
