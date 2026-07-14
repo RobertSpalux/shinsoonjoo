@@ -24,12 +24,21 @@ const {
 const DAILY_LIMIT = Number(process.env.DAILY_ARTICLE_LIMIT ?? 2);
 
 /**
- * 모델 입력용 원문 캡 — 종전 동작 그대로 유지한다(관련도 점수·생성 결과 불변).
- * ⚠️ 검수용 원문 전문(item.contentFull)은 이 캡을 적용하지 않는다 — 잘린 원문으로는
- * /admin 🔴 체크리스트의 "원문과 대조"가 성립하지 않는다(실측: 민원사례 원문 5,441자,
- * 저장된 excerpt는 2,000자뿐이라 63%가 유실됐다).
+ * 원문 캡 — 용도마다 다르다. 셋을 섞지 말 것.
+ *
+ * 1) item.contentFull — 무캡. 검수용 원문 전문(raw_source_fulltext). 잘린 원문으로는
+ *    /admin 🔴 체크리스트의 "원문과 대조"가 성립하지 않는다.
+ * 2) item.content — MODEL_SOURCE_CAP. 모델 생성 입력.
+ *    ⚠️ 4,000 → 12,000 상향(실측 사고): 파인 민원사례는 한 페이지에 여러 사례가 이어붙어
+ *    있어 4,000자에서 자르면 뒤쪽 사례의 '판단결과'(= 그 사례의 결론)가 통째로 잘린다.
+ *    실제로 초안 4e60ef9c는 제목에 '배상책임보험'을 달고도 그 사례의 판단결과(원문 4,176자
+ *    지점 — 직무수행 중 사고는 면책, 부지급)를 모델이 못 본 채 작성됐다.
+ * 3) 관련도 스코어링 입력 — SCORE_INPUT_CAP. 종전 4,000자 그대로 고정한다.
+ *    ⚠️ 여기를 건드리면 O9 게이트 점수가 통째로 흔들려 통과/컷 분포가 바뀐다(회귀).
+ *    모델 입력 캡을 올려도 스코어링은 영향받지 않아야 하므로 상수를 분리해 둔다.
  */
-const MODEL_SOURCE_CAP = 4000;
+const MODEL_SOURCE_CAP = 12000;
+const SCORE_INPUT_CAP = 4000;
 
 /**
  * 원천 소스 — 실패해도 다음 소스로 넘어감. 소스 규칙은 CONTENT-STRATEGY §9(공공 1차 소스만 재가공,
@@ -369,11 +378,14 @@ async function hydrateBoardItems(items) {
     try {
       const body = item.fscDetail ? await fetchFscBody(item.link) : await fetchBoardBody(item.link);
       if (body) {
-        // 원문 전문은 무절단 보존(검수 대조용), 모델·스코어링 입력은 종전 캡 그대로 → 생성 결과 불변
+        // 원문 전문 = 무절단(검수 대조용) / 모델 입력 = MODEL_SOURCE_CAP
+        // (스코어링 입력은 relevanceScore가 SCORE_INPUT_CAP으로 다시 자른다 — O9 불변)
         item.contentFull = body;
         item.content = body.slice(0, MODEL_SOURCE_CAP);
-        if (body.length > MODEL_SOURCE_CAP) {
-          console.log(`  [원문 ${body.length}자 보존 — 모델 입력은 ${MODEL_SOURCE_CAP}자]`);
+        if (body.length > SCORE_INPUT_CAP) {
+          console.log(
+            `  [원문 ${body.length}자 · 보존 전문 ${body.length}자 · 모델 입력 ${item.content.length}자 · 스코어 입력 ${SCORE_INPUT_CAP}자]`
+          );
         }
       } else {
         item.noBody = true;
@@ -483,7 +495,9 @@ const SUPPLIER_PENALTIES = [
 ];
 
 function relevanceScore(item) {
-  const text = `${item.title} ${item.content}`;
+  // ⚠️ 스코어링 입력은 SCORE_INPUT_CAP(4,000자)로 고정 — 모델 입력 캡(MODEL_SOURCE_CAP)이
+  // 올라가도 게이트 점수는 종전과 바이트 단위로 동일해야 한다(O9 회귀 방지).
+  const text = `${item.title} ${String(item.content ?? "").slice(0, SCORE_INPUT_CAP)}`;
   const title = String(item.title ?? "");
 
   const sum = (tokens, target) => tokens.reduce((acc, [kw, w]) => acc + (target.includes(kw) ? w : 0), 0);
