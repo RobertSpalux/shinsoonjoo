@@ -535,6 +535,15 @@ async function main() {
     if (gen.high_risk_topics?.length) {
       lines.push(`⚖️ 고위험 주제: ${gen.high_risk_topics.join("·")} — 원문 대조 후 발행`);
     }
+    // 💾 캐시 적중 — 0/0이면 캐싱 미작동 신호이므로 숨기지 않는다
+    if (gen.usage) {
+      const w = gen.usage.cache_creation_input_tokens ?? 0;
+      const r = gen.usage.cache_read_input_tokens ?? 0;
+      lines.push(
+        `💾 캐시: 쓰기 ${w.toLocaleString()} · 읽기 ${r.toLocaleString()} 토큰` +
+          (w === 0 && r === 0 ? " ⚠️ 캐싱 미작동" : "")
+      );
+    }
     lines.push(
       full?.needs_human_review
         ? `🔴 사람 검수 필수: ${gen.review_reasons ?? "needs_human_review=true"}`

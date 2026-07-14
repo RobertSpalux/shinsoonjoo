@@ -572,6 +572,7 @@ async function generateArticle(item) {
     needs_human_review: json.needs_human_review === true,
     review_reasons: json.review_reasons ?? null,
     high_risk_topics: json.high_risk_topics ?? null,
+    usage: json.usage ?? null, // 캐시 적중 관측(💾 라인)
   };
 }
 
@@ -597,7 +598,7 @@ async function sendTelegramDoc(filename, text, caption) {
 }
 
 /** 파이프라인 요약 알림 — 매일 아침 이것만 보고 "왜 글이 없는지/소스가 부실한지" 판단 가능해야 함 */
-function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, noBodySkipped, passed, picked, cut, results, failures }) {
+function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, noBodySkipped, passed, picked, cut, results, failures, cacheUsage = [] }) {
   const today = new Date().toLocaleDateString("ko-KR", {
     month: "numeric", day: "numeric", timeZone: "Asia/Seoul",
   });
@@ -635,6 +636,15 @@ function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, no
       );
     });
     lines.push(`발행 대기: ${SITE_URL}/admin 에서 검수 후 [발행]`);
+  }
+  // 💾 캐시 적중 — 0/0이면 캐싱이 안 먹는다는 신호이므로 숨기지 않고 그대로 노출한다
+  if (cacheUsage.length) {
+    const w = cacheUsage.reduce((a, u) => a + (u.cache_creation_input_tokens ?? 0), 0);
+    const r = cacheUsage.reduce((a, u) => a + (u.cache_read_input_tokens ?? 0), 0);
+    lines.push(
+      `💾 캐시: 쓰기 ${w.toLocaleString()} · 읽기 ${r.toLocaleString()} 토큰` +
+        (w === 0 && r === 0 ? " ⚠️ 캐싱 미작동" : "")
+    );
   }
   if (failures.length) {
     lines.push(`❌ 생성 실패 ${failures.length}건:`);
@@ -685,12 +695,14 @@ async function main() {
 
   const results = []; // 생성 성공 (제목·카테고리·카드 장수·검증 경고)
   const failures = []; // 생성 실패 (0건은 에러가 아님 — 실패는 게이트 통과분의 생성 오류만)
+  const cacheUsage = []; // 호출별 usage — 캐시 적중 관측(💾 라인). 0/0이면 캐싱 미작동 신호
 
   for (const item of picked) {
     console.log(`[생성] ${item.title} (관련도 ${item.score})`);
     try {
-      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics } =
+      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics, usage } =
         await generateArticle(item);
+      if (usage) cacheUsage.push(usage);
       console.log(`  → 초안 적재: ${SITE_URL}/news/${article.slug}`);
       if (carousel_warning) console.warn(`  → ⚠️ 카드 검증 경고: ${carousel_warning}`);
       if (needs_human_review) console.warn(`  → 🔴 사람 검수 필수: ${review_reasons ?? "-"}`);
@@ -745,6 +757,7 @@ async function main() {
     cut,
     results,
     failures,
+    cacheUsage,
   });
   console.log(`\n──── 파이프라인 요약 ────\n${summary}`);
   await sendTelegramMessage(summary);

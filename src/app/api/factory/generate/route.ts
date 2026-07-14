@@ -298,12 +298,23 @@ export async function POST(request: Request) {
   // 1회 생성 — 카드 검증 가드의 재생성에서도 동일하게 호출
   const generateOnce = async (): Promise<
     | { error: { status: number; message: string } }
-    | { article: Record<string, unknown>; usage: { input_tokens: number; output_tokens: number } }
+    | {
+        article: Record<string, unknown>;
+        usage: {
+          input_tokens: number;
+          output_tokens: number;
+          cache_creation_input_tokens: number;
+          cache_read_input_tokens: number;
+        };
+      }
   > => {
     const stream = anthropic.messages.stream({
       model: MODEL,
       max_tokens: 32000,
-      system: systemPrompt,
+      // 프롬프트 캐싱 — system을 블록 배열로 전달하고 끝에 브레이크포인트 1개(기본 TTL 5분).
+      // 프롬프트 텍스트는 그대로다(전달 형태만 문자열 → 블록). 뉴스 system은 호출마다 동일하므로
+      // 같은 크론 실행 안의 2번째 기사·재생성 호출부터 캐시 읽기로 붙는다.
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       output_config: {
         format: {
           type: "json_schema",
@@ -330,6 +341,10 @@ export async function POST(request: Request) {
       usage: {
         input_tokens: message.usage.input_tokens,
         output_tokens: message.usage.output_tokens,
+        // 캐시 적중 관측 — 무음 실패 금지. 둘 다 0이면 캐싱이 안 먹고 있다는 신호이므로
+        // 파이프라인 요약(💾 라인)에 0으로 그대로 노출된다.
+        cache_creation_input_tokens: message.usage.cache_creation_input_tokens ?? 0,
+        cache_read_input_tokens: message.usage.cache_read_input_tokens ?? 0,
       },
     };
   };
@@ -368,6 +383,9 @@ export async function POST(request: Request) {
         if (!("error" in retry)) {
           usage.input_tokens += retry.usage.input_tokens;
           usage.output_tokens += retry.usage.output_tokens;
+          // 재생성은 같은 system을 재전송 → 여기서 캐시 읽기가 잡혀야 정상
+          usage.cache_creation_input_tokens += retry.usage.cache_creation_input_tokens;
+          usage.cache_read_input_tokens += retry.usage.cache_read_input_tokens;
           const retryCarousel = validateCarousel(
             (retry.article as { carousel_json?: unknown }).carousel_json
           );

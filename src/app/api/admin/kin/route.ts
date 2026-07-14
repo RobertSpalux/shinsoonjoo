@@ -74,7 +74,10 @@ export async function POST(request: Request) {
     const message = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1500,
-      system: kinAnswerSystemPrompt(linked),
+      // 프롬프트 캐싱 — 블록 배열 + 브레이크포인트 1개(기본 TTL 5분). 프롬프트 텍스트는 그대로.
+      system: [
+        { type: "text", text: kinAnswerSystemPrompt(linked), cache_control: { type: "ephemeral" } },
+      ],
       messages: [
         {
           role: "user",
@@ -115,6 +118,10 @@ export async function POST(request: Request) {
       console.error("kin_answers insert error:", dbError);
       return NextResponse.json({ error: "DB 저장 실패" }, { status: 500 });
     }
+    // 캐시 적중 관측 — 0/0이면 캐싱이 안 먹는 것이므로 로그에 그대로 드러난다
+    console.log(
+      `[지식iN] 캐시 쓰기 ${message.usage.cache_creation_input_tokens ?? 0} · 읽기 ${message.usage.cache_read_input_tokens ?? 0} 토큰`
+    );
     return NextResponse.json({ success: true, answer: inserted });
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {
