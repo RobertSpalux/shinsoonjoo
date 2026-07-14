@@ -320,6 +320,11 @@ async function generateEvergreen(seed, content, sourceFulltext) {
   const res = await fetch(`${SITE_URL}/api/factory/generate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-factory-secret": FACTORY_SECRET },
+    // undici 기본 헤더 타임아웃(300초)이 서버 한도와 같아, 서버가 300초에 죽으며 보내는
+    // 504(FUNCTION_INVOCATION_TIMEOUT)를 받기도 전에 클라이언트가 먼저 끊겼다
+    // (실측: run 29299705372 — UND_ERR_HEADERS_TIMEOUT, 원인 불명 에러로만 보임).
+    // 서버보다 넉넉히 길게 잡아 504 본문을 받아 원인이 로그에 남게 한다.
+    signal: AbortSignal.timeout(840_000),
     body: JSON.stringify({
       mode: "evergreen",
       seed: {
@@ -565,6 +570,15 @@ async function main() {
     // 고위험 주제(분쟁·판례·세법·의료) — 발행 전 원문 대조 필수
     if (gen.high_risk_topics?.length) {
       lines.push(`⚖️ 고위험 주제: ${gen.high_risk_topics.join("·")} — 원문 대조 후 발행`);
+    }
+    // ⏱️ 생성 소요 — 300초(Hobby 함수 한도)에 얼마나 근접했는지, 재생성이 상습적인지 관측
+    if (gen.timing) {
+      const t = gen.timing;
+      lines.push(
+        `⏱️ 생성 ${Math.round((t.total_ms ?? 0) / 1000)}초 (1회차 ${Math.round((t.first_ms ?? 0) / 1000)}초` +
+          (t.retried ? ` + 재생성 1회 ${Math.round((t.retry_ms ?? 0) / 1000)}초` : ", 재생성 없음") +
+          `) · 한도 300초`
+      );
     }
     // 💾 캐시 적중 — 0/0이면 캐싱 미작동 신호이므로 숨기지 않는다
     if (gen.usage) {

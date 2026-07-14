@@ -10,7 +10,14 @@ import {
   type EvergreenSeed,
 } from "@/lib/factory-prompt";
 
-export const maxDuration = 300; // Fluid Compute: 멀티 원고 생성은 수 분 소요 가능
+/**
+ * ⚠️ 300이 이 프로젝트의 상한이다 — 올리지 말 것(2026-07-14 실측).
+ * Vercel 함수 한도: Hobby=300초(고정) / Pro·Enterprise=800초.
+ * 프리뷰 배포로 검증함 — maxDuration=800은 배포 실패, 300은 성공 → 현재 Hobby 플랜.
+ * 상록수 생성이 300초를 넘겨 죽는 문제는 이 값이 아니라 생성 시간 자체로 풀어야 한다
+ * (아래 ⏱️ 계측이 1회차/재생성 소요를 실측해 파이프라인 요약에 싣는다).
+ */
+export const maxDuration = 300;
 
 const MODEL = process.env.FACTORY_CLAUDE_MODEL ?? "claude-sonnet-5";
 
@@ -349,8 +356,16 @@ export async function POST(request: Request) {
     };
   };
 
+  // ⏱️ 소요시간 계측 — 300초 벽(Hobby 상한)에 왜 부딪히는지 추측하지 않고 숫자로 본다.
+  // 재생성이 상습적으로 터지면 프롬프트를 고쳐야 하므로, 재생성 발생 여부·소요를 따로 싣는다.
+  const timing = { first_ms: 0, retry_ms: 0, retried: false, total_ms: 0 };
+  const startedAt = Date.now();
+
   try {
+    const firstStart = Date.now();
     const first = await generateOnce();
+    timing.first_ms = Date.now() - firstStart;
+    console.log(`[⏱️ 1회차 생성] ${(timing.first_ms / 1000).toFixed(1)}초`);
     if ("error" in first) {
       return NextResponse.json({ error: first.error.message }, { status: first.error.status });
     }
@@ -374,12 +389,23 @@ export async function POST(request: Request) {
     let carouselIssues = validateCarousel(article.carousel_json);
     let markdownIssues = validateArticleBody(article);
     let bannedTerms = scanBannedTopics(article); // 금지 소재 하드 게이트 (커밋 O1)
+    console.log(
+      `[⏱️ 1회차 검증] ${
+        carouselIssues.length + markdownIssues.length + bannedTerms.length === 0
+          ? "통과 — 재생성 없음"
+          : `실패 → 재생성 발생: ${[...carouselIssues, ...markdownIssues, ...bannedTerms.map((t) => `금지어:${t}`)].join(" / ")}`
+      }`
+    );
     if (carouselIssues.length + markdownIssues.length + bannedTerms.length > 0) {
       console.warn(
         `생성물 검증 실패 — 1회 재생성: ${[...carouselIssues, ...markdownIssues, ...bannedTerms.map((t) => `금지어:${t}`)].join(" / ")}`
       );
       try {
+        timing.retried = true;
+        const retryStart = Date.now();
         const retry = await generateOnce();
+        timing.retry_ms = Date.now() - retryStart;
+        console.log(`[⏱️ 재생성] ${(timing.retry_ms / 1000).toFixed(1)}초`);
         if (!("error" in retry)) {
           usage.input_tokens += retry.usage.input_tokens;
           usage.output_tokens += retry.usage.output_tokens;
@@ -565,6 +591,8 @@ export async function POST(request: Request) {
       // 고위험 주제 감지 토큰 — 텔레그램 ⚖️ 라인 관측용
       high_risk_topics: riskTokens.length > 0 ? riskTokens : undefined,
       usage, // 재생성 포함 합산
+      // ⏱️ 소요시간 — 300초 벽에 얼마나 근접했는지, 재생성이 상습적인지 관측용
+      timing: { ...timing, total_ms: Date.now() - startedAt },
     });
   } catch (err) {
     if (err instanceof Anthropic.RateLimitError) {

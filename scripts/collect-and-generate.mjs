@@ -550,6 +550,9 @@ async function generateArticle(item) {
       "Content-Type": "application/json",
       "x-factory-secret": FACTORY_SECRET,
     },
+    // 서버 한도(300초)보다 길게 — undici 기본값(300초)이면 서버의 504를 받기 전에 끊겨
+    // 원인 불명 UND_ERR_HEADERS_TIMEOUT으로만 남는다(상록수 run 29299705372 실측)
+    signal: AbortSignal.timeout(840_000),
     body: JSON.stringify({
       title: item.title,
       category: item.category,
@@ -573,6 +576,7 @@ async function generateArticle(item) {
     review_reasons: json.review_reasons ?? null,
     high_risk_topics: json.high_risk_topics ?? null,
     usage: json.usage ?? null, // 캐시 적중 관측(💾 라인)
+    timing: json.timing ?? null, // 소요시간 관측(⏱️ 라인)
   };
 }
 
@@ -632,7 +636,11 @@ function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, no
           (r.warning ? `\n   ⚠️ 카드 검증: ${r.warning}` : "") +
           // 고위험 주제(분쟁·판례·세법·의료) — 발행 전 원문 대조 필수
           (r.riskTopics?.length ? `\n   ⚖️ 고위험 주제: ${r.riskTopics.join("·")} — 원문 대조 후 발행` : "") +
-          (r.needsReview ? `\n   🔴 사람 검수 필수: ${r.reviewReasons ?? "needs_human_review=true"}` : "")
+          (r.needsReview ? `\n   🔴 사람 검수 필수: ${r.reviewReasons ?? "needs_human_review=true"}` : "") +
+          // ⏱️ 300초(Hobby 함수 한도) 대비 여유 — 재생성이 상습적이면 프롬프트를 고쳐야 한다
+          (r.timing
+            ? `\n   ⏱️ 생성 ${Math.round((r.timing.total_ms ?? 0) / 1000)}초 (1회차 ${Math.round((r.timing.first_ms ?? 0) / 1000)}초${r.timing.retried ? ` + 재생성 1회 ${Math.round((r.timing.retry_ms ?? 0) / 1000)}초` : ", 재생성 없음"}) · 한도 300초`
+            : "")
       );
     });
     lines.push(`발행 대기: ${SITE_URL}/admin 에서 검수 후 [발행]`);
@@ -700,9 +708,14 @@ async function main() {
   for (const item of picked) {
     console.log(`[생성] ${item.title} (관련도 ${item.score})`);
     try {
-      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics, usage } =
+      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics, usage, timing } =
         await generateArticle(item);
       if (usage) cacheUsage.push(usage);
+      if (timing) {
+        console.log(
+          `  → ⏱️ ${Math.round((timing.total_ms ?? 0) / 1000)}초 (1회차 ${Math.round((timing.first_ms ?? 0) / 1000)}초${timing.retried ? ` + 재생성 ${Math.round((timing.retry_ms ?? 0) / 1000)}초` : ", 재생성 없음"})`
+        );
+      }
       console.log(`  → 초안 적재: ${SITE_URL}/news/${article.slug}`);
       if (carousel_warning) console.warn(`  → ⚠️ 카드 검증 경고: ${carousel_warning}`);
       if (needs_human_review) console.warn(`  → 🔴 사람 검수 필수: ${review_reasons ?? "-"}`);
@@ -723,6 +736,7 @@ async function main() {
         needsReview: needs_human_review,
         reviewReasons: review_reasons,
         riskTopics: high_risk_topics,
+        timing,
       });
 
       if (full) {
