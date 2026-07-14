@@ -5,8 +5,8 @@ import {
   factorySystemPrompt,
   evergreenSystemPrompt,
   scanBannedTopics,
-  FACTORY_OUTPUT_SCHEMA,
-  EVERGREEN_OUTPUT_SCHEMA,
+  stage1Schema,
+  STAGE2_SCHEMA,
   type EvergreenSeed,
 } from "@/lib/factory-prompt";
 
@@ -20,6 +20,14 @@ import {
 export const maxDuration = 300;
 
 const MODEL = process.env.FACTORY_CLAUDE_MODEL ?? "claude-sonnet-5";
+
+/**
+ * 단계별 출력 상한 — 단일 호출 32,000이 폭주해 311초·잘림을 냈다(2026-07-14 실측).
+ * 스키마로 필드를 쪼갠 위에 상한도 단계 크기에 맞춰 내린다: 한 단계가 천장을 쳐도
+ * 함수 한도(300초) 안에서 끝나고, 그 사실이 422로 드러난다(무음 실패 금지).
+ */
+const STAGE1_MAX_TOKENS = 16000; // 본문+FAQ+검증목록+메타 (실측 typical ~8k)
+const STAGE2_MAX_TOKENS = 14000; // 네이버+블로그스팟+인스타+카드 (실측 typical ~10k)
 
 /**
  * 카드 검증 가드 — 생성 변동성 방어 (실측: stat 4장 중복 + cta 누락 샘플 관측).
@@ -298,152 +306,270 @@ export async function POST(request: Request) {
           .filter(Boolean)
           .join("\n");
 
-  // 모드별 프롬프트·스키마 — 뉴스는 현행 그대로
+  // system 프롬프트는 1·2차가 동일한 문자열을 재사용한다 → 2차에서 캐시 읽기로 붙는다.
+  // (프롬프트 텍스트는 바꾸지 않는다. 출력 필드 제한은 스키마로만 건다 — 글자수 지시는 모델이 무시함)
   const systemPrompt = evergreenSeed ? evergreenSystemPrompt(evergreenSeed) : factorySystemPrompt();
-  const outputSchema = evergreenSeed ? EVERGREEN_OUTPUT_SCHEMA : FACTORY_OUTPUT_SCHEMA;
 
-  // 1회 생성 — 카드 검증 가드의 재생성에서도 동일하게 호출
-  const generateOnce = async (): Promise<
+  type StageUsage = {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens: number;
+    cache_read_input_tokens: number;
+  };
+  type StageResult =
     | { error: { status: number; message: string } }
-    | {
-        article: Record<string, unknown>;
-        usage: {
-          input_tokens: number;
-          output_tokens: number;
-          cache_creation_input_tokens: number;
-          cache_read_input_tokens: number;
-        };
-      }
-  > => {
+    | { data: Record<string, unknown>; usage: StageUsage };
+
+  /**
+   * 단계 1회 생성. 스키마가 그 호출이 뽑을 수 있는 필드를 물리적으로 제한하므로
+   * 한 호출이 32k까지 폭주하지 않는다(단일 호출 실측: 311초 + max_tokens 잘림).
+   */
+  const generateStage = async (
+    label: string,
+    schema: unknown,
+    userMessage: string,
+    maxTokens: number
+  ): Promise<StageResult> => {
     const stream = anthropic.messages.stream({
       model: MODEL,
-      max_tokens: 32000,
-      // 프롬프트 캐싱 — system을 블록 배열로 전달하고 끝에 브레이크포인트 1개(기본 TTL 5분).
-      // 프롬프트 텍스트는 그대로다(전달 형태만 문자열 → 블록). 뉴스 system은 호출마다 동일하므로
-      // 같은 크론 실행 안의 2번째 기사·재생성 호출부터 캐시 읽기로 붙는다.
+      max_tokens: maxTokens,
+      /**
+       * ⚠️ 폭주의 진짜 원인 — Claude Sonnet 5는 thinking을 생략하면 adaptive thinking이 기본 ON이고,
+       * 추론 토큰이 max_tokens를 함께 먹는다. 실측(2026-07-14): 16,000 출력 토큰 중 텍스트는 1,473자뿐
+       * (나머지 ~14.5k가 thinking) → 본문이 중간에 잘리고 311초 소요.
+       * 이 파이프라인은 17,000자 시스템 프롬프트가 규칙을 전부 명시하는 구조화 출력 작업이라
+       * 추론 여지가 크지 않다 → 명시적으로 끈다. 프롬프트·모델·스키마는 그대로 둔다.
+       */
+      thinking: { type: "disabled" },
+      // 프롬프트 캐싱 — 블록 배열 + 브레이크포인트 1개(기본 TTL 5분). 1·2차가 같은 system이라
+      // 2차는 캐시 읽기로 붙는다(💾 라인으로 관측).
       system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       output_config: {
-        format: {
-          type: "json_schema",
-          schema: outputSchema as unknown as Record<string, unknown>,
-        },
+        format: { type: "json_schema", schema: schema as Record<string, unknown> },
       },
-      messages: [{ role: "user", content: userContent }],
+      messages: [{ role: "user", content: userMessage }],
     });
 
     const message = await stream.finalMessage();
 
     if (message.stop_reason === "refusal") {
-      return { error: { status: 422, message: "생성이 거부되었습니다." } };
+      return { error: { status: 422, message: `${label}: 생성이 거부되었습니다.` } };
     }
     if (message.stop_reason === "max_tokens") {
-      return { error: { status: 422, message: "출력이 잘렸습니다. 원천 자료를 줄여주세요." } };
+      // 단계 분리 후에도 천장을 치면 그 단계의 스키마가 아직 큰 것 — 숨기지 않고 드러낸다.
+      // 어느 필드를 쓰다 잘렸는지 남긴다(무음 실패 금지 — 추측으로 스키마를 손대지 않기 위해).
+      const partial = message.content.find((b) => b.type === "text");
+      const text = partial?.type === "text" ? partial.text : "";
+      const keys = [...text.matchAll(/"([a-z_]+)"\s*:/g)].map((m) => m[1]);
+      const blocks = message.content
+        .map((b) => `${b.type}:${b.type === "text" ? b.text.length : "?"}자`)
+        .join(", ");
+      console.error(
+        `[max_tokens 잘림] ${label} · output ${message.usage.output_tokens} 토큰 · 텍스트 ${text.length}자\n` +
+          `  블록: [${blocks}] (총 ${message.content.length}개)\n` +
+          `  usage: ${JSON.stringify(message.usage)}\n` +
+          `  작성된 필드 순서: ${[...new Set(keys)].join(" → ")}\n` +
+          `  잘린 지점(끝 200자): ${text.slice(-200)}`
+      );
+      return {
+        error: { status: 422, message: `${label}: 출력이 max_tokens(${maxTokens})에서 잘렸습니다.` },
+      };
     }
     const textBlock = message.content.find((b) => b.type === "text");
     if (!textBlock || textBlock.type !== "text") {
-      return { error: { status: 502, message: "빈 응답" } };
+      return { error: { status: 502, message: `${label}: 빈 응답` } };
     }
     return {
-      article: JSON.parse(textBlock.text),
+      data: JSON.parse(textBlock.text),
       usage: {
         input_tokens: message.usage.input_tokens,
         output_tokens: message.usage.output_tokens,
-        // 캐시 적중 관측 — 무음 실패 금지. 둘 다 0이면 캐싱이 안 먹고 있다는 신호이므로
-        // 파이프라인 요약(💾 라인)에 0으로 그대로 노출된다.
         cache_creation_input_tokens: message.usage.cache_creation_input_tokens ?? 0,
         cache_read_input_tokens: message.usage.cache_read_input_tokens ?? 0,
       },
     };
   };
 
-  // ⏱️ 소요시간 계측 — 300초 벽(Hobby 상한)에 왜 부딪히는지 추측하지 않고 숫자로 본다.
-  // 재생성이 상습적으로 터지면 프롬프트를 고쳐야 하므로, 재생성 발생 여부·소요를 따로 싣는다.
-  const timing = { first_ms: 0, retry_ms: 0, retried: false, total_ms: 0 };
+  /** 2차 user 메시지 — 1차에서 확정된 본진 원고를 기준으로 채널 파생만 만든다 */
+  const stage2Message = (s1: Record<string, unknown>) =>
+    [
+      "아래는 1차 생성에서 확정된 본진 원고다. 이 원고를 기준으로 채널 파생 원고(네이버·블로그스팟·인스타 캡션·카드뉴스)만 생성하라.",
+      "사실·수치는 본진 원고와 근거 자료 안에 있는 것만 사용한다(새로운 사실을 만들지 않는다).",
+      "",
+      "--- 확정된 본진 원고 ---",
+      `제목: ${String(s1.title ?? "")}`,
+      `요약: ${String(s1.summary ?? "")}`,
+      `핵심: ${(Array.isArray(s1.key_points) ? s1.key_points : []).join(" / ")}`,
+      "",
+      String(s1.main_website_markdown ?? ""),
+      "",
+      "--- 근거 자료(원천) ---",
+      content.trim().slice(0, 30000),
+    ].join("\n");
+
+  // ⏱️ 소요시간 계측 — 300초 벽(Hobby 상한)에 얼마나 여유가 있는지 숫자로 본다.
+  const timing = {
+    stage1_ms: 0,
+    stage1_retry_ms: 0,
+    stage2_ms: 0,
+    stage2_retry_ms: 0,
+    retried_stages: [] as string[],
+    total_ms: 0,
+  };
+  const usage = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+  };
+  const addUsage = (u: StageUsage) => {
+    usage.input_tokens += u.input_tokens;
+    usage.output_tokens += u.output_tokens;
+    usage.cache_creation_input_tokens += u.cache_creation_input_tokens;
+    usage.cache_read_input_tokens += u.cache_read_input_tokens;
+  };
   const startedAt = Date.now();
 
-  try {
-    const firstStart = Date.now();
-    const first = await generateOnce();
-    timing.first_ms = Date.now() - firstStart;
-    console.log(`[⏱️ 1회차 생성] ${(timing.first_ms / 1000).toFixed(1)}초`);
+  // 검증 하한 — 종전 그대로. 뉴스 H2 4/1,900자 · 상록수 5/2,300자 · 허브 7/3,200자 + FAQ 8
+  const isHub = evergreenSeed?.isHub === true;
+  const mdMinH2 = mode === "evergreen" ? (isHub ? 7 : 5) : 4;
+  const mdMinChars = mode === "evergreen" ? (isHub ? 3200 : 2300) : 1900;
+  const minFaq = isHub ? 8 : 0;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const validateStage1 = (a: any) => [
+    ...validateMainMarkdown(a.main_website_markdown, mdMinH2, mdMinChars),
+    ...validateFaqCount(a.faq_json, minFaq),
+  ];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const validateStage2 = (a: any) => validateCarousel(a.carousel_json);
+
+  /**
+   * 단계 실행 + 검증 가드. 실패 시 그 단계만 1회 재생성한다(가드는 끄지 않는다 — 단계별로 유지).
+   * 채택 규칙은 종전과 동일: 금지어를 없앤 재시도는 무조건 채택 / 새로 만든 재시도는 절대 미채택,
+   * 그 외에는 위반 합계가 적은 쪽.
+   */
+  const runStage = async (
+    label: string,
+    schema: unknown,
+    userMessage: string,
+    maxTokens: number,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    validate: (a: any) => string[],
+    onTiming: (firstMs: number, retryMs: number, retried: boolean) => void
+  ): Promise<
+    | { error: { status: number; message: string } }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    | { data: any; issues: string[]; banned: string[] }
+  > => {
+    const t0 = Date.now();
+    const first = await runStageOnce();
+    const firstMs = Date.now() - t0;
+    console.log(`[⏱️ ${label}] ${(firstMs / 1000).toFixed(1)}초`);
     if ("error" in first) {
-      return NextResponse.json({ error: first.error.message }, { status: first.error.status });
+      onTiming(firstMs, 0, false);
+      return first;
     }
+    addUsage(first.usage);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let article: any = first.article;
-    const usage = { ...first.usage };
-
-    // 검증 가드 — 카드(커밋 G) + 본진 원고(커밋 M0). 어느 쪽이든 실패 시 1회만 재생성
-    // (가드별 재생성이면 최대 3회 호출이 되므로 합산 1회). 그래도 실패하면 그대로 저장하되 ⚠️ 플래그.
-    // 하한: 뉴스 H2 4/1,900자 · 상록수 5/2,300자 · 허브(M3-3) 7/3,200자 + FAQ 8
-    const isHub = evergreenSeed?.isHub === true;
-    const mdMinH2 = mode === "evergreen" ? (isHub ? 7 : 5) : 4;
-    const mdMinChars = mode === "evergreen" ? (isHub ? 3200 : 2300) : 1900;
-    const minFaq = isHub ? 8 : 0;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const validateArticleBody = (a: any) => [
-      ...validateMainMarkdown(a.main_website_markdown, mdMinH2, mdMinChars),
-      ...validateFaqCount(a.faq_json, minFaq),
-    ];
-    let carouselIssues = validateCarousel(article.carousel_json);
-    let markdownIssues = validateArticleBody(article);
-    let bannedTerms = scanBannedTopics(article); // 금지 소재 하드 게이트 (커밋 O1)
+    let data: any = first.data;
+    let issues = validate(data);
+    let banned = scanBannedTopics(data); // 단계별 부분 결과에 대해서도 그대로 동작(누락 필드는 빈 문자열)
     console.log(
-      `[⏱️ 1회차 검증] ${
-        carouselIssues.length + markdownIssues.length + bannedTerms.length === 0
+      `[⏱️ ${label} 검증] ${
+        issues.length + banned.length === 0
           ? "통과 — 재생성 없음"
-          : `실패 → 재생성 발생: ${[...carouselIssues, ...markdownIssues, ...bannedTerms.map((t) => `금지어:${t}`)].join(" / ")}`
+          : `실패 → 재생성: ${[...issues, ...banned.map((t) => `금지어:${t}`)].join(" / ")}`
       }`
     );
-    if (carouselIssues.length + markdownIssues.length + bannedTerms.length > 0) {
-      console.warn(
-        `생성물 검증 실패 — 1회 재생성: ${[...carouselIssues, ...markdownIssues, ...bannedTerms.map((t) => `금지어:${t}`)].join(" / ")}`
-      );
+
+    let retryMs = 0;
+    let retried = false;
+    if (issues.length + banned.length > 0) {
+      retried = true;
+      const t1 = Date.now();
       try {
-        timing.retried = true;
-        const retryStart = Date.now();
-        const retry = await generateOnce();
-        timing.retry_ms = Date.now() - retryStart;
-        console.log(`[⏱️ 재생성] ${(timing.retry_ms / 1000).toFixed(1)}초`);
+        const retry = await runStageOnce();
+        retryMs = Date.now() - t1;
+        console.log(`[⏱️ ${label} 재생성] ${(retryMs / 1000).toFixed(1)}초`);
         if (!("error" in retry)) {
-          usage.input_tokens += retry.usage.input_tokens;
-          usage.output_tokens += retry.usage.output_tokens;
-          // 재생성은 같은 system을 재전송 → 여기서 캐시 읽기가 잡혀야 정상
-          usage.cache_creation_input_tokens += retry.usage.cache_creation_input_tokens;
-          usage.cache_read_input_tokens += retry.usage.cache_read_input_tokens;
-          const retryCarousel = validateCarousel(
-            (retry.article as { carousel_json?: unknown }).carousel_json
-          );
-          const retryMarkdown = validateArticleBody(retry.article);
-          const retryBanned = scanBannedTopics(retry.article);
-          // 채택 규칙: 금지어가 최우선 — 금지어를 없앤 재시도는 무조건 채택,
-          // 금지어를 새로 만든 재시도는 절대 채택하지 않는다. 그 외엔 위반 합계가 적은 쪽.
+          addUsage(retry.usage);
+          const retryIssues = validate(retry.data);
+          const retryBanned = scanBannedTopics(retry.data);
           const preferRetry =
-            bannedTerms.length > 0 && retryBanned.length === 0
+            banned.length > 0 && retryBanned.length === 0
               ? true
-              : bannedTerms.length === 0 && retryBanned.length > 0
+              : banned.length === 0 && retryBanned.length > 0
                 ? false
-                : retryCarousel.length + retryMarkdown.length + retryBanned.length <
-                  carouselIssues.length + markdownIssues.length + bannedTerms.length;
+                : retryIssues.length + retryBanned.length < issues.length + banned.length;
           if (preferRetry) {
-            article = retry.article;
-            carouselIssues = retryCarousel;
-            markdownIssues = retryMarkdown;
-            bannedTerms = retryBanned;
+            data = retry.data;
+            issues = retryIssues;
+            banned = retryBanned;
           }
         }
       } catch (retryErr) {
-        console.warn("재생성 호출 실패 — 원본 유지:", retryErr);
+        retryMs = Date.now() - t1;
+        console.warn(`${label} 재생성 호출 실패 — 원본 유지:`, retryErr);
       }
-      if (carouselIssues.length > 0) {
-        console.warn(`carousel 검증 최종 실패 — 그대로 저장: ${carouselIssues.join(" / ")}`);
-        await notifyValidationWarning(String(article.title ?? "(제목 없음)"), "카드", carouselIssues);
+    }
+    onTiming(firstMs, retryMs, retried);
+    return { data, issues, banned };
+
+    async function runStageOnce() {
+      return generateStage(label, schema, userMessage, maxTokens);
+    }
+  };
+
+  try {
+    // ── 1차: 본진 원고 축(본문·FAQ·검증목록·메타) — 2차의 입력이 된다
+    const s1 = await runStage(
+      "1차(본진)",
+      stage1Schema(mode),
+      userContent,
+      STAGE1_MAX_TOKENS,
+      validateStage1,
+      (f, r, retried) => {
+        timing.stage1_ms = f;
+        timing.stage1_retry_ms = r;
+        if (retried) timing.retried_stages.push("1차");
       }
-      if (markdownIssues.length > 0) {
-        console.warn(`본진 원고 검증 최종 실패 — 그대로 저장: ${markdownIssues.join(" / ")}`);
-        await notifyValidationWarning(String(article.title ?? "(제목 없음)"), "본진 원고", markdownIssues);
+    );
+    if ("error" in s1) {
+      return NextResponse.json({ error: s1.error.message }, { status: s1.error.status });
+    }
+
+    // ── 2차: 채널 파생(네이버·블로그스팟·인스타·카드) — 1차 본문을 기준으로
+    const s2 = await runStage(
+      "2차(채널)",
+      STAGE2_SCHEMA,
+      stage2Message(s1.data),
+      STAGE2_MAX_TOKENS,
+      validateStage2,
+      (f, r, retried) => {
+        timing.stage2_ms = f;
+        timing.stage2_retry_ms = r;
+        if (retried) timing.retried_stages.push("2차");
       }
+    );
+    if ("error" in s2) {
+      return NextResponse.json({ error: s2.error.message }, { status: s2.error.status });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const article: any = { ...s1.data, ...s2.data };
+    const markdownIssues = s1.issues;
+    const carouselIssues = s2.issues;
+    // 금지 소재는 병합 결과로 최종 재확인(단계별 스캔 + 병합 스캔 — 둘 중 하나라도 걸리면 차단)
+    const bannedTerms = [...new Set([...s1.banned, ...s2.banned, ...scanBannedTopics(article)])];
+
+    if (carouselIssues.length > 0) {
+      console.warn(`carousel 검증 최종 실패 — 그대로 저장: ${carouselIssues.join(" / ")}`);
+      await notifyValidationWarning(String(article.title ?? "(제목 없음)"), "카드", carouselIssues);
+    }
+    if (markdownIssues.length > 0) {
+      console.warn(`본진 원고 검증 최종 실패 — 그대로 저장: ${markdownIssues.join(" / ")}`);
+      await notifyValidationWarning(String(article.title ?? "(제목 없음)"), "본진 원고", markdownIssues);
     }
 
     // 금지 소재 하드 게이트 (커밋 O1) — 재생성 후에도 감지되면 저장하지 않고 스킵.
@@ -590,8 +716,8 @@ export async function POST(request: Request) {
       review_reasons: reviewReasons.length > 0 ? reviewReasons.join(" / ") : undefined,
       // 고위험 주제 감지 토큰 — 텔레그램 ⚖️ 라인 관측용
       high_risk_topics: riskTokens.length > 0 ? riskTokens : undefined,
-      usage, // 재생성 포함 합산
-      // ⏱️ 소요시간 — 300초 벽에 얼마나 근접했는지, 재생성이 상습적인지 관측용
+      usage, // 1·2차 + 재생성 전부 합산
+      // ⏱️ 단계별 소요 — 300초 벽에 얼마나 근접했는지, 어느 단계가 재생성을 부르는지 관측용
       timing: { ...timing, total_ms: Date.now() - startedAt },
     });
   } catch (err) {

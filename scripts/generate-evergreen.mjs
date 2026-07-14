@@ -369,6 +369,19 @@ async function generateEvergreen(seed, content, sourceFulltext) {
   return json; // { article, carousel_warning?, markdown_warning?, needs_human_review?, review_reasons?, high_risk_topics?, usage }
 }
 
+/** ⏱️ 라인 — 2단계 분리 후 각 단계가 300초 한도 안에 들어오는지 한눈에 보이게 */
+function fmtTiming(t) {
+  const s = (ms) => Math.round((ms ?? 0) / 1000);
+  const retried = (t.retried_stages ?? []).length ? `재생성 ${t.retried_stages.join("·")}` : "재생성 없음";
+  return (
+    `⏱️ 생성 ${s(t.total_ms)}초 — 1차 ${s(t.stage1_ms)}초` +
+    (t.stage1_retry_ms ? `(+재생성 ${s(t.stage1_retry_ms)}초)` : "") +
+    ` · 2차 ${s(t.stage2_ms)}초` +
+    (t.stage2_retry_ms ? `(+재생성 ${s(t.stage2_retry_ms)}초)` : "") +
+    ` · ${retried} · 단계별 한도 300초`
+  );
+}
+
 async function sendTelegramMessage(text) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -571,15 +584,8 @@ async function main() {
     if (gen.high_risk_topics?.length) {
       lines.push(`⚖️ 고위험 주제: ${gen.high_risk_topics.join("·")} — 원문 대조 후 발행`);
     }
-    // ⏱️ 생성 소요 — 300초(Hobby 함수 한도)에 얼마나 근접했는지, 재생성이 상습적인지 관측
-    if (gen.timing) {
-      const t = gen.timing;
-      lines.push(
-        `⏱️ 생성 ${Math.round((t.total_ms ?? 0) / 1000)}초 (1회차 ${Math.round((t.first_ms ?? 0) / 1000)}초` +
-          (t.retried ? ` + 재생성 1회 ${Math.round((t.retry_ms ?? 0) / 1000)}초` : ", 재생성 없음") +
-          `) · 한도 300초`
-      );
-    }
+    // ⏱️ 단계별 소요 — 300초(Hobby 함수 한도) 대비 여유와, 어느 단계가 재생성을 부르는지 관측
+    if (gen.timing) lines.push(fmtTiming(gen.timing));
     // 💾 캐시 적중 — 0/0이면 캐싱 미작동 신호이므로 숨기지 않는다
     if (gen.usage) {
       const w = gen.usage.cache_creation_input_tokens ?? 0;

@@ -74,6 +74,9 @@ export async function POST(request: Request) {
     const message = await anthropic.messages.create({
       model: MODEL,
       max_tokens: 1500,
+      // Sonnet 5는 thinking 생략 시 adaptive thinking이 기본 ON이고 추론 토큰이 max_tokens를
+      // 함께 먹는다 — 1,500 예산에서는 답변이 통째로 잘린다(팩토리에서 실측). 명시적으로 끈다.
+      thinking: { type: "disabled" },
       // 프롬프트 캐싱 — 블록 배열 + 브레이크포인트 1개(기본 TTL 5분). 프롬프트 텍스트는 그대로.
       system: [
         { type: "text", text: kinAnswerSystemPrompt(linked), cache_control: { type: "ephemeral" } },

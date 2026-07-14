@@ -580,6 +580,19 @@ async function generateArticle(item) {
   };
 }
 
+/** ⏱️ 라인 — 2단계 분리 후 각 단계가 300초 한도 안에 들어오는지 한눈에 보이게 */
+function fmtTiming(t) {
+  const s = (ms) => Math.round((ms ?? 0) / 1000);
+  const retried = (t.retried_stages ?? []).length ? `재생성 ${t.retried_stages.join("·")}` : "재생성 없음";
+  return (
+    `⏱️ 생성 ${s(t.total_ms)}초 — 1차 ${s(t.stage1_ms)}초` +
+    (t.stage1_retry_ms ? `(+재생성 ${s(t.stage1_retry_ms)}초)` : "") +
+    ` · 2차 ${s(t.stage2_ms)}초` +
+    (t.stage2_retry_ms ? `(+재생성 ${s(t.stage2_retry_ms)}초)` : "") +
+    ` · ${retried} · 단계별 한도 300초`
+  );
+}
+
 async function sendTelegramMessage(text) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -637,10 +650,8 @@ function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, no
           // 고위험 주제(분쟁·판례·세법·의료) — 발행 전 원문 대조 필수
           (r.riskTopics?.length ? `\n   ⚖️ 고위험 주제: ${r.riskTopics.join("·")} — 원문 대조 후 발행` : "") +
           (r.needsReview ? `\n   🔴 사람 검수 필수: ${r.reviewReasons ?? "needs_human_review=true"}` : "") +
-          // ⏱️ 300초(Hobby 함수 한도) 대비 여유 — 재생성이 상습적이면 프롬프트를 고쳐야 한다
-          (r.timing
-            ? `\n   ⏱️ 생성 ${Math.round((r.timing.total_ms ?? 0) / 1000)}초 (1회차 ${Math.round((r.timing.first_ms ?? 0) / 1000)}초${r.timing.retried ? ` + 재생성 1회 ${Math.round((r.timing.retry_ms ?? 0) / 1000)}초` : ", 재생성 없음"}) · 한도 300초`
-            : "")
+          // ⏱️ 300초(Hobby 함수 한도) 대비 여유 — 어느 단계가 재생성을 부르는지도 함께 본다
+          (r.timing ? `\n   ${fmtTiming(r.timing)}` : "")
       );
     });
     lines.push(`발행 대기: ${SITE_URL}/admin 에서 검수 후 [발행]`);
@@ -711,11 +722,7 @@ async function main() {
       const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics, usage, timing } =
         await generateArticle(item);
       if (usage) cacheUsage.push(usage);
-      if (timing) {
-        console.log(
-          `  → ⏱️ ${Math.round((timing.total_ms ?? 0) / 1000)}초 (1회차 ${Math.round((timing.first_ms ?? 0) / 1000)}초${timing.retried ? ` + 재생성 ${Math.round((timing.retry_ms ?? 0) / 1000)}초` : ", 재생성 없음"})`
-        );
-      }
+      if (timing) console.log(`  → ${fmtTiming(timing)}`);
       console.log(`  → 초안 적재: ${SITE_URL}/news/${article.slug}`);
       if (carousel_warning) console.warn(`  → ⚠️ 카드 검증 경고: ${carousel_warning}`);
       if (needs_human_review) console.warn(`  → 🔴 사람 검수 필수: ${review_reasons ?? "-"}`);

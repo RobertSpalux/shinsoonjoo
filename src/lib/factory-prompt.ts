@@ -477,3 +477,61 @@ export const EVERGREEN_OUTPUT_SCHEMA = {
     },
   },
 } as const;
+
+/**
+ * 2단계 분리 스키마 (2026-07-14) — 단일 호출이 max_tokens 32,000까지 폭주해
+ * 311초 소요 + 출력 잘림(422)으로 실패한 실측(car-insurance-savings)에서 나왔다.
+ * ⚠️ 프롬프트 텍스트는 건드리지 않는다 — "글자수를 지키라"는 지시는 모델이 무시한다(실측 원칙).
+ * 대신 출력 스키마를 쪼개 한 호출이 뽑을 수 있는 필드 자체를 물리적으로 제한한다.
+ *
+ * 1차 = 본진 원고 축(긴 것) — 본문·FAQ·검증목록·메타. 2차의 입력이 된다.
+ * 2차 = 채널 파생 축 — 네이버·블로그스팟·인스타·카드뉴스.
+ * system 프롬프트는 두 단계가 동일한 문자열을 재사용한다(캐시 히트 유지).
+ */
+const STAGE1_FIELDS = [
+  "title",
+  "naver_title",
+  "blogspot_title",
+  "slug",
+  "category",
+  "summary",
+  "tags",
+  "key_points",
+  "remodeling_bridge",
+  "main_website_markdown",
+  "faq_json",
+] as const;
+
+const STAGE2_FIELDS = [
+  "naver_blog_content",
+  "blogspot_content",
+  "instagram_caption",
+  "carousel_json",
+] as const;
+
+type SchemaProps = Record<string, unknown>;
+
+function pickSchema(fields: readonly string[], extra?: SchemaProps) {
+  const all = FACTORY_OUTPUT_SCHEMA.properties as SchemaProps;
+  const properties: SchemaProps = {};
+  for (const f of fields) properties[f] = all[f];
+  Object.assign(properties, extra ?? {});
+  return {
+    type: "object",
+    additionalProperties: false,
+    required: [...fields, ...Object.keys(extra ?? {})],
+    properties,
+  };
+}
+
+/** 1차 스키마 — 상록수는 verify_claims 포함(본문과 같은 호출에서 나와야 근거가 맞는다) */
+export function stage1Schema(mode: "news" | "evergreen") {
+  const extra =
+    mode === "evergreen"
+      ? { verify_claims: (EVERGREEN_OUTPUT_SCHEMA.properties as SchemaProps).verify_claims }
+      : undefined;
+  return pickSchema(STAGE1_FIELDS, extra);
+}
+
+/** 2차 스키마 — 채널 파생. 뉴스·상록수 동일 */
+export const STAGE2_SCHEMA = pickSchema(STAGE2_FIELDS);
