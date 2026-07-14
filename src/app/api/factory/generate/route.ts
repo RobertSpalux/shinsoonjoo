@@ -81,6 +81,42 @@ function scanHumanReviewTriggers(text: string): string[] {
 }
 
 /**
+ * 고위험 주제 게이트 — 틀리면 소비자 피해·법적 리스크로 직결되는 주제군.
+ * 컷이 아니라 needs_human_review 강제 + 검증 항목 자동 주입(좋은 소재이므로 죽이지 않는다).
+ * 뉴스·상록수 공통 — 뉴스는 종전에 일화 날조 외 사실검증 플래그가 없어 분쟁·판례·세법·의료
+ * 기사가 무플래그로 초안 적재됐다(실측: 연금 조기수령/분쟁사례 초안).
+ * 감지면은 제목·본문·출처명 — 출처명(예: '분쟁조정위원회')만으로도 주제 성격이 드러난다.
+ */
+const HIGH_RISK_TOPICS: { tokens: string[]; check: string }[] = [
+  {
+    tokens: ["분쟁조정", "분쟁", "민원사례"],
+    check: "분쟁조정·민원 사례의 결과와 쟁점을 원문과 대조했는가 (결론을 일반화하지 않았는가)",
+  },
+  {
+    tokens: ["판례", "소송", "손해배상", "배상책임"],
+    check: "판례·소송의 심급과 확정 여부를 원문과 대조했는가 (하급심을 확정 판결로 쓰지 않았는가)",
+  },
+  {
+    tokens: ["세액공제", "세율", "과세", "비과세", "상속", "증여"],
+    check: "세율·공제한도·과세요건이 현행 기준인가 (개정 시행일 반영 확인)",
+  },
+  {
+    tokens: ["진단기준", "급여기준", "산정특례", "후유장해"],
+    check: "진단기준·급여기준·지급기준을 약관/고시 원문과 대조했는가",
+  },
+];
+
+type HighRiskHit = { tokens: string[]; check: string };
+
+/** 제목·본문·출처명에서 고위험 토큰 감지 → 감지된 토큰과 검증 항목 반환 */
+function scanHighRiskTopics(text: string): HighRiskHit[] {
+  return HIGH_RISK_TOPICS.map(({ tokens, check }) => ({
+    tokens: tokens.filter((t) => text.includes(t)),
+    check,
+  })).filter((hit) => hit.tokens.length > 0);
+}
+
+/**
  * 일화 날조 하드 게이트(일화뱅크) — '특정 시점 + 특정 고객' 결합 서사 감지.
  * CLAUDE.md 일화 날조 금지: "어제 만난 50대 고객님이…" 류는 지어낸 단건 서사 의심.
  * "상담하다 보면 ~하시는 분이 많습니다" 반복 패턴 화법은 시점 결합이 없어 통과한다.
@@ -390,6 +426,16 @@ export async function POST(request: Request) {
       }
     }
 
+    // 고위험 주제 게이트 — 뉴스·상록수 공통. 감지 시 사람 검수 강제 + 검증 항목 자동 주입.
+    const riskHits = scanHighRiskTopics(
+      [article.title ?? title ?? "", article.main_website_markdown ?? "", source_name ?? ""].join("\n")
+    );
+    const riskTokens = riskHits.flatMap((h) => h.tokens);
+    if (riskHits.length > 0) {
+      needsHumanReview = true;
+      reviewReasons.push(`고위험 주제(${riskTokens.join("·")})`);
+    }
+
     // 상록수 사실검증 게이트(커밋 M2) — 원고 검증 최종 실패 또는 민감 사실 포함이면 사람 검수 강제.
     if (mode === "evergreen") {
       if (markdownIssues.length > 0) {
@@ -405,6 +451,17 @@ export async function POST(request: Request) {
     if (needsHumanReview) {
       console.warn(`needs_human_review=true — ${reviewReasons.join(" / ")}`);
     }
+
+    // 검증 항목 = 모델 자가 신고(상록수) + 고위험 주제 자동 항목(공통).
+    // 자동 항목은 confidence=low — 어드민 체크리스트에서 사람이 원문과 대조하기 전엔 미검증이다.
+    // 뉴스는 모델이 verify_claims를 내지 않으므로(스키마 미포함) 자동 항목만 실린다.
+    const modelClaims = Array.isArray(article.verify_claims) ? article.verify_claims : [];
+    const autoClaims = riskHits.map((hit) => ({
+      claim: hit.check,
+      basis: `고위험 주제 자동 감지: ${hit.tokens.join("·")}`,
+      confidence: "low",
+    }));
+    const verifyClaims = [...modelClaims, ...autoClaims];
 
     // slug 중복 방지 — 이미 있으면 날짜 접미사
     const supabase = createAdminClient();
@@ -444,10 +501,11 @@ export async function POST(request: Request) {
           ? {
               content_type: "evergreen",
               seed_key: evergreenSeed.key,
-              verify_claims: article.verify_claims ?? null,
             }
           : {}),
-        // 사람 검수 플래그 — 뉴스·상록수 공통(일화 날조 게이트는 두 모드 모두 적용)
+        // 검증 항목 — 뉴스도 고위험 주제 자동 항목이 실린다(없으면 null = 종전과 동일)
+        verify_claims: verifyClaims.length > 0 ? verifyClaims : null,
+        // 사람 검수 플래그 — 뉴스·상록수 공통(일화 날조·고위험 주제 게이트는 두 모드 모두 적용)
         needs_human_review: needsHumanReview,
         is_main_published: auto_publish,
         // 초안이어도 published_at은 생성 시각으로 기록(정렬용). 노출 게이트는 is_main_published를
@@ -468,9 +526,11 @@ export async function POST(request: Request) {
       // 재시도 후에도 남은 검증 위반 — 파이프라인이 텔레그램 요약에 플래그로 실음
       carousel_warning: carouselIssues.length > 0 ? carouselIssues.join(" / ") : undefined,
       markdown_warning: markdownIssues.length > 0 ? markdownIssues.join(" / ") : undefined,
-      // 상록수 전용 — 사람 검수 필요 플래그와 사유 (뉴스는 undefined)
-      needs_human_review: mode === "evergreen" ? needsHumanReview : undefined,
+      // 사람 검수 필요 플래그·사유 — 뉴스·상록수 공통(파이프라인이 텔레그램 요약에 실음)
+      needs_human_review: needsHumanReview,
       review_reasons: reviewReasons.length > 0 ? reviewReasons.join(" / ") : undefined,
+      // 고위험 주제 감지 토큰 — 텔레그램 ⚖️ 라인 관측용
+      high_risk_topics: riskTokens.length > 0 ? riskTokens : undefined,
       usage, // 재생성 포함 합산
     });
   } catch (err) {

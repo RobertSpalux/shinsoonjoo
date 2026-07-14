@@ -535,7 +535,14 @@ async function generateArticle(item) {
   const json = await res.json();
   if (!res.ok) throw new Error(`generate 실패(${res.status}): ${json.error ?? "unknown"}`);
   // carousel_warning: 카드 검증 가드(route.ts)가 재시도 후에도 실패하면 사유를 실어 보냄
-  return { article: json.article, carousel_warning: json.carousel_warning ?? null };
+  // high_risk_topics / review_reasons: 고위험 주제·사람 검수 게이트 관측용
+  return {
+    article: json.article,
+    carousel_warning: json.carousel_warning ?? null,
+    needs_human_review: json.needs_human_review === true,
+    review_reasons: json.review_reasons ?? null,
+    high_risk_topics: json.high_risk_topics ?? null,
+  };
 }
 
 async function sendTelegramMessage(text) {
@@ -591,7 +598,10 @@ function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, no
     results.forEach((r) => {
       lines.push(
         ` · [${r.category}] ${r.title.slice(0, 40)} (관련도 ${r.score}, 카드 ${r.cards}장)` +
-          (r.warning ? `\n   ⚠️ 카드 검증: ${r.warning}` : "")
+          (r.warning ? `\n   ⚠️ 카드 검증: ${r.warning}` : "") +
+          // 고위험 주제(분쟁·판례·세법·의료) — 발행 전 원문 대조 필수
+          (r.riskTopics?.length ? `\n   ⚖️ 고위험 주제: ${r.riskTopics.join("·")} — 원문 대조 후 발행` : "") +
+          (r.needsReview ? `\n   🔴 사람 검수 필수: ${r.reviewReasons ?? "needs_human_review=true"}` : "")
       );
     });
     lines.push(`발행 대기: ${SITE_URL}/admin 에서 검수 후 [발행]`);
@@ -649,9 +659,11 @@ async function main() {
   for (const item of picked) {
     console.log(`[생성] ${item.title} (관련도 ${item.score})`);
     try {
-      const { article, carousel_warning } = await generateArticle(item);
+      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics } =
+        await generateArticle(item);
       console.log(`  → 초안 적재: ${SITE_URL}/news/${article.slug}`);
       if (carousel_warning) console.warn(`  → ⚠️ 카드 검증 경고: ${carousel_warning}`);
+      if (needs_human_review) console.warn(`  → 🔴 사람 검수 필수: ${review_reasons ?? "-"}`);
 
       // 네이버/블로그스팟 원고를 발행 대기함(텔레그램)으로 + 카드 장수 집계
       const { data: full } = await supabase
@@ -666,6 +678,9 @@ async function main() {
         score: item.score,
         cards: Array.isArray(full?.carousel_json) ? full.carousel_json.length : 0,
         warning: carousel_warning ?? null,
+        needsReview: needs_human_review,
+        reviewReasons: review_reasons,
+        riskTopics: high_risk_topics,
       });
 
       if (full) {

@@ -447,7 +447,7 @@ export default function AdminDashboard({
                               🔴 검증 필요
                             </span>
                           )}
-                          {isEvergreen(a) && (a.verify_claims?.length ?? 0) > 0 && (
+                          {(a.verify_claims?.length ?? 0) > 0 && (
                             <span className="text-[10px] font-semibold text-slate-500">
                               검증 항목 {a.verify_claims?.length}건
                             </span>
@@ -744,40 +744,40 @@ export default function AdminDashboard({
               </button>
             </div>
             <div className="overflow-y-auto px-6 py-5">
-              {/* 상록수 사실검증 체크리스트(M4-1) — 체크는 확인용 로컬 상태이며 저장하지 않는다 */}
-              {previewArticle.content_type === "evergreen" &&
-                (previewArticle.verify_claims?.length ?? 0) > 0 && (
-                  <details
-                    className="mb-4 rounded-lg border border-red-200 bg-red-50/70"
-                    open={previewArticle.needs_human_review === true}
-                  >
-                    <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-red-800">
-                      발행 전 사실검증 체크리스트 ({previewArticle.verify_claims?.length}건)
-                      {previewArticle.needs_human_review === true && (
-                        <span className="ml-2 rounded-full border border-red-500 bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
-                          🔴 검증 필요
-                        </span>
-                      )}
-                    </summary>
-                    <ol className="space-y-3 px-4 pb-4">
-                      {(previewArticle.verify_claims ?? []).map((c, i) => (
-                        <li key={i} className="flex items-start gap-2.5">
-                          <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-forest)]" />
-                          <div className="text-sm leading-relaxed text-slate-800">
-                            <span className="font-bold tabular-nums text-slate-500">{i + 1}.</span> {c.claim ?? "-"}
-                            {(c.basis || c.confidence) && (
-                              <p className="mt-0.5 text-xs text-slate-500">
-                                {c.basis && <>근거: {c.basis}</>}
-                                {c.basis && c.confidence && " · "}
-                                {c.confidence && <>확신도 {c.confidence}</>}
-                              </p>
-                            )}
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  </details>
-                )}
+              {/* 사실검증 체크리스트(M4-1) — 체크는 확인용 로컬 상태이며 저장하지 않는다.
+                  뉴스도 고위험 주제(분쟁·판례·세법·의료) 감지 시 항목이 실리므로 content_type을 가리지 않는다 */}
+              {(previewArticle.verify_claims?.length ?? 0) > 0 && (
+                <details
+                  className="mb-4 rounded-lg border border-red-200 bg-red-50/70"
+                  open={previewArticle.needs_human_review === true}
+                >
+                  <summary className="cursor-pointer select-none px-4 py-3 text-sm font-bold text-red-800">
+                    발행 전 사실검증 체크리스트 ({previewArticle.verify_claims?.length}건)
+                    {previewArticle.needs_human_review === true && (
+                      <span className="ml-2 rounded-full border border-red-500 bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
+                        🔴 검증 필요
+                      </span>
+                    )}
+                  </summary>
+                  <ol className="space-y-3 px-4 pb-4">
+                    {(previewArticle.verify_claims ?? []).map((c, i) => (
+                      <li key={i} className="flex items-start gap-2.5">
+                        <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-forest)]" />
+                        <div className="text-sm leading-relaxed text-slate-800">
+                          <span className="font-bold tabular-nums text-slate-500">{i + 1}.</span> {c.claim ?? "-"}
+                          {(c.basis || c.confidence) && (
+                            <p className="mt-0.5 text-xs text-slate-500">
+                              {c.basis && <>근거: {c.basis}</>}
+                              {c.basis && c.confidence && " · "}
+                              {c.confidence && <>확신도 {c.confidence}</>}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
               {previewArticle.summary && (
                 <div className="mb-4 rounded-lg bg-slate-50 p-4">
                   <p className="text-[11px] font-bold text-slate-400">SUMMARY</p>

@@ -347,7 +347,7 @@ async function generateEvergreen(seed, groundingText) {
     err.status = res.status;
     throw err;
   }
-  return json; // { article, carousel_warning?, markdown_warning?, needs_human_review?, review_reasons?, usage }
+  return json; // { article, carousel_warning?, markdown_warning?, needs_human_review?, review_reasons?, high_risk_topics?, usage }
 }
 
 async function sendTelegramMessage(text) {
@@ -525,6 +525,10 @@ async function main() {
     lines.push(anecdote.count ? `🧾 일화: ${anecdote.count}건 주입` : "🧾 일화: 없음(금지 지시)");
     if (gen.carousel_warning) lines.push(`⚠️ 카드 검증: ${gen.carousel_warning}`);
     if (gen.markdown_warning) lines.push(`⚠️ 원고 검증: ${gen.markdown_warning}`);
+    // 고위험 주제(분쟁·판례·세법·의료) — 발행 전 원문 대조 필수
+    if (gen.high_risk_topics?.length) {
+      lines.push(`⚖️ 고위험 주제: ${gen.high_risk_topics.join("·")} — 원문 대조 후 발행`);
+    }
     lines.push(
       full?.needs_human_review
         ? `🔴 사람 검수 필수: ${gen.review_reasons ?? "needs_human_review=true"}`
