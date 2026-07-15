@@ -525,11 +525,13 @@ const STAGE1_FIELDS = [
   "faq_json",
 ] as const;
 
+// carousel_json 제거(2026-07-15) — 카드 자동생성 중단. 2차는 네이버·블로그스팟·인스타 캡션만.
+// pickSchema가 required를 이 목록에서 도출하므로 여기서 빼면 스키마 required에서도 자동 제외된다.
+// 렌더러(render-cards.mjs)·기존 글 carousel_json은 보존. 온디맨드 카드는 추후.
 const STAGE2_FIELDS = [
   "naver_blog_content",
   "blogspot_content",
   "instagram_caption",
-  "carousel_json",
 ] as const;
 
 type SchemaProps = Record<string, unknown>;

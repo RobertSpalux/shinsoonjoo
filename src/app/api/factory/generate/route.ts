@@ -30,39 +30,6 @@ const STAGE1_MAX_TOKENS = 16000; // 본문+FAQ+검증목록+메타 (실측 typic
 const STAGE2_MAX_TOKENS = 14000; // 네이버+블로그스팟+인스타+카드 (실측 typical ~10k)
 
 /**
- * 카드 검증 가드 — 생성 변동성 방어 (실측: stat 4장 중복 + cta 누락 샘플 관측).
- * 위반 목록을 반환. 비어 있으면 통과.
- */
-function validateCarousel(cards: unknown): string[] {
-  const issues: string[] = [];
-  if (!Array.isArray(cards) || cards.length === 0) return ["carousel_json 없음/비어 있음"];
-
-  type Card = { type?: string; overline?: string; headline?: string; body?: string };
-  const list = cards as Card[];
-
-  if (list[0]?.type !== "hook") issues.push(`1번 카드가 hook 아님(${list[0]?.type ?? "없음"})`);
-  if (list[list.length - 1]?.type !== "cta")
-    issues.push(`마지막 카드가 cta 아님(${list[list.length - 1]?.type ?? "없음"})`);
-  if (list.length < 5 || list.length > 9) issues.push(`카드 수 ${list.length}장(5~9 범위 밖)`);
-
-  const typeCounts = new Map<string, number>();
-  for (const c of list) {
-    const t = c.type ?? "unknown";
-    typeCounts.set(t, (typeCounts.get(t) ?? 0) + 1);
-  }
-  for (const [t, n] of typeCounts) {
-    if (n >= 3) issues.push(`${t} 타입 ${n}장 반복(물타기 의심)`);
-  }
-
-  list.forEach((c, i) => {
-    for (const field of ["overline", "headline", "body"] as const) {
-      if (!String(c[field] ?? "").trim()) issues.push(`${i + 1}번(${c.type}) ${field} 비어 있음`);
-    }
-  });
-  return issues;
-}
-
-/**
  * 원고 검증 가드 — 커밋 M0. 실측: 프롬프트의 글자수 지시(2,000~3,200자)가 안 먹혀
  * 1,749자/1,302자 미달 생성물 관측 → 글자수가 아니라 구조(H2 개수)로 강제하고 여기서 검증.
  * 임계값은 모드별(뉴스 4개/1,900자, 상록수 5개/2,300자 — 커밋 M2).
@@ -393,7 +360,7 @@ export async function POST(request: Request) {
   /** 2차 user 메시지 — 1차에서 확정된 본진 원고를 기준으로 채널 파생만 만든다 */
   const stage2Message = (s1: Record<string, unknown>) =>
     [
-      "아래는 1차 생성에서 확정된 본진 원고다. 이 원고를 기준으로 채널 파생 원고(네이버·블로그스팟·인스타 캡션·카드뉴스)만 생성하라.",
+      "아래는 1차 생성에서 확정된 본진 원고다. 이 원고를 기준으로 채널 파생 원고(네이버·블로그스팟·인스타 캡션)만 생성하라.",
       "사실·수치는 본진 원고와 근거 자료 안에 있는 것만 사용한다(새로운 사실을 만들지 않는다).",
       "",
       "--- 확정된 본진 원고 ---",
@@ -440,8 +407,11 @@ export async function POST(request: Request) {
     ...validateMainMarkdown(a.main_website_markdown, mdMinH2, mdMinChars),
     ...validateFaqCount(a.faq_json, minFaq),
   ];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const validateStage2 = (a: any) => validateCarousel(a.carousel_json);
+  // carousel_json 제거(2026-07-15) — 카드 자동생성 중단. 2차 파생(네이버·블로그스팟·인스타
+  // 캡션)에는 별도 구조 검증이 없어 무검증 통과. 금지어 스캔(scanBannedTopics)은 runStage 안에서
+  // 여전히 돌아 위반 시 2차 재생성을 트리거한다 — 그 가드는 유지.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+  const validateStage2 = (_a: any): string[] => [];
 
   /**
    * 단계 실행 + 검증 가드. 실패 시 그 단계만 1회 재생성한다(가드는 끄지 않는다 — 단계별로 유지).
@@ -679,7 +649,10 @@ export async function POST(request: Request) {
         main_website_markdown: article.main_website_markdown,
         naver_blog_content: article.naver_blog_content,
         blogspot_content: article.blogspot_content,
-        carousel_json: article.carousel_json,
+        // 카드 자동생성 중단(2026-07-15) — 2차가 carousel_json을 더 내지 않으므로 undefined → null.
+        // 컬럼은 nullable 유지. carousel_json is not null 조회 조건 때문에 render-cards가 신규 글을
+        // 자연히 건너뛴다. 기존 발행글의 carousel_json은 이 insert가 건드리지 않는다(신규 행만).
+        carousel_json: article.carousel_json ?? null,
         faq_json: article.faq_json,
         // 상록수 전용 컬럼 — 뉴스 insert는 기존과 동일(DB 디폴트 content_type='news')
         ...(evergreenSeed
