@@ -46,6 +46,14 @@ interface VerifyClaim {
   basis?: string;
   confidence?: string;
 }
+/** 스레드 문구 — 본글 + 이어달기 답글 (threads_json jsonb 그대로, 표시·복사 전용) */
+interface ThreadsPost {
+  day: number;
+  type: "single" | "chain";
+  label: string; // 예: "1일차 · 이어달기 (밤 9시)"
+  body: string; // 본글
+  replies: string[]; // 이어달기 답글 (없으면 빈 배열)
+}
 interface Article {
   id: string;
   title: string;
@@ -70,6 +78,7 @@ interface Article {
   blogspot_content: string | null;
   instagram_caption: string | null;
   carousel_json: CarouselCard[] | null;
+  threads_json?: ThreadsPost[] | null;
   image_paths: string[];
   naver_image_paths: string[] | null;
   view_count: number;
@@ -176,6 +185,8 @@ export default function AdminDashboard({
   // 원문 대조 뷰 — 검수자가 체크리스트를 보면서 원문 전문을 나란히 읽을 수 있게 한다
   const [showSource, setShowSource] = useState(false);
   const [lightbox, setLightbox] = useState<{ images: string[]; slug: string; index: number } | null>(null);
+  // 스레드 문구 모달 — 표시·복사 전용 (발행 플래그·배포 체크박스는 건드리지 않는다)
+  const [threadsArticle, setThreadsArticle] = useState<Article | null>(null);
   const [zipping, setZipping] = useState("");
 
   const now = useMemo(() => Date.now(), []);
@@ -222,6 +233,16 @@ export default function AdminDashboard({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [previewArticle]);
+
+  // 스레드 모달 ESC 닫기 (미리보기 모달과 동일 패턴)
+  useEffect(() => {
+    if (!threadsArticle) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setThreadsArticle(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [threadsArticle]);
 
   // 라이트박스 키보드
   useEffect(() => {
@@ -556,6 +577,15 @@ export default function AdminDashboard({
                           인스타 캡션 복사
                         </button>
                       )}
+                      {(a.threads_json?.length ?? 0) > 0 && (
+                        <button
+                          onClick={() => setThreadsArticle(a)}
+                          title="스레드 본글·이어달기 답글을 글별로 복사"
+                          className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
+                        >
+                          스레드 보기 <span className="text-slate-400">· {a.threads_json?.length}글</span>
+                        </button>
+                      )}
                       {a.image_paths?.length > 0 && (
                         <button
                           onClick={() => downloadZip(`insta-${a.id}`, a.image_paths, `${a.slug}-cards.zip`, "인스타 카드")}
@@ -882,6 +912,89 @@ export default function AdminDashboard({
             .admin-md th, .admin-md td { border: 1px solid #e2e8f0; padding: 0.5em 0.7em; text-align: left; }
             .admin-md strong { font-weight: 700; }
           `}</style>
+        </div>
+      )}
+
+      {/* 스레드 문구 모달 — day 순 나열, 글별/답글별 복사 (줄바꿈 유지된 채 클립보드로) */}
+      {threadsArticle && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setThreadsArticle(null)}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-[var(--color-line)] px-6 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold text-slate-400">
+                    스레드 문구 · {threadsArticle.threads_json?.length ?? 0}글
+                  </p>
+                  <h2 className="mt-0.5 font-bold text-slate-900">{threadsArticle.title}</h2>
+                </div>
+                <button
+                  onClick={() => setThreadsArticle(null)}
+                  className="shrink-0 rounded-full border border-[var(--color-line)] px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                >
+                  닫기 (ESC)
+                </button>
+              </div>
+              <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                본문에 링크 금지(도달 하락). 링크는 마지막 답글에. 인스타 캡션 복붙 금지.
+              </p>
+            </div>
+            <div className="space-y-4 overflow-y-auto px-6 py-5">
+              {[...(threadsArticle.threads_json ?? [])]
+                .sort((x, y) => x.day - y.day)
+                .map((p, i) => (
+                  <div key={i} className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-bold text-slate-900">{p.label}</p>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[11px] font-semibold tabular-nums ${
+                            p.body.length > 500 ? "text-red-600" : "text-slate-400"
+                          }`}
+                        >
+                          {p.body.length}자{p.body.length > 500 && " ⚠️ 500자 초과"}
+                        </span>
+                        <button
+                          onClick={() => copy(p.body, `${p.label} 본글`)}
+                          className="rounded-full border border-[var(--color-line)] px-3 py-1 text-[11px] font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
+                        >
+                          본글 복사
+                        </button>
+                      </div>
+                    </div>
+                    <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-slate-700">{p.body}</p>
+                    {(p.replies ?? []).map((r, j) => (
+                      <div key={j} className="ml-1 mt-3 border-l-2 border-[var(--color-line)] pl-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-bold text-slate-500">↳ 답글 {j + 1}</p>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`text-[11px] font-semibold tabular-nums ${
+                                r.length > 500 ? "text-red-600" : "text-slate-400"
+                              }`}
+                            >
+                              {r.length}자{r.length > 500 && " ⚠️ 500자 초과"}
+                            </span>
+                            <button
+                              onClick={() => copy(r, `${p.label} 답글 ${j + 1}`)}
+                              className="rounded-full border border-[var(--color-line)] px-3 py-1 text-[11px] font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
+                            >
+                              복사
+                            </button>
+                          </div>
+                        </div>
+                        <p className="mt-1 whitespace-pre-wrap text-[13px] leading-relaxed text-slate-700">{r}</p>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          </div>
         </div>
       )}
 
