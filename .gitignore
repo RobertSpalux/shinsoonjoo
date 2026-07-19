@@ -27,6 +27,9 @@
 # exports
 SHIN_export.zip
 
+# temp work orders (헌법과 시점이 어긋난 지시서 커밋 방지)
+WORK-ORDER.md
+
 # debug
 npm-debug.log*
 yarn-debug.log*
