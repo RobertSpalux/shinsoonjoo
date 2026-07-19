@@ -3,8 +3,7 @@ import { BRAND, getCareer } from "@/lib/brand";
 
 export const metadata: Metadata = {
   title: "인재채용 — GA명장 직속 팀에서 시작하세요",
-  description:
-    "프라임에셋 140본부 천안. 8년 연속 우수인증설계사 · GA명장 신순주 지사장이 직접 가르치는 정도(正道) 영업. 경력·신입 설계사 상시 채용.",
+  description: `${BRAND.company}. 8년 연속 우수인증설계사 · GA명장 신순주 지사장이 직접 가르치는 정도(正道) 영업. 경력·신입 설계사 상시 채용.`,
   alternates: { canonical: "/recruit" },
 };
 
