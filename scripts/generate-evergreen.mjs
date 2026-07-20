@@ -603,7 +603,7 @@ async function main() {
     for (const s of skipped) {
       lines.push(`⏭️ 스킵된 시드: ${s.seed.key} — ${s.reason ?? "모든 소스 본문 추출 실패"}`);
     }
-    lines.push(`발행 대기: ${SITE_URL}/admin 에서 검수 후 [발행]`);
+    lines.push(`심의 대기: ${SITE_URL}/admin 에서 검수 → 광고심의 신청 → 승인 후 발행`);
     const summary = lines.join("\n");
     console.log(`\n──── 상록수 요약 ────\n${summary}`);
     await sendTelegramMessage(summary);

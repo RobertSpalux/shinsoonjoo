@@ -48,6 +48,15 @@ export async function POST(request: Request) {
   const { error } = await supabase.from(table).update(patch).eq("id", id);
   if (error) {
     console.error("admin update error:", error);
+    // 발행 게이트 트리거(enforce_publish_gate) 예외를 사용자 문구로 변환.
+    // raw 메시지("[금소법] … CLAUDE.md §6.9")를 그대로 노출하지 않는다. (§6 컴플라이언스)
+    const gateHit = error.code === "23514" || /\[금소법\]/.test(error.message ?? "");
+    if (gateHit) {
+      return NextResponse.json(
+        { error: "유효한 광고심의필이 없어 발행할 수 없습니다" },
+        { status: 409 }
+      );
+    }
     return NextResponse.json({ error: "수정 실패" }, { status: 500 });
   }
 

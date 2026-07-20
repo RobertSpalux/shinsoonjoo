@@ -5,6 +5,15 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toBlogspotHtml, toNaverText } from "@/lib/osmu-format";
 import KinTab, { type KinAnswer } from "@/components/admin/KinTab";
+import {
+  AdReviewPanel,
+  ExpiringDashboard,
+  UrlReminderBanner,
+  reviewValid,
+  todayStr,
+  type AdReview,
+  type ExpiringReview,
+} from "@/components/admin/AdReviewPanel";
 
 /**
  * 관리자 운영 콘솔 — 매일 아침 5분 운영 도구 (검수 → 발행 → 4채널 배포 → 리드 관리).
@@ -121,13 +130,19 @@ function carouselWarnings(cards: CarouselCard[] | null): string[] {
   return issues;
 }
 
-async function updateRow(table: string, id: string, fields: Record<string, unknown>) {
+async function updateRow(
+  table: string,
+  id: string,
+  fields: Record<string, unknown>
+): Promise<{ ok: boolean; error?: string }> {
   const res = await fetch("/api/admin/update", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ table, id, fields }),
   });
-  return res.ok;
+  // 발행 게이트(409) 등 서버가 변환한 사용자 문구를 그대로 전달한다.
+  const json = await res.json().catch(() => ({}));
+  return { ok: res.ok, error: json.error };
 }
 
 async function deleteRow(table: string, id: string, blockSource = false) {
@@ -144,17 +159,41 @@ export default function AdminDashboard({
   consultations: initialConsults,
   articles: initialArticles,
   kinAnswers: initialKinAnswers,
+  adReviews: initialAdReviews,
+  expiring,
 }: {
   leads: Lead[];
   consultations: Consultation[];
   articles: Article[];
   kinAnswers: KinAnswer[];
+  adReviews: AdReview[];
+  expiring: ExpiringReview[];
 }) {
   const [tab, setTab] = useState<"leads" | "consults" | "articles" | "kin">("articles");
   const [leads, setLeads] = useState(initialLeads);
   const [consults, setConsults] = useState(initialConsults);
   const [articles, setArticles] = useState(initialArticles);
   const [kinAnswers, setKinAnswers] = useState(initialKinAnswers);
+  const [adReviews, setAdReviews] = useState(initialAdReviews);
+
+  // 발행 게이트 판정 기준일(마운트 시 1회 캡처) + (article,channel)당 최신 심의 행 맵.
+  const [today] = useState(() => todayStr());
+  const reviewsByArticle = useMemo(() => {
+    const m = new Map<string, Record<string, AdReview>>();
+    for (const r of adReviews) {
+      const rec = m.get(r.article_id) ?? {};
+      if (!rec[r.channel]) rec[r.channel] = r; // adReviews는 최신순 → 첫 행이 활성
+      m.set(r.article_id, rec);
+    }
+    return m;
+  }, [adReviews]);
+  // 심의 저장 후 로컬 반영 — 같은 (article,channel) 이전 행을 치우고 새 행을 맨 앞에.
+  const upsertReview = useCallback((review: AdReview) => {
+    setAdReviews((prev) => [
+      review,
+      ...prev.filter((r) => !(r.article_id === review.article_id && r.channel === review.channel)),
+    ]);
+  }, []);
 
   // 토스트
   const [toast, setToast] = useState("");
@@ -365,6 +404,8 @@ export default function AdminDashboard({
   return (
     <main className="min-h-screen bg-[var(--color-ink)] pt-16">
       <div className="mx-auto max-w-7xl px-6 py-10 md:px-12">
+        {/* 심의필 만료 임박 — 최상단 상시 노출 (§6.9) */}
+        <ExpiringDashboard rows={expiring} />
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-900">운영 콘솔</h1>
@@ -491,34 +532,45 @@ export default function AdminDashboard({
                           UI가 가리면 '눌러도 안 되는' 것처럼 보인다 → 실패 시 롤백+토스트, 성공도 토스트 */}
                       <PublishControls
                         article={a}
+                        // 발행 게이트(§6.9) — 본진 채널 유효 심의필 없으면 발행/예약 비활성
+                        gateOk={reviewValid(reviewsByArticle.get(a.id)?.main, today)}
                         onPublish={async () => {
                           if (!passReviewGate(a)) return;
                           const clearReview = a.needs_human_review === true ? { needs_human_review: false } : {};
                           const published_at = new Date().toISOString();
                           const snapshot = articles;
                           setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at, ...clearReview } : x)));
-                          const ok = await updateRow("premium_articles", a.id, { is_main_published: true, ...clearReview });
+                          const { ok, error } = await updateRow("premium_articles", a.id, { is_main_published: true, ...clearReview });
                           if (!ok) setArticles(snapshot);
-                          showToast(ok ? "발행 완료" : "발행 실패 — 새로고침(재로그인) 후 다시 시도하세요");
+                          showToast(ok ? "발행 완료" : error ?? "발행 실패 — 새로고침(재로그인) 후 다시 시도하세요");
                         }}
                         onSchedule={async (iso) => {
                           if (!passReviewGate(a)) return;
                           const clearReview = a.needs_human_review === true ? { needs_human_review: false } : {};
                           const snapshot = articles;
                           setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: true, published_at: iso, ...clearReview } : x)));
-                          const ok = await updateRow("premium_articles", a.id, { is_main_published: true, published_at: iso, ...clearReview });
+                          const { ok, error } = await updateRow("premium_articles", a.id, { is_main_published: true, published_at: iso, ...clearReview });
                           if (!ok) setArticles(snapshot);
-                          showToast(ok ? "예약 발행 확정" : "예약 실패 — 새로고침(재로그인) 후 다시 시도하세요");
+                          showToast(ok ? "예약 발행 확정" : error ?? "예약 실패 — 새로고침(재로그인) 후 다시 시도하세요");
                         }}
                         onDraft={async () => {
                           const snapshot = articles;
                           setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, is_main_published: false } : x)));
-                          const ok = await updateRow("premium_articles", a.id, { is_main_published: false });
+                          const { ok } = await updateRow("premium_articles", a.id, { is_main_published: false });
                           if (!ok) setArticles(snapshot);
                           showToast(ok ? "초안으로 회수 완료" : "회수 실패 — 새로고침(재로그인) 후 다시 시도하세요");
                         }}
                       />
                     </div>
+
+                    {/* 게시위치(URL) 등록 리마인더 — 승인+게시됐는데 URL 미등록 채널이 있으면 노출 */}
+                    <UrlReminderBanner
+                      article={a}
+                      reviews={reviewsByArticle.get(a.id) ?? {}}
+                      today={today}
+                      onSaved={upsertReview}
+                      onToast={showToast}
+                    />
 
                     {/* 액션 행: 검수·복사·삭제 */}
                     <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -607,25 +659,50 @@ export default function AdminDashboard({
                     <div className="mt-4 flex flex-wrap items-center gap-4 rounded-lg border border-[var(--color-line)] bg-white/60 px-4 py-2.5">
                       <span className="text-[11px] font-bold tracking-wide text-slate-400">배포</span>
                       {([
-                        ["네이버", "is_naver_published", a.is_naver_published],
-                        ["블로그스팟", "is_blogspot_published", a.is_blogspot_published],
-                        ["인스타", "is_instagram_published", a.is_instagram_published],
-                      ] as const).map(([label, field, checked]) => (
-                        <label key={field} className="flex items-center gap-1.5 text-xs text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            className="h-4 w-4 accent-[var(--color-forest)]"
-                            onChange={(e) => {
-                              const v = e.target.checked;
-                              setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, [field]: v } : x)));
-                              updateRow("premium_articles", a.id, { [field]: v });
-                            }}
-                          />
-                          {label}
-                        </label>
-                      ))}
+                        ["네이버", "is_naver_published", "naver", a.is_naver_published],
+                        ["블로그스팟", "is_blogspot_published", "blogspot", a.is_blogspot_published],
+                        ["인스타", "is_instagram_published", "instagram", a.is_instagram_published],
+                      ] as const).map(([label, field, channel, checked]) => {
+                        // 발행 게이트 — 유효 심의필 없으면 켜기 금지(끄기는 허용). 서버 트리거가 최후 방어선.
+                        const canOn = reviewValid(reviewsByArticle.get(a.id)?.[channel], today);
+                        const locked = !checked && !canOn;
+                        return (
+                          <label
+                            key={field}
+                            title={locked ? "게시 전 광고심의가 필요합니다 (금소법 제22조)" : undefined}
+                            className={`flex items-center gap-1.5 text-xs ${locked ? "text-slate-400" : "text-slate-700"}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={locked}
+                              className="h-4 w-4 accent-[var(--color-forest)] disabled:opacity-40"
+                              onChange={async (e) => {
+                                const v = e.target.checked;
+                                const snapshot = articles;
+                                setArticles((prev) => prev.map((x) => (x.id === a.id ? { ...x, [field]: v } : x)));
+                                const { ok, error } = await updateRow("premium_articles", a.id, { [field]: v });
+                                if (!ok) {
+                                  setArticles(snapshot);
+                                  showToast(error ?? "배포 상태 변경 실패");
+                                }
+                              }}
+                            />
+                            {label}
+                          </label>
+                        );
+                      })}
                     </div>
+
+                    {/* 광고심의 관리 패널 — 5채널 상태·신청·심의필·반려 (§6.9) */}
+                    <AdReviewPanel
+                      article={a}
+                      reviews={reviewsByArticle.get(a.id) ?? {}}
+                      today={today}
+                      onSaved={upsertReview}
+                      onToast={showToast}
+                      onCopy={copy}
+                    />
 
                     {/* 인스타 세로 카드 썸네일 */}
                     {a.image_paths?.length > 0 && (
@@ -706,7 +783,7 @@ export default function AdminDashboard({
                   }}
                   onMemo={async (memo) => {
                     setLeads((prev) => prev.map((x) => (x.id === l.id ? { ...x, memo } : x)));
-                    const ok = await updateRow("lead_consultings", l.id, { memo });
+                    const { ok } = await updateRow("lead_consultings", l.id, { memo });
                     showToast(ok ? "메모 저장 완료" : "메모 저장 실패");
                   }}
                   onDelete={() => removeLead(l)}
@@ -744,14 +821,14 @@ export default function AdminDashboard({
                 onStatus={async (status) => {
                   const snapshot = consults;
                   setConsults((prev) => prev.map((x) => (x.id === c.id ? { ...x, status } : x)));
-                  const ok = await updateRow("consultations", c.id, { status });
+                  const { ok } = await updateRow("consultations", c.id, { status });
                   if (!ok) setConsults(snapshot);
                   showToast(ok ? "상태 변경 완료" : "상태 변경 실패 — 새로고침 후 다시 시도하세요");
                 }}
                 onMemo={async (memo) => {
                   const snapshot = consults;
                   setConsults((prev) => prev.map((x) => (x.id === c.id ? { ...x, memo } : x)));
-                  const ok = await updateRow("consultations", c.id, { memo });
+                  const { ok } = await updateRow("consultations", c.id, { memo });
                   if (!ok) setConsults(snapshot);
                   showToast(ok ? "메모 저장 완료" : "메모 저장 실패");
                 }}
@@ -1217,11 +1294,14 @@ function ConsultCard({
 /** 발행 통제 — 상태 뱃지(초안/발행됨/예약) + 발행·예약발행·초안으로 액션 */
 function PublishControls({
   article,
+  gateOk,
   onPublish,
   onSchedule,
   onDraft,
 }: {
   article: Article;
+  /** 본진 채널 유효 심의필 보유 여부 — false면 발행/예약 비활성 (금소법 제22조) */
+  gateOk: boolean;
   onPublish: () => void;
   onSchedule: (iso: string) => void;
   onDraft: () => void;
@@ -1254,11 +1334,21 @@ function PublishControls({
       <span className={`rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${badge.cls}`}>
         {badge.text}
       </span>
+      {status !== "published" && !gateOk && (
+        <span
+          title="게시 전 광고심의가 필요합니다 (금소법 제22조)"
+          className="rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[10px] font-bold text-red-600"
+        >
+          🔒 심의 미완료 — 발행 불가
+        </span>
+      )}
       <div className="flex flex-wrap items-center justify-end gap-1.5">
         {status !== "published" && (
           <button
             onClick={onPublish}
-            className={`${btn} border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700`}
+            disabled={!gateOk}
+            title={gateOk ? undefined : "게시 전 광고심의가 필요합니다 (금소법 제22조)"}
+            className={`${btn} border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-emerald-600`}
           >
             발행
           </button>
@@ -1267,7 +1357,9 @@ function PublishControls({
           status !== "published" && (
             <button
               onClick={() => setScheduling(true)}
-              className={`${btn} border-[var(--color-line)] text-slate-600 hover:border-[var(--color-gold-dim)]`}
+              disabled={!gateOk}
+              title={gateOk ? undefined : "게시 전 광고심의가 필요합니다 (금소법 제22조)"}
+              className={`${btn} border-[var(--color-line)] text-slate-600 hover:border-[var(--color-gold-dim)] disabled:cursor-not-allowed disabled:opacity-40`}
             >
               {status === "scheduled" ? "예약변경" : "예약발행"}
             </button>
@@ -1286,7 +1378,8 @@ function PublishControls({
                 onSchedule(new Date(when).toISOString());
                 setScheduling(false);
               }}
-              className={`${btn} border-sky-600 bg-sky-600 text-white hover:bg-sky-700`}
+              disabled={!gateOk}
+              className={`${btn} border-sky-600 bg-sky-600 text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-40`}
             >
               확정
             </button>

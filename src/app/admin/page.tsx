@@ -17,7 +17,7 @@ export default async function AdminPage() {
   }
 
   const supabase = createAdminClient();
-  const [leads, consultations, articles, kinAnswers] = await Promise.all([
+  const [leads, consultations, articles, kinAnswers, adReviews, expiring] = await Promise.all([
     supabase
       .from("lead_consultings")
       .select("id, name, phone, quiz_responses, quiz_score, lead_source, status, memo, created_at")
@@ -42,6 +42,18 @@ export default async function AdminPage() {
       )
       .order("created_at", { ascending: false })
       .limit(100),
+    // 광고심의(§6.9) — 채널별 심의 상태. 최신순으로 받아 (article,channel)당 첫 행을 활성으로 본다.
+    supabase
+      .from("ad_reviews")
+      .select(
+        "id, article_id, channel, review_type, posting_title, ad_form, status, review_authority, review_no, review_from, review_to, posted_url, url_registered_at, submitted_at, reviewed_at, rejected_reason, notes"
+      )
+      .order("created_at", { ascending: false })
+      .limit(500),
+    // 만료 임박 대시보드 — 유효기간 60일 이내 승인 심의필(뷰가 days_left 계산).
+    supabase
+      .from("ad_reviews_expiring")
+      .select("id, article_id, title, slug, channel, review_no, review_from, review_to, days_left, posted_url, url_registered_at"),
   ]);
 
   return (
@@ -50,6 +62,8 @@ export default async function AdminPage() {
       consultations={consultations.data ?? []}
       articles={articles.data ?? []}
       kinAnswers={kinAnswers.data ?? []}
+      adReviews={adReviews.data ?? []}
+      expiring={expiring.data ?? []}
     />
   );
 }

@@ -48,5 +48,5 @@ jobs:
         run: |
           curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
-            --data-urlencode text="✅ 오늘의 OSMU 파이프라인 완료 — 사이트 발행 + 카드뉴스 생성 완료. 인스타 업로드용 이미지는 Supabase Storage(card-news)에 있습니다." \
+            --data-urlencode text="✅ 오늘의 OSMU 파이프라인 완료 — 초안 생성 + 카드뉴스 생성 완료 (미발행). 인스타 업로드용 이미지는 Supabase Storage(card-news)에 있습니다." \
             > /dev/null

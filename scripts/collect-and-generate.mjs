@@ -654,7 +654,7 @@ function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, no
           (r.timing ? `\n   ${fmtTiming(r.timing)}` : "")
       );
     });
-    lines.push(`발행 대기: ${SITE_URL}/admin 에서 검수 후 [발행]`);
+    lines.push(`심의 대기: ${SITE_URL}/admin 에서 검수 → 광고심의 신청 → 승인 후 발행`);
   }
   // 💾 캐시 적중 — 0/0이면 캐싱이 안 먹는다는 신호이므로 숨기지 않고 그대로 노출한다
   if (cacheUsage.length) {
