@@ -93,7 +93,7 @@ export default async function NewsPage({
         <div className="mt-16 overflow-hidden rounded-[var(--radius-lg)] bg-[var(--color-forest)] px-7 py-12 text-center md:mt-20 md:px-12 md:py-16">
           <span aria-hidden className="mx-auto mb-5 block h-px w-6 bg-[var(--color-gold)]" />
           <p className="mb-3 text-xs font-semibold tracking-[0.08em] text-[var(--color-ink)]/70">
-            무료 보험 리모델링 진단
+            보험 리모델링 진단
           </p>
           <h2 className="mx-auto max-w-xl font-serif text-2xl font-semibold leading-[1.3] tracking-[-0.01em] text-[var(--color-ink)] md:text-[2rem]">
             읽으셨다면, 이제 내 보험 차례입니다.
@@ -106,10 +106,10 @@ export default async function NewsPage({
               href="/diagnosis"
               className="inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-ink)] px-7 py-3.5 text-sm font-semibold text-[var(--color-forest)] transition-transform duration-300 hover:-translate-y-px"
             >
-              무료로 내 보험 진단받기
+              내 보험 리모델링 진단받기
             </Link>
             <p className="text-[11px] text-[var(--color-ink)]/60">
-              상담 강요 없음 · 결과 리포트 무료
+              상담 강요 없음 · 결과 리포트 제공
             </p>
           </div>
         </div>

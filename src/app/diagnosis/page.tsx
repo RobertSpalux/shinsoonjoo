@@ -5,7 +5,7 @@ import { getCareer } from "@/lib/brand";
 const { years } = getCareer();
 
 export const metadata: Metadata = {
-  title: "자산 방어력 진단 — 2분 무료 진단",
+  title: "자산 방어력 진단 — 2분 진단",
   description: `내 보험, 제대로 되어 있을까? 7개 질문으로 자산 방어력을 진단하고 항목별 근거까지 바로 확인하세요. 상담 강요 없음.`,
   alternates: { canonical: "/diagnosis" },
 };

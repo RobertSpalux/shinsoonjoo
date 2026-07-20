@@ -64,7 +64,7 @@ function normalizeCard(card, index, total) {
   if (card?.type) return card;
   return {
     type: "legacy",
-    overline: index === 0 ? "" : index === total - 1 ? "무료 진단" : "확인 포인트",
+    overline: index === 0 ? "" : index === total - 1 ? "리모델링 진단" : "확인 포인트",
     _dark: index === 0 || index === total - 1,
     _isCta: index === total - 1,
     heading: card?.heading,
@@ -512,8 +512,8 @@ function naverCtaHtml() {
   return naverDoc(800, 250, `background:${GREEN}; color:${CREAM}; display:flex; align-items:center;`, `
     <div style="display:flex; align-items:center; justify-content:space-between; width:100%; padding:0 56px;">
       <div>
-        <p style="font-size:17px; font-weight:800; letter-spacing:0.1em; color:${GOLD};">비대면 · 전국 · 무료</p>
-        <p style="margin-top:10px; font-size:36px; font-weight:800; color:${CREAM}; letter-spacing:-0.02em;">내 보험, 새는 곳 없는지<br/>무료 리모델링 진단 받기</p>
+        <p style="font-size:17px; font-weight:800; letter-spacing:0.1em; color:${GOLD};">비대면 · 전국</p>
+        <p style="margin-top:10px; font-size:36px; font-weight:800; color:${CREAM}; letter-spacing:-0.02em;">내 보험, 새는 곳 없는지<br/>보험 리모델링 진단 받기</p>
       </div>
       <div style="background:${GOLD}; color:${CHARCOAL}; font-size:22px; font-weight:800; padding:20px 30px;
         border-radius:14px; text-align:center; line-height:1.45;">goodfinance.kr<br/>→</div>
@@ -579,7 +579,7 @@ async function main() {
       // fonts.load()에 실제 렌더 텍스트(한글 포함)를 인자로 넘겨 필요한 서브셋을 강제 로드해야 한다.
       // waitUntil:"load"로 스타일시트/@import 완료(=@font-face 등록) 보장 후, weight별로 로드하고 fonts.ready까지 await.
       // (networkidle0은 CDN 서브셋 스트리밍에서 idle 미도달 → 60s 타임아웃이라 사용 불가)
-      const uiText = "신순주GA명장비대면전국저장각무료진단확인포인트프로필링크★✓✕⚠→↓—";
+      const uiText = "신순주GA명장비대면전국저장각리모델링진단확인포인트프로필링크★✓✕⚠→↓—";
       const cardText = `${collectText(cards[i])}${article.category ?? ""}${uiText}0123456789/`;
       await page.setContent(html, { waitUntil: "load", timeout: 60000 });
       await page.evaluate(async (text) => {
@@ -625,7 +625,7 @@ async function main() {
       await page.setViewport({ width: spec.w, height: spec.h, deviceScaleFactor: 2 });
       // 폰트 서브셋 로드 텍스트 — 배너·라벨의 고정 문구 글리프를 모두 포함해야 폴백 폰트로 새지 않는다
       // (카톡 채널 배너 문구는 제거했고, 진단 배너의 goodfinance.kr 라틴 글리프를 추가함 — 2026-07-14)
-      const fontText = `${article.title}${collectText(cards)}${YEARS}${SITE_NAME}보험리모델링인사이트신순주지사장GA명장비대면전국무료진단핵심정리내새는곳없는지받기goodfinance.kr'★✓→0123456789|`;
+      const fontText = `${article.title}${collectText(cards)}${YEARS}${SITE_NAME}보험리모델링인사이트신순주지사장GA명장비대면전국리모델링진단핵심정리내새는곳없는지받기goodfinance.kr'★✓→0123456789|`;
       await page.setContent(spec.html, { waitUntil: "load", timeout: 60000 });
       await page.evaluate(async (text) => {
         const weights = ["500", "600", "700", "800"];

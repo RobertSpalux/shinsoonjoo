@@ -26,7 +26,7 @@ export async function GET() {
     "",
     "## 주요 페이지",
     `- [금융소식](${BRAND.siteUrl}/news): 보험료 절약·청구/보상·실손 가이드·연금/노후·리모델링·금융 뉴스 (매일 업데이트)`,
-    `- [자산 방어력 진단](${BRAND.siteUrl}/diagnosis): 3분 무료 진단`,
+    `- [자산 방어력 진단](${BRAND.siteUrl}/diagnosis): 3분 진단`,
     `- [상담 예약](${BRAND.siteUrl}/#consultation)`,
     "",
     "## 최신 콘텐츠",

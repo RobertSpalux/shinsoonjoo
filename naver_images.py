@@ -34,7 +34,7 @@ CONFIG = {
         "최근 5년 — 입원·수술, 7일 이상 치료, 30일 이상 투약",
     ],
     "cta_line": "내 계약에 뭐가 빠져 있을까요?",
-    "cta_sub": "담보 단위로 무료 점검",
+    "cta_sub": "담보 단위로 리모델링 점검",
     "cta_url": "goodfinance.kr/diagnosis",
 }
 

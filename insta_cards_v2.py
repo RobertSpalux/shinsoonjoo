@@ -308,7 +308,7 @@ def card7():
     d.text((PAD, y), "자주 쓰는 담보가 무엇인지 알아야", font=sans("medium", 38), fill=ON_DARK)
     d.text((PAD, y + 58), "바꿀지 둘지 판단이 섭니다.", font=sans("medium", 38), fill=ON_DARK)
     y += 160
-    d.text((PAD, y), "담보 단위 무료 진단", font=sans("black", 56), fill=CREAM)
+    d.text((PAD, y), "담보 단위 리모델링 진단", font=sans("black", 56), fill=CREAM)
     d.text((PAD, y + 88), "goodfinance.kr/diagnosis", font=sans("bold", 42), fill=GOLD_BRIGHT)
     y += 176
     pill(d, PAD, y, "프로필 링크에서 바로", True, solid=True, fs=28)

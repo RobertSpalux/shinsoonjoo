@@ -195,7 +195,7 @@ export function toNaverText(
   if (opts?.includeDiagnosisCta) {
     const diagnosisUrl = `${SITE_URL}/diagnosis`;
     if (!text.includes(diagnosisUrl)) {
-      text += `\n\n무료 보험 리모델링 진단 👉 ${diagnosisUrl}`;
+      text += `\n\n보험 리모델링 진단 👉 ${diagnosisUrl}`;
     }
   }
 
