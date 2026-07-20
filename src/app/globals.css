@@ -106,12 +106,12 @@ html {
   color: var(--color-text-strong);
   font-weight: 700;
 }
-/* 풀아웃 인용 ("신순주의 한 줄 조언") — 골드 헤어라인 + 세리프 이탤릭 */
+/* 일반 인용 — 골드 헤어라인 + 세리프. ⚠️ italic 제거(한글은 진짜 이탤릭이 없어 합성 oblique로 획이 뭉개짐) */
 .article-body blockquote {
   margin: 2.5rem 0;
   padding: 0;
   font-family: var(--font-serif);
-  font-style: italic;
+  font-style: normal;
   font-size: 1.125rem;
   line-height: 1.7;
   color: var(--color-text-strong);
@@ -123,6 +123,59 @@ html {
   height: 1px;
   background: var(--color-gold);
   margin-bottom: 1rem;
+}
+
+/* 「신순주 지사장의 한 줄 조언」 — 딥그린 대비 밴드 (DESIGN-SPEC 3-4).
+   크림 본문 흐름 안에서 이 블록만 딥그린으로 떠오르게 한다. 사람의 목소리 = 위계를 준다. */
+.article-body blockquote.advice-callout {
+  margin: 3rem 0;
+  /* 본문 폭을 좌우로 살짝 넘기는 밴드(들여쓰기 아님) */
+  margin-inline: clamp(-1.5rem, -4vw, -0.75rem);
+  padding: 2rem clamp(1.5rem, 5vw, 2.5rem);
+  background: var(--color-forest);
+  border-radius: 0; /* 인용 프레임 = radius 0 (DESIGN-SPEC 3-3) */
+  color: color-mix(in srgb, var(--color-ink) 90%, transparent);
+}
+/* 골드는 헤어라인에만 (텍스트엔 쓰지 않는다) */
+.article-body blockquote.advice-callout::before {
+  background: var(--color-gold);
+}
+/* 라벨: 세리프 크림 */
+.article-body blockquote.advice-callout strong {
+  display: block;
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--color-ink);
+  margin-bottom: 0.85rem;
+}
+/* 본문: italic 없음, 산세리프, 크림 90%, 넉넉한 행간 */
+.article-body blockquote.advice-callout p {
+  font-family: var(--font-sans);
+  font-style: normal;
+  font-size: 1.0625rem;
+  line-height: 1.9;
+  color: color-mix(in srgb, var(--color-ink) 90%, transparent);
+  margin: 0.6rem 0 0;
+}
+.article-body blockquote.advice-callout p:first-of-type {
+  margin-top: 0;
+}
+/* ⚠️ 인쇄 색 반전 — '배경 그래픽' 설정에 의존하지 않는다(MandatoryNotice와 동일 문제).
+   배경 없이 좌측 3px 딥그린 실선 + 딥그린 텍스트로 밴드를 대체한다. */
+@media print {
+  .article-body blockquote.advice-callout {
+    margin-inline: 0;
+    padding: 0.5rem 0 0.5rem 1rem;
+    background: transparent;
+    border-left: 3px solid var(--color-forest);
+    color: var(--color-forest);
+    break-inside: avoid;
+  }
+  .article-body blockquote.advice-callout strong,
+  .article-body blockquote.advice-callout p {
+    color: var(--color-forest);
+  }
 }
 .article-body a {
   color: var(--color-gold);

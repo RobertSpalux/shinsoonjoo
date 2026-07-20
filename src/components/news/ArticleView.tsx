@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { Root, Blockquote, Nodes } from "mdast";
 import rehypeSlug from "rehype-slug";
 import GithubSlugger from "github-slugger";
 import type { Article } from "@/lib/articles";
@@ -22,6 +23,61 @@ function extractToc(markdown: string) {
     const text = m[1].trim();
     return { text, id: slugger.slug(text) };
   });
+}
+
+const ADVICE_MARKER = /<!--\s*advice\s*-->/i;
+
+/** mdast 노드의 텍스트만 재귀 수집 (라벨 판별용) */
+function nodeText(node: Nodes): string {
+  if ("value" in node && typeof node.value === "string") return node.value;
+  if ("children" in node && Array.isArray(node.children)) {
+    return node.children.map((c) => nodeText(c as Nodes)).join("");
+  }
+  return "";
+}
+
+/** blockquote가 「한 줄 조언」이면 advice-callout 클래스를 부여(mdast→hast로 전달) */
+function markAdvice(bq: Blockquote) {
+  let isAdvice = false;
+  const kids = bq.children;
+  // 1) 마커 판별 — HTML 주석 `<!-- advice -->`. 문구가 아니라 마커로 판별한다
+  //    ("한 줄 조언"은 brand.ts에서 조립되는 문구라 직급이 바뀌면 조용히 깨진다).
+  const idx = kids.findIndex((c) => c.type === "html" && ADVICE_MARKER.test(c.value));
+  if (idx >= 0) {
+    isAdvice = true;
+    kids.splice(idx, 1); // 마커 자체는 렌더하지 않는다
+  } else {
+    // 2) 폴백 — 마커 도입 이전 원고 대응. 첫 단락이 강조 라벨이고 그 안에
+    //    BRAND.personName이 포함되면 조언 블록으로 본다. ⚠️ 전량 마커 전환 후 이 폴백은 제거.
+    const first = kids[0];
+    if (first?.type === "paragraph") {
+      const lead = first.children[0];
+      if (lead?.type === "strong" && nodeText(lead).includes(BRAND.personName)) isAdvice = true;
+    }
+  }
+  if (!isAdvice) return;
+  const data = (bq.data ??= {}) as { hProperties?: { className?: string | string[] } };
+  const hProps = (data.hProperties ??= {});
+  const cls = hProps.className;
+  hProps.className = Array.isArray(cls) ? [...cls, "advice-callout"] : "advice-callout";
+}
+
+/**
+ * remark 플러그인 — 「한 줄 조언」 blockquote에 advice-callout 클래스 부여(§DESIGN-SPEC 3-4 대비 밴드).
+ * ⚠️ react-markdown 기본 설정은 HTML 주석을 렌더 전에 제거하므로, 마커 판별은 렌더러가 아니라
+ *    이 mdast 단계에서 해야 한다(렌더러의 children에는 마커가 도달하지 않는다).
+ */
+function remarkAdviceCallout() {
+  return (tree: Root) => {
+    const walk = (node: Nodes) => {
+      if (!("children" in node) || !Array.isArray(node.children)) return;
+      for (const child of node.children) {
+        if (child.type === "blockquote") markAdvice(child);
+        walk(child);
+      }
+    };
+    walk(tree);
+  };
 }
 
 /**
@@ -148,13 +204,13 @@ export default function ArticleView({
 
         {/* 본문 — 마커가 있으면 그 지점에 인라인 진단 다리 삽입 (커밋 N5) */}
         <div className="article-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
+          <ReactMarkdown remarkPlugins={[remarkGfm, remarkAdviceCallout]} rehypePlugins={[rehypeSlug]}>
             {bodyBeforeCta}
           </ReactMarkdown>
           {markerIdx !== -1 && (
             <>
               <ArticleCtaInline slug={article.slug} />
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
+              <ReactMarkdown remarkPlugins={[remarkGfm, remarkAdviceCallout]} rehypePlugins={[rehypeSlug]}>
                 {bodyAfterCta}
               </ReactMarkdown>
             </>
