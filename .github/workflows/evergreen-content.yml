@@ -5,8 +5,13 @@
 name: Weekly Evergreen Content
 
 on:
-  schedule:
-    - cron: "0 22 * * 1,4" # UTC 월·목 22:00 = KST 화·금 07:00
+  # ⏸ 일시정지 (2026-07-20) — 금소법 사전심의 체제 전환
+  # 사유: 전 게시물 게시 전 사전심의 대상(CLAUDE.md §6.2/§6.9). 팜스 동시 심사중 2건 한도로
+  #       발행 처리량이 제한되는데 크론은 매일 초안을 적재해 큐가 빠지지 않는다.
+  # 성격: Track A 폐기가 아니라 일시정지. 심의 처리량 확보 후 아래 schedule 주석을 해제해 재개한다.
+  # 재개 전까지는 workflow_dispatch 수동 실행만 사용한다.
+  # schedule:
+  #   - cron: "0 22 * * 1,4" # UTC 월·목 22:00 = KST 화·금 07:00
   workflow_dispatch: # 수동 실행 (intent 선택 / 특정 시드 지정)
     inputs:
       intent:
