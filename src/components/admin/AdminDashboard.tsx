@@ -652,27 +652,34 @@ export default function AdminDashboard({
                       >
                         본문 보기
                       </button>
-                      {/* 심의용 웹 미리보기 — 공개 화면과 동일(필수안내사항·심의필 공란). 5-3 캡처 세트.
-                          §6.10 게이트 미통과면 비활성(서버 /preview도 차단). */}
-                      {previewToken &&
-                        (gateBlocked ? (
-                          <span
-                            title={gateTip}
-                            className="cursor-not-allowed rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-400"
-                          >
-                            🔒 웹 심의용 미리보기
-                          </span>
-                        ) : (
-                          <a
-                            href={`/preview/news/${a.slug}?token=${encodeURIComponent(previewToken)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="공개 화면과 픽셀 동일한 심의용 페이지(필수안내사항 포함·심의필 공란). 비공개 상태로 캡처해 제출하세요."
-                            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 transition-all hover:border-amber-400"
-                          >
-                            웹 심의용 미리보기 ↗
-                          </a>
-                        ))}
+                      {/* 심의용 웹 미리보기 — 5-3 캡처 세트. 항상 노출하되 아래 조건이면 비활성:
+                          ① PREVIEW_SECRET 미설정(토큰 없음) ② §6.10 게이트 미통과(서버 /preview도 차단).
+                          ⚠️ previewToken이 비면 통째로 숨기던 과거 동작이 "버튼이 없다"는 오해를 낳았다 → 항상 표시. */}
+                      {!previewToken ? (
+                        <span
+                          title="PREVIEW_SECRET 미설정 — .env.local·Vercel 환경변수에 등록해야 활성화됩니다"
+                          className="cursor-not-allowed rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-400"
+                        >
+                          🔒 웹 심의용 미리보기 (토큰 미설정)
+                        </span>
+                      ) : gateBlocked ? (
+                        <span
+                          title={gateTip}
+                          className="cursor-not-allowed rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-400"
+                        >
+                          🔒 웹 심의용 미리보기
+                        </span>
+                      ) : (
+                        <a
+                          href={`/preview/news/${a.slug}?token=${encodeURIComponent(previewToken)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="공개 화면과 픽셀 동일한 심의용 페이지(필수안내사항 포함·심의필 공란). 비공개 상태로 캡처해 제출하세요."
+                          className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 transition-all hover:border-amber-400"
+                        >
+                          웹 심의용 미리보기 ↗
+                        </a>
+                      )}
                       {a.naver_blog_content && (
                         <>
                           <button
