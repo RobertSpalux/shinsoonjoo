@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { createAdminClient } from "./supabase-admin";
 
 export interface Article {
   id: string;
@@ -36,7 +37,7 @@ export const CATEGORIES = [
   "금융·경제 뉴스",
 ] as const;
 
-const ARTICLE_COLUMNS =
+export const ARTICLE_COLUMNS =
   "id, title, slug, category, summary, tags, key_points, raw_source_url, raw_source_name, main_website_markdown, faq_json, image_paths, og_image_path, published_at, view_count, created_at, content_type, seed_key, verify_claims, needs_human_review";
 
 function publicClient() {
@@ -141,6 +142,25 @@ export async function getArticleBySlug(slug: string): Promise<Article | null> {
 
   if (error) {
     console.error("getArticleBySlug error:", error.message);
+    return null;
+  }
+  return data as Article | null;
+}
+
+/**
+ * 심의 프리뷰 전용 — service-role로 발행 상태와 무관하게 slug로 1건 조회.
+ * ⚠️ 서버 전용(/preview 라우트에서만). 발행 게이트를 우회하므로 공개 경로에서 쓰지 않는다.
+ * 컬럼은 getArticleBySlug와 동일(ARTICLE_COLUMNS) — 프리뷰가 공개 페이지와 같은 데이터로 렌더되게.
+ */
+export async function getArticleBySlugPreview(slug: string): Promise<Article | null> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("premium_articles")
+    .select(ARTICLE_COLUMNS)
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) {
+    console.error("getArticleBySlugPreview error:", error.message);
     return null;
   }
   return data as Article | null;

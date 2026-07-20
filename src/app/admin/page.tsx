@@ -56,6 +56,9 @@ export default async function AdminPage() {
       .select("id, article_id, title, slug, channel, review_no, review_from, review_to, days_left, posted_url, url_registered_at"),
   ]);
 
+  // 심의 프리뷰 토큰 — 서버에서만 읽어 인증된 관리자에게만 전달(NEXT_PUBLIC_ 아님, 번들 미노출).
+  const previewToken = process.env.PREVIEW_SECRET ?? "";
+
   return (
     <AdminDashboard
       leads={leads.data ?? []}
@@ -64,6 +67,7 @@ export default async function AdminPage() {
       kinAnswers={kinAnswers.data ?? []}
       adReviews={adReviews.data ?? []}
       expiring={expiring.data ?? []}
+      previewToken={previewToken}
     />
   );
 }

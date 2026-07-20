@@ -1,19 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import Image from "next/image";
 import { notFound } from "next/navigation";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
-import rehypeSlug from "rehype-slug";
-import GithubSlugger from "github-slugger";
 import { getArticleBySlug, getPublishedArticles, incrementViewCount } from "@/lib/articles";
-import { articleSchema, faqSchema, personSchema, jsonLdString } from "@/lib/jsonld";
-import { BRAND, getCareer } from "@/lib/brand";
-import ReadingProgress from "@/components/news/ReadingProgress";
-import ArticleCard from "@/components/news/ArticleCard";
-import ArticleCtaInline from "@/components/news/ArticleCtaInline";
-import ArticleCtaEnd from "@/components/news/ArticleCtaEnd";
-import { CTA_MARKER } from "@/lib/osmu-format";
+import { getApprovedReview } from "@/lib/ad-reviews";
+import { BRAND } from "@/lib/brand";
+import ArticleView from "@/components/news/ArticleView";
 
 export const revalidate = 60;
 // 빌드 시점에 없던 slug(빌드 후 발행된 초안)도 요청 시 렌더 — SSG 404 방지.
@@ -49,15 +39,6 @@ export async function generateMetadata({
   };
 }
 
-/** ## 소제목 추출 → 목차 (rehype-slug와 동일한 slugger로 앵커 일치) */
-function extractToc(markdown: string) {
-  const slugger = new GithubSlugger();
-  return [...markdown.matchAll(/^##\s+(.+)$/gm)].map((m) => {
-    const text = m[1].trim();
-    return { text, id: slugger.slug(text) };
-  });
-}
-
 export default async function ArticlePage({
   params,
 }: {
@@ -69,188 +50,13 @@ export default async function ArticlePage({
 
   incrementViewCount(slug); // fire-and-forget
 
-  const { years } = getCareer();
-  const markdown = article.main_website_markdown ?? "";
-  const date = article.published_at
-    ? new Date(article.published_at).toLocaleDateString("ko-KR", {
-        year: "numeric", month: "long", day: "numeric",
-      })
-    : "";
-  const faqs = article.faq_json ?? [];
-  const keyPoints = article.key_points ?? [];
-  const toc = extractToc(markdown);
-  const readMinutes = Math.max(1, Math.round(markdown.length / 600));
+  const [review, relatedRaw] = await Promise.all([
+    getApprovedReview(article.id, "main"),
+    getPublishedArticles(article.category, 4),
+  ]);
+  const related = relatedRaw.filter((a) => a.slug !== article.slug).slice(0, 3);
 
-  // 글 중간 CTA (커밋 N5) — <!--CTA--> 마커 첫 번째 위치에만 치환, 나머지 마커는 제거(화면 노출 금지)
-  const markerIdx = markdown.indexOf(CTA_MARKER);
-  const bodyBeforeCta =
-    markerIdx === -1 ? markdown.replaceAll(CTA_MARKER, "") : markdown.slice(0, markerIdx);
-  const bodyAfterCta =
-    markerIdx === -1 ? "" : markdown.slice(markerIdx + CTA_MARKER.length).replaceAll(CTA_MARKER, "");
-
-  const related = (await getPublishedArticles(article.category, 4))
-    .filter((a) => a.slug !== article.slug)
-    .slice(0, 3);
-
-  return (
-    <main className="min-h-screen bg-[var(--color-ink)] pt-16">
-      <ReadingProgress />
-
-      {/* JSON-LD: Article + Person (+ FAQPage) — YMYL E-E-A-T 핵심 신호 */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleSchema(article)) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(personSchema()) }} />
-      {faqs.length > 0 && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(faqSchema(faqs)) }} />
-      )}
-
-      <article className="mx-auto max-w-3xl px-6 py-14 md:py-20">
-        {/* 브레드크럼 */}
-        <nav className="mb-8 flex items-center gap-2 text-xs text-[var(--color-text-muted)]" aria-label="breadcrumb">
-          <Link href="/news" className="transition-colors hover:text-[var(--color-text-body)]">금융소식</Link>
-          <span aria-hidden>/</span>
-          <Link href={`/news?category=${encodeURIComponent(article.category)}`} className="transition-colors hover:text-[var(--color-text-body)]">
-            {article.category}
-          </Link>
-        </nav>
-
-        <header className="mb-8">
-          <h1
-            className="mb-6 text-3xl font-semibold leading-[1.25] tracking-[-0.015em] text-[var(--color-forest)] md:text-4xl"
-            style={{ fontFamily: "var(--font-serif)" }}
-          >
-            {article.title}
-          </h1>
-
-          {/* 저자 바이라인 — 실명·경력 명시 (E-E-A-T) */}
-          <div className="flex items-center gap-4 border-y border-[var(--color-line)] py-4">
-            <div className="relative h-11 w-11 overflow-hidden rounded-full">
-              <Image src="/soonjoo.jpg" alt={BRAND.personName} fill className="object-cover object-top" sizes="44px" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-[var(--color-text-strong)]">
-                {BRAND.personName} <span className="font-normal text-[var(--color-text-muted)]">{BRAND.title}</span>
-              </p>
-              <p className="text-xs text-[var(--color-text-muted)]">
-                {years}년 차 · 우수인증설계사 8년 연속 · GA명장
-              </p>
-            </div>
-            <div className="text-right text-xs text-[var(--color-text-muted)]">
-              <time dateTime={article.published_at ?? undefined}>{date}</time>
-              <p className="mt-0.5">약 {readMinutes}분 읽기</p>
-            </div>
-          </div>
-        </header>
-
-        {/* 핵심 3줄 요약 — 바쁜 독자를 붙잡는 첫 블록 */}
-        {keyPoints.length > 0 && (
-          <aside className="mb-8 rounded-lg border border-[var(--color-gold-dim)] bg-gradient-to-br from-[#fdf9ef] to-white p-6">
-            <p className="mb-3 text-xs font-semibold tracking-[0.08em] text-[var(--color-gold)]">
-              핵심만 3줄
-            </p>
-            <ol className="space-y-2">
-              {keyPoints.map((p, i) => (
-                <li key={i} className="flex gap-3 text-[15px] font-medium leading-relaxed text-[var(--color-text-body)]">
-                  <span className="font-semibold tabular-nums text-[var(--color-gold)]">{i + 1}</span>
-                  {p}
-                </li>
-              ))}
-            </ol>
-          </aside>
-        )}
-
-        {/* 목차 — 기본 접힘으로 상단 밀도 완화 */}
-        {toc.length >= 3 && (
-          <nav className="mb-10" aria-label="목차">
-            <details className="group rounded-lg border border-[var(--color-line)] bg-white px-6 py-4">
-              <summary className="cursor-pointer list-none text-xs font-semibold tracking-[0.08em] text-[var(--color-text-muted)]">
-                목차 펼치기
-                <span aria-hidden className="ml-1.5 inline-block transition-transform group-open:rotate-180">⌄</span>
-              </summary>
-              <ul className="mt-3 space-y-1.5">
-                {toc.map((h) => (
-                  <li key={h.id}>
-                    <a href={`#${h.id}`} className="text-sm text-[var(--color-text-body)] transition-colors hover:text-[var(--color-text-strong)]">
-                      · {h.text}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          </nav>
-        )}
-
-        {/* 본문 — 마커가 있으면 그 지점에 인라인 진단 다리 삽입 (커밋 N5) */}
-        <div className="article-body">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
-            {bodyBeforeCta}
-          </ReactMarkdown>
-          {markerIdx !== -1 && (
-            <>
-              <ArticleCtaInline slug={article.slug} />
-              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSlug]}>
-                {bodyAfterCta}
-              </ReactMarkdown>
-            </>
-          )}
-        </div>
-
-        {/* 원문 출처 — 신뢰 신호 */}
-        {article.raw_source_url && (
-          <p className="mt-10 rounded-lg border border-[var(--color-line)] bg-white px-5 py-4 text-xs leading-relaxed text-[var(--color-text-muted)]">
-            원문 출처: {article.raw_source_name ?? "외부 자료"} —{" "}
-            <a href={article.raw_source_url} target="_blank" rel="noopener noreferrer"
-               className="text-[var(--color-text-strong)] underline decoration-[var(--color-gold-dim)] underline-offset-2 transition-colors hover:decoration-[var(--color-gold)]">
-              원문 보기 ↗
-            </a>
-            <span className="mt-1 block">
-              본 글은 공개 자료를 기반으로 한 전문가 해설이며, 특정 상품의 권유가 아닙니다.
-            </span>
-          </p>
-        )}
-
-        {/* FAQ 섹션 (FAQPage 스키마와 쌍) */}
-        {faqs.length > 0 && (
-          <section className="mt-14">
-            <h2
-              className="mb-6 text-xl font-semibold text-[var(--color-forest)]"
-              style={{ fontFamily: "var(--font-serif)" }}
-            >
-              자주 묻는 질문
-            </h2>
-            <div className="space-y-3">
-              {faqs.map((f, i) => (
-                <details key={i} className="group rounded-lg border border-[var(--color-line)] bg-white px-6 py-4">
-                  <summary className="cursor-pointer list-none text-[15px] font-semibold text-[var(--color-text-body)] transition-colors group-open:text-[var(--color-text-strong)]">
-                    Q. {f.question}
-                  </summary>
-                  <p className="mt-3 text-sm leading-relaxed text-[var(--color-text-body)]">{f.answer}</p>
-                </details>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* 글 끝 CTA — 딥그린 밴드, 모든 기사 자동 삽입 (커밋 N5 — 기존 골드 카드 CTA 대체) */}
-        <ArticleCtaEnd slug={article.slug} />
-
-        {/* 관련 글 — 내부 순환으로 체류시간 연장 */}
-        {related.length > 0 && (
-          <section className="mt-16 border-t border-[var(--color-line)] pt-10">
-            <h2
-              className="mb-6 text-lg font-semibold text-[var(--color-forest)]"
-              style={{ fontFamily: "var(--font-serif)" }}
-            >
-              함께 보면 좋은 글
-            </h2>
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {related.map((a, i) => (
-                <ArticleCard key={a.id} slug={a.slug} title={a.title} category={a.category}
-                  summary={a.summary} publishedAt={a.published_at} viewCount={a.view_count} index={i} />
-              ))}
-            </div>
-          </section>
-        )}
-      </article>
-    </main>
-  );
+  // 공개 페이지 = 게시용. 승인 심의필이 없으면 MandatoryNotice가 null → 렌더 안 함(§6.3).
+  // 실제로는 trg_publish_gate가 미심의 발행을 막아 이 경로가 공개 상태로 나올 일은 없다.
+  return <ArticleView article={article} related={related} review={review} mode="publish" />;
 }

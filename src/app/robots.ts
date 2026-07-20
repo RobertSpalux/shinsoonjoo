@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/admin"],
+        disallow: ["/api/", "/admin", "/preview/"],
       },
       // AEO: AI 검색엔진 크롤러 명시 허용 — AI 답변 인용 출처로 노출되기 위함
       { userAgent: "GPTBot", allow: "/" },
