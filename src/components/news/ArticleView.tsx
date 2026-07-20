@@ -116,7 +116,7 @@ export default function ArticleView({
     markerIdx === -1 ? "" : markdown.slice(markerIdx + CTA_MARKER.length).replaceAll(CTA_MARKER, "");
 
   return (
-    <main className="min-h-screen bg-[var(--color-ink)] pt-16">
+    <main className="min-h-screen bg-[var(--color-ink)] pt-16 print:pt-0">
       <ReadingProgress />
 
       {/* JSON-LD: Article + Person (+ FAQPage) — YMYL E-E-A-T 핵심 신호 */}
@@ -217,19 +217,22 @@ export default function ArticleView({
           )}
         </div>
 
-        {/* 원문 출처 — 신뢰 신호 */}
-        {article.raw_source_url && (
-          <p className="mt-10 rounded-lg border border-[var(--color-line)] bg-white px-5 py-4 text-xs leading-relaxed text-[var(--color-text-muted)]">
-            원문 출처: {article.raw_source_name ?? "외부 자료"} —{" "}
-            <a href={article.raw_source_url} target="_blank" rel="noopener noreferrer"
-               className="text-[var(--color-text-strong)] underline decoration-[var(--color-gold-dim)] underline-offset-2 transition-colors hover:decoration-[var(--color-gold)]">
-              원문 보기 ↗
-            </a>
-            <span className="mt-1 block">
-              본 글은 공개 자료를 기반으로 한 전문가 해설이며, 특정 상품의 권유가 아닙니다.
-            </span>
+        {/* 원문 출처 + 비권유 고지 — 출처 줄은 raw_source_url이 있을 때만(§6.10 출처 4요소 미충족이면
+            데이터를 비워 이 줄만 감춘다). 비권유 고지는 출처 유무와 무관하게 상시 노출(§6 업무광고 입장). */}
+        <div className="mt-10 rounded-lg border border-[var(--color-line)] bg-white px-5 py-4 text-xs leading-relaxed text-[var(--color-text-muted)]">
+          {article.raw_source_url && (
+            <p>
+              원문 출처: {article.raw_source_name ?? "외부 자료"} —{" "}
+              <a href={article.raw_source_url} target="_blank" rel="noopener noreferrer"
+                 className="text-[var(--color-text-strong)] underline decoration-[var(--color-gold-dim)] underline-offset-2 transition-colors hover:decoration-[var(--color-gold)]">
+                원문 보기 ↗
+              </a>
+            </p>
+          )}
+          <p className={article.raw_source_url ? "mt-1" : ""}>
+            본 글은 공개 자료를 기반으로 한 전문가 해설이며, 특정 상품의 권유가 아닙니다.
           </p>
-        )}
+        </div>
 
         {/* FAQ 섹션 (FAQPage 스키마와 쌍) */}
         {faqs.length > 0 && (

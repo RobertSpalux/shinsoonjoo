@@ -16,7 +16,7 @@ export default function Header() {
   const reduceMotion = useReducedMotion();
 
   return (
-    <header className="fixed top-0 z-50 w-full border-b border-[var(--color-line)] bg-[#faf9f6]/85 backdrop-blur-md">
+    <header className="fixed top-0 z-50 w-full border-b border-[var(--color-line)] bg-[#faf9f6]/85 backdrop-blur-md print:static print:bg-transparent print:backdrop-blur-none">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-12">
         <Link href="/" className="group flex flex-col leading-tight">
           <span className="text-[15px] font-bold tracking-tight text-[var(--color-text-strong)]">

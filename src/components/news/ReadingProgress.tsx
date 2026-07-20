@@ -9,7 +9,7 @@ export default function ReadingProgress() {
 
   return (
     <motion.div
-      className="fixed inset-x-0 top-16 z-40 h-[3px] origin-left bg-[var(--color-gold)]"
+      className="fixed inset-x-0 top-16 z-40 h-[3px] origin-left bg-[var(--color-gold)] print:hidden"
       style={{ scaleX }}
     />
   );
