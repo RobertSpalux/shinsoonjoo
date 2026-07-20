@@ -87,19 +87,34 @@ export type ReviewInfo = {
  * 자가점검표 1-1 ~ 1-8 전 항목을 충족하는 완성형이다. 하나라도 빠지면 반려된다.
  * (협회 가이드북 Part II · 프라임에셋 참고자료 26.05.21 기준)
  *
- * ⚠️ review가 없거나 no가 비어 있으면 **null**을 반환한다(블록 자체를 생략). §6.3
- *    절대 '제00000호' 공란 플레이스홀더를 반환하지 않는다 — 공란은 신청서 예시 형식이지
- *    게시용 값이 아니며, 게시되면 허위 심의필 표기가 된다.
+ * 두 모드의 유일한 차이는 **심의필 줄 한 줄**뿐이다 — 본문 나머지는 제출본=게시본으로
+ * 완전히 동일해야 한다. (제출 후 본문이 달라지면 심의에서 '원안 수정'으로 걸린다.)
+ * - mode='submission': review와 무관하게 항상 전문을 반환하고, 심의필 줄만 공란으로 고정한다.
+ *   심의는 '실제 게시될 화면 전체'를 보고 판정하므로, 필수안내사항이 빠진 화면을 제출하면
+ *   누락으로 반려된다. ⚠️ 공란은 임의번호·예시번호(00000 포함) 절대 금지 — 밑줄만 쓴다
+ *   (프라임에셋 참고자료: "심의필 예시는 공란으로 표기, 임의번호 불가").
+ * - mode='publish'(기본): review가 없거나 no가 비면 **null**을 반환한다(블록 생략). §6.3
+ *   게시용에 공란 심의필을 넣으면 허위 심의필 표기가 되므로 절대 출력하지 않는다.
  * ⚠️ 출력 문구를 임의로 축약·변형하지 말 것 — 축약은 반송 사유다.
  * ⚠️ 승환계약 유의문구는 2022.11.07 회사 공지로 GA 전 광고물 필수 → 상시 포함.
  * ⚠️ 실제 화면 렌더 시 파일 상단의 표시 기준(색상·차별화·글꼴 크기)을 지킬 것.
  */
-export function renderMandatoryNotice(review?: ReviewInfo): string | null {
-  // 유효한 심의필이 없으면 필수안내사항을 만들지 않는다(허위 표기 방지).
-  if (!review || !review.no) return null;
+export function renderMandatoryNotice(
+  review?: ReviewInfo | null,
+  mode: "submission" | "publish" = "publish"
+): string | null {
+  // ⬇️ 심의필 줄만 모드에 따라 달라진다. 아래 본문 전체는 두 모드 공통(한 글자도 다르면 안 됨).
+  let reviewLine: string;
+  if (mode === "submission") {
+    // 제출용: 심의필 줄은 공란(밑줄)으로 고정. 임의번호·예시번호 금지.
+    reviewLine = "프라임에셋 심의필 제_____호 (____.__.__ ~ ____.__.__)";
+  } else {
+    // 게시용: 유효 심의필이 없으면 필수안내사항을 만들지 않는다(허위 표기 방지).
+    if (!review || !review.no) return null;
+    reviewLine = `${review.authority} 심의필 제${review.no}호 (${review.from}~${review.to})`;
+  }
 
   const { plannerName, plannerRegNo, agencyName, agencyRegNo } = COMPLIANCE;
-  const reviewLine = `${review.authority} 심의필 제${review.no}호 (${review.from}~${review.to})`;
 
   return `[필수안내사항]
 

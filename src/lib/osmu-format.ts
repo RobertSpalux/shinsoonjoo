@@ -27,6 +27,13 @@ export const CTA_MARKER = "<!--CTA-->";
 /** osmu 변환 공통 옵션 — 채널 공통 신규 필드(심의 체제). */
 export type OsmuOptions = {
   channel: "naver" | "blogspot";
+  /**
+   * 렌더 모드. 기본 'publish'.
+   * - 'submission': 심의 신청용 캡처 원고. 필수안내사항 전문을 항상 붙이되 심의필 줄은 공란.
+   * - 'publish': 게시용. 승인 심의필이 있을 때만 실번호로 필수안내사항을 붙인다.
+   * ⚠️ 두 모드 출력물은 심의필 줄 한 줄 외에는 완전히 동일해야 한다(원안 수정 방지).
+   */
+  mode?: "submission" | "publish";
   /** 승인된 심의필. 있으면 필수안내사항을 말미에 붙인다. null/미지정이면 생략(미심의). */
   review?: ReviewInfo | null;
   /**
@@ -114,7 +121,7 @@ export function toBlogspotHtml(
   markdown: string,
   slug: string,
   tags?: string[] | null,
-  opts?: Pick<OsmuOptions, "review">
+  opts?: Pick<OsmuOptions, "review" | "mode">
 ): string {
   const cleaned = markdown
     .replace(IMG_MARKER, "")
@@ -137,8 +144,8 @@ export function toBlogspotHtml(
   // 개인의견 귀속 문구 (§6.10 — 바이럴은 본문에 1회 이상)
   out = insertPersonalOpinionHtml(out);
 
-  // 필수안내사항 — 승인 심의필이 있을 때만 (§6.3: 미심의면 블록 통째로 생략)
-  const notice = renderMandatoryNotice(opts?.review ?? undefined);
+  // 필수안내사항 — submission이면 항상(공란 심의필), publish면 승인 심의필 있을 때만.
+  const notice = renderMandatoryNotice(opts?.review ?? undefined, opts?.mode ?? "publish");
   if (notice) {
     out += `\n<hr />\n${noticeToHtml(notice)}`;
   }
@@ -159,7 +166,7 @@ export function toNaverText(
   markdown: string,
   opts?: { articleTitle?: string; slug?: string; tags?: string[] | null } & Pick<
     OsmuOptions,
-    "review" | "includeDiagnosisCta"
+    "review" | "includeDiagnosisCta" | "mode"
   >
 ): string {
   let text = markdown
@@ -197,8 +204,9 @@ export function toNaverText(
     text += `\n\n${hashtags}`;
   }
 
-  // 필수안내사항 — 승인 심의필이 있을 때만. 앞에 빈 줄 2개 + 구분선(플레인 텍스트).
-  const notice = renderMandatoryNotice(opts?.review ?? undefined);
+  // 필수안내사항 — submission이면 항상(공란 심의필), publish면 승인 심의필 있을 때만.
+  // 앞에 빈 줄 2개 + 구분선(플레인 텍스트).
+  const notice = renderMandatoryNotice(opts?.review ?? undefined, opts?.mode ?? "publish");
   if (notice) {
     text += `\n\n\n─────────────\n\n${notice}`;
   }

@@ -600,44 +600,83 @@ export default function AdminDashboard({
                         본문 보기
                       </button>
                       {a.naver_blog_content && (
-                        <button
-                          onClick={() =>
-                            copy(
-                              `${a.naver_title ?? a.title}\n\n${toNaverText(a.naver_blog_content ?? "", {
-                                articleTitle: a.title,
-                                slug: a.slug,
-                                tags: a.tags,
-                                review: naverReview,
-                              })}`,
-                              naverReview
-                                ? "네이버 원고 (필수안내사항 포함)"
-                                : "네이버 원고 (미심의 — 심의 신청용 캡처 원고)"
-                            )
-                          }
-                          title="네이버 전용 제목 포함 · 마크다운 기호 제거 · [이미지] 마커 유지 · 본진 기사 링크 + 해시태그 자동 첨부. 필수안내사항은 승인 심의필이 있을 때만 첨부"
-                          className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
-                        >
-                          네이버 복사 <span className="text-slate-400">· 텍스트 변환</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={() =>
+                              copy(
+                                `${a.naver_title ?? a.title}\n\n${toNaverText(a.naver_blog_content ?? "", {
+                                  articleTitle: a.title,
+                                  slug: a.slug,
+                                  tags: a.tags,
+                                  review: naverReview,
+                                  mode: "submission",
+                                })}`,
+                                "네이버 심의 신청용 원고 (필수안내사항 · 심의필 공란)"
+                              )
+                            }
+                            title="심의 신청용 캡처 원고 — 필수안내사항 전문 포함(심의필 줄만 공란). 비공개 게시 후 캡처해 제출하세요."
+                            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400"
+                          >
+                            네이버 심의용 복사
+                          </button>
+                          {!naverReview && <SubmissionBadge />}
+                          <button
+                            onClick={() =>
+                              copy(
+                                `${a.naver_title ?? a.title}\n\n${toNaverText(a.naver_blog_content ?? "", {
+                                  articleTitle: a.title,
+                                  slug: a.slug,
+                                  tags: a.tags,
+                                  review: naverReview,
+                                  mode: "publish",
+                                })}`,
+                                "네이버 게시용 원고 (필수안내사항 포함)"
+                              )
+                            }
+                            disabled={!naverReview}
+                            title={naverReview ? "게시용 — 승인 심의필 실번호로 필수안내사항 첨부" : "심의 승인 후 활성화됩니다"}
+                            className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)] disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            네이버 게시용 복사
+                          </button>
+                        </>
                       )}
-                      {a.naver_blog_content && !naverReview && <UnreviewedBadge />}
                       {a.blogspot_content && (
-                        <button
-                          onClick={() =>
-                            copy(
-                              toBlogspotHtml(a.blogspot_content ?? "", a.slug, a.tags, { review: blogspotReview }),
-                              blogspotReview
-                                ? "블로그스팟 HTML (필수안내사항 포함)"
-                                : "블로그스팟 HTML (미심의 — 심의 신청용 캡처 원고)"
-                            )
-                          }
-                          title="마크다운→HTML 변환 · 이미지 마커 제거 · 본진 링크 + 해시태그 삽입. 제목은 Blogger 제목란에 별도 입력. 필수안내사항은 승인 심의필이 있을 때만 첨부"
-                          className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
-                        >
-                          블로그스팟 복사 <span className="text-slate-400">· HTML 변환</span>
-                        </button>
+                        <>
+                          <button
+                            onClick={() =>
+                              copy(
+                                toBlogspotHtml(a.blogspot_content ?? "", a.slug, a.tags, {
+                                  review: blogspotReview,
+                                  mode: "submission",
+                                }),
+                                "블로그스팟 심의 신청용 HTML (필수안내사항 · 심의필 공란)"
+                              )
+                            }
+                            title="심의 신청용 캡처 원고 — 필수안내사항 전문 포함(심의필 줄만 공란). 비공개 게시 후 캡처해 제출하세요."
+                            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400"
+                          >
+                            블로그스팟 심의용 복사
+                          </button>
+                          {!blogspotReview && <SubmissionBadge />}
+                          <button
+                            onClick={() =>
+                              copy(
+                                toBlogspotHtml(a.blogspot_content ?? "", a.slug, a.tags, {
+                                  review: blogspotReview,
+                                  mode: "publish",
+                                }),
+                                "블로그스팟 게시용 HTML (필수안내사항 포함)"
+                              )
+                            }
+                            disabled={!blogspotReview}
+                            title={blogspotReview ? "게시용 — 승인 심의필 실번호로 필수안내사항 첨부" : "심의 승인 후 활성화됩니다"}
+                            className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)] disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            블로그스팟 게시용 복사
+                          </button>
+                        </>
                       )}
-                      {a.blogspot_content && !blogspotReview && <UnreviewedBadge />}
                       {a.blogspot_title && (
                         <button
                           onClick={() => copy(a.blogspot_title ?? "", "블로그스팟 제목 (Blogger 제목란에 붙여넣기)")}
@@ -1431,14 +1470,14 @@ function PublishControls({
   );
 }
 
-/** 미심의 경고 배지 — 승인 심의필이 없어 필수안내사항이 빠진 원고. 공개 게시 금지(§6.9). */
-function UnreviewedBadge() {
+/** 심의 신청 안내 배지 — [심의용 복사] 옆. 승인 심의필이 아직 없는 원고(§6.9). */
+function SubmissionBadge() {
   return (
     <span
-      title="승인된 광고심의필이 없어 필수안내사항이 빠졌습니다. 비공개 캡처(심의 신청)용으로만 쓰세요."
+      title="심의용 복사본은 필수안내사항 전문을 포함하되 심의필 줄만 공란입니다. 비공개로 게시한 화면을 캡처해 팜스에 제출하세요."
       className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700"
     >
-      ⚠️ 미심의 — 심의 신청용 캡처 원고입니다. 이 상태로 공개 게시 금지
+      ⚠️ 심의 신청용 — 비공개 게시 후 캡처하세요
     </span>
   );
 }
