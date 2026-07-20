@@ -182,13 +182,13 @@ def card1():
     title(d, [("도수치료,", False), ("7월부터 이렇게", False), ("바뀝니다", True)],
           196, True, 92, 112)
     y = rule(d, 560, True) + 40
-    d.text((PAD, y), "1회 가격이 전국 통일", font=sans("bold", 34), fill=ON_DARK)
-    y = draw_bignum(d, PAD - 8, y + 62, "43,850", sans("black", 186),
-                    "원", sans("black", 70), True, 40)
-    d.text((PAD, y), "본인부담 95% · 약 41,658원", font=sans("medium", 36), fill=ON_DARK)
+    d.text((PAD, y), "횟수 기준이 생겼습니다", font=sans("bold", 34), fill=ON_DARK)
+    y = draw_bignum(d, PAD - 8, y + 62, "주 2회", sans("black", 186),
+                    "· 연 15회", sans("black", 70), True, 40)
+    d.text((PAD, y), "물리치료 먼저 · 본인부담 정률", font=sans("medium", 36), fill=ON_DARK)
     y += 100
-    x = pill(d, PAD, y, "주 2회 · 연 15회", True)
-    pill(d, x + 16, y, "물리치료 먼저", True)
+    x = pill(d, PAD, y, "피로회복 목적 제외", True)
+    pill(d, x + 16, y, "소진해도 비용청구 불가", True)
     source(d, y + 98, "보건복지부 확정 기준", True)
     footer(d, True, nav="→ 넘겨보기")
     return img
@@ -198,13 +198,18 @@ def card1():
 def card2():
     img, d = canvas(False)
     overline(d, "왜 바뀌었나", False)
-    title(d, [("같은 도수치료인데", False), ("가격이 제각각이었습니다", True)],
+    title(d, [("같은 도수치료인데", False), ("가격이 병원마다 달랐습니다", True)],
           200, False, 74, 96)
     y = rule(d, 430, False) + 44
     d.text((PAD, y), "이전 병원별 가격", font=sans("bold", 34), fill=MUTED)
-    y = draw_bignum(d, PAD - 8, y + 60, "5만~20만", sans("black", 140),
-                    "원", sans("black", 60), False, 40)
-    d.text((PAD, y), "1회 평균 약 11만원 수준이었습니다", font=sans("medium", 36), fill=BODY)
+    # 빅넘버(금액) 제거 → 문장형 2줄. draw_bignum 반환 y에 의존하지 않으므로
+    # 아래 요소는 여기서 산출한 y를 그대로 이어받는다.
+    by = y + 56
+    fbig = sans("black", 116)
+    d.text((PAD, by), "기준이", font=fbig, fill=STRONG)
+    d.text((PAD, by + 132), "없었습니다", font=fbig, fill="#1b3a30")
+    y = by + 132 + 150
+    d.text((PAD, y), "병원마다 조건이 달랐습니다", font=sans("medium", 36), fill=BODY)
     y += 110
     d.text((PAD, y), "그래서 정부가", font=sans("black", 52), fill=STRONG)
     d.text((PAD, y + 72), "기준을 정했습니다", font=sans("black", 52), fill="#1b3a30")
@@ -222,7 +227,7 @@ def card3():
     d.text((PAD + 320, top), "이전", font=sans("bold", 28), fill=ON_DARK)
     d.text((PAD + 620, top), "2026년 7월~", font=sans("bold", 28), fill=GOLD_BRIGHT)
     ry, rh = top + 56, 122
-    rows = [("가격", "5만~20만원", "43,850원"), ("본인부담", "전액", "95%"),
+    rows = [("가격 기준", "병원별", "전국 동일"), ("본인부담", "전액", "95%"),
             ("횟수", "제한 없음", "주2 · 연15"), ("시작", "바로 가능", "물리치료 후")]
     fl, fb, fa = sans("bold", 38), sans("regular", 34), sans("black", 42)
     for lab, bef, aft in rows:
@@ -251,8 +256,8 @@ def card4():
            font=sans("medium", 36), fill=BODY)
     d.text((PAD, y + 56), "연 최대 24회까지 가능합니다", font=sans("medium", 36), fill=BODY)
     y += 150
-    x = pill(d, PAD, y, "올해는 7~12월 기준", False)
-    pill(d, x + 16, y, "이월 없음", False)
+    # "이월 없음"은 원문 미확인(§6.10) → 제거. "올해는 7~12월 기준"만 유지.
+    pill(d, PAD, y, "올해는 7~12월 기준", False)
     source(d, y + 100, C["source"], False)
     footer(d, False, page="4 / 7")
     return img

@@ -31,6 +31,9 @@ def tw(d,s,f):
 
 PAD = 84
 
+# cover_A 빅넘버 — 렌더/폭측정이 한 값을 참조하도록 상수로 일원화 (§6.10: 금액 금지)
+COVER_A_BIGNUM = "95%"
+
 def footer(d, dark, nav="→ 넘겨보기"):
     f=sans("bold",28); fs=sans("regular",26); y=H-78
     d.text((PAD,y),"신순주의 선한 금융",font=f,fill=CREAM if dark else STRONG)
@@ -52,9 +55,8 @@ def overline(d,text,dark,color=GOLD):
 def cover_A():
     img=Image.new("RGB",(W,H),FOREST); d=ImageDraw.Draw(img)
     toprule(d); overline(d,"2026년 7월 · 실손보험",True)
-    d.text((PAD,300),"도수치료 1회",font=sans("bold",34),fill=ON_DARK)
-    fn=sans("black",168); d.text((PAD-6,350),"43,850",font=fn,fill=GOLD_LT)
-    d.text((PAD+tw(d,"43,850",fn)+14,440),"원",font=sans("black",74),fill=CREAM)
+    d.text((PAD,300),"도수치료 본인부담",font=sans("bold",34),fill=ON_DARK)
+    fn=sans("black",168); d.text((PAD-6,350),COVER_A_BIGNUM,font=fn,fill=GOLD_LT)
     ft=sans("black",84)
     for i,l in enumerate(["도수치료,","7월부터","이렇게 바뀝니다"]):
         d.text((PAD,590+i*106),l,font=ft,fill=CREAM)
@@ -106,8 +108,8 @@ def cover_D():
     ft=sans("black",92)
     d.text((PAD,300),"내 암보험금,",font=ft,fill=CREAM)
     d.text((PAD,412),"진짜",font=ft,fill=CREAM)
-    d.text((PAD+tw(d,"진짜 ",ft),412),"5,000만원",font=ft,fill=GOLD_LT)
-    d.text((PAD,524),"맞을까?",font=ft,fill=CREAM)
+    d.text((PAD+tw(d,"진짜 ",ft),412),"합쳐서",font=ft,fill=GOLD_LT)
+    d.text((PAD,524),"얼마일까?",font=ft,fill=CREAM)
     items=["계약 3장에 흩어진 진단비","특약마다 다른 지급 조건","합산해야 보이는 실제 금액"]
     fy=740
     for i,it in enumerate(items):
