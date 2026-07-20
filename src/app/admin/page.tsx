@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { isAdminAuthed } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase-admin";
+import { checkBannedTerms, type CheckResult, type ComplianceAck } from "@/lib/compliance/banned-terms";
 import AdminLogin from "@/components/admin/AdminLogin";
 import AdminDashboard from "@/components/admin/AdminDashboard";
 
@@ -31,7 +32,7 @@ export default async function AdminPage() {
     supabase
       .from("premium_articles")
       .select(
-        "id, title, naver_title, blogspot_title, slug, category, summary, tags, raw_source_url, raw_source_name, raw_source_fulltext, key_points, remodeling_bridge, main_website_markdown, is_main_published, is_naver_published, is_blogspot_published, is_instagram_published, is_threads_published, naver_blog_content, blogspot_content, instagram_caption, carousel_json, threads_json, image_paths, naver_image_paths, view_count, published_at, created_at, content_type, seed_key, verify_claims, needs_human_review"
+        "id, title, naver_title, blogspot_title, slug, category, summary, tags, raw_source_url, raw_source_name, raw_source_fulltext, key_points, remodeling_bridge, main_website_markdown, is_main_published, is_naver_published, is_blogspot_published, is_instagram_published, is_threads_published, naver_blog_content, blogspot_content, instagram_caption, carousel_json, threads_json, faq_json, image_paths, naver_image_paths, view_count, published_at, created_at, content_type, seed_key, verify_claims, compliance_acks, needs_human_review"
       )
       .order("created_at", { ascending: false })
       .limit(100),
@@ -59,15 +60,24 @@ export default async function AdminPage() {
   // 심의 프리뷰 토큰 — 서버에서만 읽어 인증된 관리자에게만 전달(NEXT_PUBLIC_ 아님, 번들 미노출).
   const previewToken = process.env.PREVIEW_SECRET ?? "";
 
+  // §6.10 금지 표현 검사 — 서버에서 기사별 판정(심의 신청 전 게이트의 단일 기준).
+  const articleRows = articles.data ?? [];
+  const compliance: Record<string, CheckResult> = {};
+  for (const a of articleRows) {
+    const row = a as { id: string; compliance_acks?: ComplianceAck[] };
+    compliance[row.id] = checkBannedTerms(a, row.compliance_acks ?? []);
+  }
+
   return (
     <AdminDashboard
       leads={leads.data ?? []}
       consultations={consultations.data ?? []}
-      articles={articles.data ?? []}
+      articles={articleRows}
       kinAnswers={kinAnswers.data ?? []}
       adReviews={adReviews.data ?? []}
       expiring={expiring.data ?? []}
       previewToken={previewToken}
+      compliance={compliance}
     />
   );
 }

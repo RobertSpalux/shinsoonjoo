@@ -5,6 +5,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toBlogspotHtml, toNaverText } from "@/lib/osmu-format";
 import type { ReviewInfo } from "@/lib/brand";
+import type { CheckResult } from "@/lib/compliance/banned-terms";
+import ComplianceModal from "@/components/admin/ComplianceModal";
 import KinTab, { type KinAnswer } from "@/components/admin/KinTab";
 import {
   AdReviewPanel,
@@ -164,6 +166,7 @@ export default function AdminDashboard({
   adReviews: initialAdReviews,
   expiring,
   previewToken,
+  compliance: initialCompliance,
 }: {
   leads: Lead[];
   consultations: Consultation[];
@@ -172,6 +175,7 @@ export default function AdminDashboard({
   adReviews: AdReview[];
   expiring: ExpiringReview[];
   previewToken: string;
+  compliance: Record<string, CheckResult>;
 }) {
   const [tab, setTab] = useState<"leads" | "consults" | "articles" | "kin">("articles");
   const [leads, setLeads] = useState(initialLeads);
@@ -179,6 +183,9 @@ export default function AdminDashboard({
   const [articles, setArticles] = useState(initialArticles);
   const [kinAnswers, setKinAnswers] = useState(initialKinAnswers);
   const [adReviews, setAdReviews] = useState(initialAdReviews);
+  // §6.10 컴플라이언스 판정(기사별) — ack 토글 시 서버 재검사 결과로 갱신.
+  const [compliance, setCompliance] = useState(initialCompliance);
+  const [complianceArticle, setComplianceArticle] = useState<Article | null>(null);
 
   // 발행 게이트 판정 기준일(마운트 시 1회 캡처) + (article,channel)당 최신 심의 행 맵.
   const [today] = useState(() => todayStr());
@@ -226,6 +233,27 @@ export default function AdminDashboard({
       showToast(`${label} 복사 완료`);
     } catch {
       showToast("복사 실패 — 브라우저 권한을 확인하세요");
+    }
+  };
+
+  // 심의용 복사 — 서버(/api/admin/compose)에서 조립. §6.10 게이트를 서버가 다시 확인하므로
+  // 버튼을 우회해도(콘솔에서 직접 호출) 미통과 원고는 내려오지 않는다.
+  const copyViaCompose = async (articleId: string, channel: "naver" | "blogspot", label: string) => {
+    try {
+      const res = await fetch("/api/admin/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articleId, channel }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.text) {
+        await navigator.clipboard.writeText(json.text);
+        showToast(`${label} 복사 완료`);
+      } else {
+        showToast(json.error ?? "복사 실패");
+      }
+    } catch {
+      showToast("복사 실패 — 네트워크·권한 확인");
     }
   };
 
@@ -509,6 +537,12 @@ export default function AdminDashboard({
                 // 채널별 유효 심의필 — 없으면 필수안내사항이 빠지므로 '미심의' 배지를 띄운다.
                 const naverReview = reviewArg(a.id, "naver");
                 const blogspotReview = reviewArg(a.id, "blogspot");
+                // §6.10 게이트 — 미통과면 심의용 복사·웹 미리보기를 막는다.
+                const comp = compliance[a.id];
+                const gateBlocked = !!comp && comp.level !== "clean";
+                const gateA = comp?.findings.filter((f) => f.grade === "A").length ?? 0;
+                const gateB = comp?.findings.filter((f) => f.grade === "B" && !f.acked).length ?? 0;
+                const gateTip = `컴플라이언스 검사 미통과 — ${gateA + gateB}건 확인 필요`;
                 return (
                   <div key={a.id} className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -528,6 +562,23 @@ export default function AdminDashboard({
                             >
                               ⚠️ 카드 검증 {warnings.length}건
                             </span>
+                          )}
+                          {comp && (
+                            <button
+                              onClick={() => setComplianceArticle(a)}
+                              title="컴플라이언스 검사 (§6.10)"
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                                comp.level === "block"
+                                  ? "border-red-300 bg-red-50 text-red-700"
+                                  : comp.level === "warn"
+                                    ? "border-amber-300 bg-amber-50 text-amber-700"
+                                    : "border-emerald-300 bg-emerald-50 text-emerald-700"
+                              }`}
+                            >
+                              {comp.level === "clean"
+                                ? "✅ 컴플라이언스 통과"
+                                : `${comp.level === "block" ? "🔴 차단" : "🟡 확인"} ${gateA + gateB}건`}
+                            </button>
                           )}
                           {isEvergreen(a) && a.seed_key && (
                             <span className="rounded border border-[var(--color-line)] bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] text-slate-600">
@@ -601,39 +652,38 @@ export default function AdminDashboard({
                       >
                         본문 보기
                       </button>
-                      {/* 심의용 웹 미리보기 — 공개 화면과 동일(필수안내사항·심의필 공란). 5-3 캡처 세트. */}
-                      {previewToken && (
-                        <a
-                          href={`/preview/news/${a.slug}?token=${encodeURIComponent(previewToken)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title="공개 화면과 픽셀 동일한 심의용 페이지(필수안내사항 포함·심의필 공란). 비공개 상태로 캡처해 제출하세요."
-                          className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 transition-all hover:border-amber-400"
-                        >
-                          웹 심의용 미리보기 ↗
-                        </a>
-                      )}
+                      {/* 심의용 웹 미리보기 — 공개 화면과 동일(필수안내사항·심의필 공란). 5-3 캡처 세트.
+                          §6.10 게이트 미통과면 비활성(서버 /preview도 차단). */}
+                      {previewToken &&
+                        (gateBlocked ? (
+                          <span
+                            title={gateTip}
+                            className="cursor-not-allowed rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-400"
+                          >
+                            🔒 웹 심의용 미리보기
+                          </span>
+                        ) : (
+                          <a
+                            href={`/preview/news/${a.slug}?token=${encodeURIComponent(previewToken)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="공개 화면과 픽셀 동일한 심의용 페이지(필수안내사항 포함·심의필 공란). 비공개 상태로 캡처해 제출하세요."
+                            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 transition-all hover:border-amber-400"
+                          >
+                            웹 심의용 미리보기 ↗
+                          </a>
+                        ))}
                       {a.naver_blog_content && (
                         <>
                           <button
-                            onClick={() =>
-                              copy(
-                                `${a.naver_title ?? a.title}\n\n${toNaverText(a.naver_blog_content ?? "", {
-                                  articleTitle: a.title,
-                                  slug: a.slug,
-                                  tags: a.tags,
-                                  review: naverReview,
-                                  mode: "submission",
-                                })}`,
-                                "네이버 심의 신청용 원고 (필수안내사항 · 심의필 공란)"
-                              )
-                            }
-                            title="심의 신청용 캡처 원고 — 필수안내사항 전문 포함(심의필 줄만 공란). 비공개 게시 후 캡처해 제출하세요."
-                            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400"
+                            onClick={() => copyViaCompose(a.id, "naver", "네이버 심의 신청용 원고")}
+                            disabled={gateBlocked}
+                            title={gateBlocked ? gateTip : "심의 신청용 캡처 원고(서버 조립) — 필수안내사항 전문 포함(심의필 줄만 공란). 비공개 게시 후 캡처해 제출하세요."}
+                            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400 disabled:cursor-not-allowed disabled:border-[var(--color-line)] disabled:bg-transparent disabled:text-slate-400"
                           >
-                            네이버 심의용 복사
+                            {gateBlocked ? "🔒 " : ""}네이버 심의용 복사
                           </button>
-                          {!naverReview && <SubmissionBadge />}
+                          {!naverReview && !gateBlocked && <SubmissionBadge />}
                           <button
                             onClick={() =>
                               copy(
@@ -658,21 +708,14 @@ export default function AdminDashboard({
                       {a.blogspot_content && (
                         <>
                           <button
-                            onClick={() =>
-                              copy(
-                                toBlogspotHtml(a.blogspot_content ?? "", a.slug, a.tags, {
-                                  review: blogspotReview,
-                                  mode: "submission",
-                                }),
-                                "블로그스팟 심의 신청용 HTML (필수안내사항 · 심의필 공란)"
-                              )
-                            }
-                            title="심의 신청용 캡처 원고 — 필수안내사항 전문 포함(심의필 줄만 공란). 비공개 게시 후 캡처해 제출하세요."
-                            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400"
+                            onClick={() => copyViaCompose(a.id, "blogspot", "블로그스팟 심의 신청용 HTML")}
+                            disabled={gateBlocked}
+                            title={gateBlocked ? gateTip : "심의 신청용 캡처 원고(서버 조립) — 필수안내사항 전문 포함(심의필 줄만 공란). 비공개 게시 후 캡처해 제출하세요."}
+                            className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400 disabled:cursor-not-allowed disabled:border-[var(--color-line)] disabled:bg-transparent disabled:text-slate-400"
                           >
-                            블로그스팟 심의용 복사
+                            {gateBlocked ? "🔒 " : ""}블로그스팟 심의용 복사
                           </button>
-                          {!blogspotReview && <SubmissionBadge />}
+                          {!blogspotReview && !gateBlocked && <SubmissionBadge />}
                           <button
                             onClick={() =>
                               copy(
@@ -1209,6 +1252,19 @@ export default function AdminDashboard({
             </button>
           </div>
         </div>
+      )}
+
+      {/* 컴플라이언스 검사 모달 (§6.10) */}
+      {complianceArticle && compliance[complianceArticle.id] && (
+        <ComplianceModal
+          article={{ id: complianceArticle.id, title: complianceArticle.title }}
+          result={compliance[complianceArticle.id]}
+          onClose={() => setComplianceArticle(null)}
+          onResult={(r) =>
+            setCompliance((prev) => ({ ...prev, [complianceArticle.id]: r }))
+          }
+          onToast={showToast}
+        />
       )}
 
       {/* 토스트 */}
