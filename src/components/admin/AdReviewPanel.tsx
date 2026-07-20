@@ -50,7 +50,7 @@ export const CHANNELS = [
   { key: "naver", label: "네이버", adForm: "바이럴(블로그 등)", reviewType: "general", publishFlag: "is_naver_published" },
   { key: "blogspot", label: "블로그스팟", adForm: "바이럴(블로그 등)", reviewType: "general", publishFlag: "is_blogspot_published" },
   { key: "instagram", label: "인스타(영상제외)", adForm: "인스타(영상제외)", reviewType: "general", publishFlag: "is_instagram_published" },
-  { key: "threads", label: "스레드", adForm: "스레드", reviewType: "threads", publishFlag: null },
+  { key: "threads", label: "스레드", adForm: "스레드", reviewType: "threads", publishFlag: "is_threads_published" },
 ] as const;
 
 export type ChannelDef = (typeof CHANNELS)[number];
@@ -193,6 +193,7 @@ type ArticleLike = {
   is_naver_published: boolean;
   is_blogspot_published: boolean;
   is_instagram_published: boolean;
+  is_threads_published: boolean;
 };
 
 type ModalState =
@@ -422,6 +423,13 @@ export function AdReviewPanel({
                       <p className="mt-0.5 font-semibold text-slate-800">{modal.channel.reviewType}</p>
                     </div>
                   </div>
+                  {modal.channel.key === "threads" && (
+                    <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+                      스레드는 팜스에서 심의유형 <b>[스레드]</b>를 선택합니다. <b>텍스트만</b>인 경우 폼에 직접
+                      입력하며 캡처·PDF·zip이 필요 없습니다(아래 체크리스트 3~5단계 생략). <b>이미지가 포함되면
+                      일반심의</b>로 신청하세요(캡처 PDF → zip).
+                    </p>
+                  )}
                   <details className="rounded-lg border border-[var(--color-line)] bg-slate-50/70">
                     <summary className="cursor-pointer px-3 py-2 text-[11px] font-bold text-slate-500">
                       팜스 신청 체크리스트 (§6.9 10단계)

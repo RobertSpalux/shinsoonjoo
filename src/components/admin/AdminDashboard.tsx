@@ -83,6 +83,7 @@ interface Article {
   is_naver_published: boolean;
   is_blogspot_published: boolean;
   is_instagram_published: boolean;
+  is_threads_published: boolean;
   naver_blog_content: string | null;
   blogspot_content: string | null;
   instagram_caption: string | null;
@@ -662,6 +663,7 @@ export default function AdminDashboard({
                         ["네이버", "is_naver_published", "naver", a.is_naver_published],
                         ["블로그스팟", "is_blogspot_published", "blogspot", a.is_blogspot_published],
                         ["인스타", "is_instagram_published", "instagram", a.is_instagram_published],
+                        ["스레드", "is_threads_published", "threads", a.is_threads_published],
                       ] as const).map(([label, field, channel, checked]) => {
                         // 발행 게이트 — 유효 심의필 없으면 켜기 금지(끄기는 허용). 서버 트리거가 최후 방어선.
                         const canOn = reviewValid(reviewsByArticle.get(a.id)?.[channel], today);
