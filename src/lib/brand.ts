@@ -62,25 +62,24 @@ export function careerLabel(now?: Date) {
  * ──────────────────────────────────────────────────────────────────────── */
 
 /**
- * 광고심의 필수 식별정보. 심의 통과 후 review 값을 채운다.
- * review.no가 비어 있으면 렌더러가 공란 플레이스홀더를 출력한다.
- * ⚠️ 프라임에셋 참고자료: "심의필 예시는 공란으로 표기(임의번호 불가)".
- *    가짜 심의필 번호를 생성하지 말 것.
+ * 광고심의 고정 식별정보(회사·설계사 공통).
+ * ⚠️ 심의필 번호·유효기간은 여기 없다 — 광고물(글)×채널 단위로 발급되므로 상수로 둘 수 없다.
+ *    정본은 `ad_reviews` 테이블이며, renderMandatoryNotice(review)에 건별로 주입한다.
  */
 export const COMPLIANCE = {
   agencyName: "프라임에셋(주) 보험대리점",
   agencyRegNo: "2009058101",
   plannerName: "신순주",
   plannerRegNo: "20030976050033", // 생명·손해보험협회 공통
-
-  // 심의 통과 후 채운다. 빈 값이면 렌더러가 플레이스홀더를 출력한다.
-  review: {
-    authority: "프라임에셋",
-    no: "", // 예: '2026-0001'
-    from: "", // 'YYYY.MM.DD'
-    to: "", // 'YYYY.MM.DD'
-  },
 } as const;
+
+/** 광고물(글)×채널 단위 승인 심의필 — ad_reviews의 해당 행에서 온다. */
+export type ReviewInfo = {
+  authority: string;
+  no: string;
+  from: string; // 'YYYY.MM.DD'
+  to: string; // 'YYYY.MM.DD'
+};
 
 /**
  * 광고 필수안내사항 전문(全文) 렌더러.
@@ -88,17 +87,19 @@ export const COMPLIANCE = {
  * 자가점검표 1-1 ~ 1-8 전 항목을 충족하는 완성형이다. 하나라도 빠지면 반려된다.
  * (협회 가이드북 Part II · 프라임에셋 참고자료 26.05.21 기준)
  *
+ * ⚠️ review가 없거나 no가 비어 있으면 **null**을 반환한다(블록 자체를 생략). §6.3
+ *    절대 '제00000호' 공란 플레이스홀더를 반환하지 않는다 — 공란은 신청서 예시 형식이지
+ *    게시용 값이 아니며, 게시되면 허위 심의필 표기가 된다.
  * ⚠️ 출력 문구를 임의로 축약·변형하지 말 것 — 축약은 반송 사유다.
  * ⚠️ 승환계약 유의문구는 2022.11.07 회사 공지로 GA 전 광고물 필수 → 상시 포함.
  * ⚠️ 실제 화면 렌더 시 파일 상단의 표시 기준(색상·차별화·글꼴 크기)을 지킬 것.
  */
-export function renderMandatoryNotice(): string {
-  const { plannerName, plannerRegNo, agencyName, agencyRegNo, review } = COMPLIANCE;
+export function renderMandatoryNotice(review?: ReviewInfo): string | null {
+  // 유효한 심의필이 없으면 필수안내사항을 만들지 않는다(허위 표기 방지).
+  if (!review || !review.no) return null;
 
-  // 심의필 줄: review.no가 비면 공란 플레이스홀더(임의번호 금지), 채워지면 실값 치환.
-  const reviewLine = review.no
-    ? `${review.authority} 심의필 제${review.no}호 (${review.from}~${review.to})`
-    : `${review.authority} 심의필 제00000호 (2026.00.00~2027.00.00)`;
+  const { plannerName, plannerRegNo, agencyName, agencyRegNo } = COMPLIANCE;
+  const reviewLine = `${review.authority} 심의필 제${review.no}호 (${review.from}~${review.to})`;
 
   return `[필수안내사항]
 

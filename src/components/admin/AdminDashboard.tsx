@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toBlogspotHtml, toNaverText } from "@/lib/osmu-format";
+import type { ReviewInfo } from "@/lib/brand";
 import KinTab, { type KinAnswer } from "@/components/admin/KinTab";
 import {
   AdReviewPanel,
@@ -195,6 +196,20 @@ export default function AdminDashboard({
       ...prev.filter((r) => !(r.article_id === review.article_id && r.channel === review.channel)),
     ]);
   }, []);
+  // 채널의 유효 승인 심의필 → 필수안내사항 삽입용 인자(날짜 YYYY.MM.DD). 없으면 null(미심의).
+  const reviewArg = useCallback(
+    (articleId: string, channel: string): ReviewInfo | null => {
+      const r = reviewsByArticle.get(articleId)?.[channel];
+      if (!r || !reviewValid(r, today)) return null;
+      return {
+        authority: r.review_authority ?? "프라임에셋",
+        no: r.review_no ?? "",
+        from: (r.review_from ?? "").replaceAll("-", "."),
+        to: (r.review_to ?? "").replaceAll("-", "."),
+      };
+    },
+    [reviewsByArticle, today]
+  );
 
   // 토스트
   const [toast, setToast] = useState("");
@@ -489,6 +504,9 @@ export default function AdminDashboard({
               {filteredArticles.length === 0 && <Empty text="조건에 맞는 콘텐츠가 없습니다." />}
               {filteredArticles.map((a) => {
                 const warnings = carouselWarnings(a.carousel_json);
+                // 채널별 유효 심의필 — 없으면 필수안내사항이 빠지므로 '미심의' 배지를 띄운다.
+                const naverReview = reviewArg(a.id, "naver");
+                const blogspotReview = reviewArg(a.id, "blogspot");
                 return (
                   <div key={a.id} className="rounded-xl border border-[var(--color-line)] bg-[var(--color-ink-card)] p-5">
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -589,30 +607,37 @@ export default function AdminDashboard({
                                 articleTitle: a.title,
                                 slug: a.slug,
                                 tags: a.tags,
+                                review: naverReview,
                               })}`,
-                              "네이버 원고 (네이버 제목 + 본진 링크 + 태그 첨부)"
+                              naverReview
+                                ? "네이버 원고 (필수안내사항 포함)"
+                                : "네이버 원고 (미심의 — 심의 신청용 캡처 원고)"
                             )
                           }
-                          title="네이버 전용 제목 포함 · 마크다운 기호 제거 · [이미지] 마커 유지 · 본진 기사 링크 + 진단 링크 + 해시태그 자동 첨부"
+                          title="네이버 전용 제목 포함 · 마크다운 기호 제거 · [이미지] 마커 유지 · 본진 기사 링크 + 해시태그 자동 첨부. 필수안내사항은 승인 심의필이 있을 때만 첨부"
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
                         >
                           네이버 복사 <span className="text-slate-400">· 텍스트 변환</span>
                         </button>
                       )}
+                      {a.naver_blog_content && !naverReview && <UnreviewedBadge />}
                       {a.blogspot_content && (
                         <button
                           onClick={() =>
                             copy(
-                              toBlogspotHtml(a.blogspot_content ?? "", a.slug, a.tags),
-                              "블로그스팟 HTML (Blogger 'HTML 보기'에 붙여넣기)"
+                              toBlogspotHtml(a.blogspot_content ?? "", a.slug, a.tags, { review: blogspotReview }),
+                              blogspotReview
+                                ? "블로그스팟 HTML (필수안내사항 포함)"
+                                : "블로그스팟 HTML (미심의 — 심의 신청용 캡처 원고)"
                             )
                           }
-                          title="마크다운→HTML 변환 · 이미지 마커 제거 · 본진 링크 + 해시태그 삽입. 제목은 Blogger 제목란에 별도 입력"
+                          title="마크다운→HTML 변환 · 이미지 마커 제거 · 본진 링크 + 해시태그 삽입. 제목은 Blogger 제목란에 별도 입력. 필수안내사항은 승인 심의필이 있을 때만 첨부"
                           className="rounded-full border border-[var(--color-line)] px-4 py-2 text-xs font-semibold text-slate-700 hover:border-[var(--color-gold-dim)]"
                         >
                           블로그스팟 복사 <span className="text-slate-400">· HTML 변환</span>
                         </button>
                       )}
+                      {a.blogspot_content && !blogspotReview && <UnreviewedBadge />}
                       {a.blogspot_title && (
                         <button
                           onClick={() => copy(a.blogspot_title ?? "", "블로그스팟 제목 (Blogger 제목란에 붙여넣기)")}
@@ -1403,6 +1428,18 @@ function PublishControls({
         )}
       </div>
     </div>
+  );
+}
+
+/** 미심의 경고 배지 — 승인 심의필이 없어 필수안내사항이 빠진 원고. 공개 게시 금지(§6.9). */
+function UnreviewedBadge() {
+  return (
+    <span
+      title="승인된 광고심의필이 없어 필수안내사항이 빠졌습니다. 비공개 캡처(심의 신청)용으로만 쓰세요."
+      className="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700"
+    >
+      ⚠️ 미심의 — 심의 신청용 캡처 원고입니다. 이 상태로 공개 게시 금지
+    </span>
   );
 }
 
