@@ -389,6 +389,18 @@
 
 ⚠️ 심의 통과 후 **원안 수정 불가**(오타 포함). 변경 시 연장 불가, 신규 재신청.
 
+**🚀 발행 실전 확정 (2026-07-21 — checklist-7 첫 정식 발행) [확정]**
+- **발행 게이트 2층:**
+  - DB 트리거 `enforce_publish_gate`는 `has_valid_review`(**심의필만**) 하드 검사(status=approved +
+    번호 + 유효기간 내). needs_human_review·verify_claims는 DB에서 검사 안 함.
+  - UI `passReviewGate`는 needs_human_review=true 시 **confirm 1회**(소프트). verify_claims는 발행을
+    하드 차단하지 않음 — **단 실제 사실검증은 필수**(팩트검증 = Claude 책임).
+- **심의필 입력 형식:** `review_no`엔 **번호만**(예: `2026-07-6088`). 템플릿이
+  `"{authority} 심의필 제{no}호"`로 접두·접미를 자동 부착한다. **전체 문자열을 넣으면 이중 렌더**
+  (`제프라임에셋…호호`) → §6.3 위반 소지. (실측 사고 있었음, 교정 완료.)
+- **admin 발행 버튼 경로는 `revalidatePath`가 붙어 ISR 즉시 반영**(MCP 직접 수정과 다름 — MCP는
+  revalidate 미트리거).
+
 **⚙️ 생성 파이프라인 상태 (2026-07-20) [확정]**
 - 사전심의 체제에서 병목은 생성이 아니라 심의다(동시 심사중 2건, §6.4).
 - 이에 따라 **뉴스·상록수 크론의 schedule을 일시정지**했다(`7786c7f`).
