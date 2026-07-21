@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BRAND, getCareer } from "@/lib/brand";
+import { BRAND, getCareer, SITE_FOOTER_NOTICES } from "@/lib/brand";
 
 /**
  * 푸터 — 딥그린 대비 밴드 (DESIGN-SPEC 3-4).
@@ -176,6 +176,12 @@ export default function Footer() {
             본 사이트의 콘텐츠는 금융 정보 제공을 목적으로 하며, 특정 상품의 권유가 아닙니다.
             보험 계약 체결 전 상품설명서와 약관을 반드시 확인하시기 바랍니다.
           </p>
+          {/* 필수 유의문구 2종 — 사이트 전체 1건 심의(§6.11-4). brand.ts 싱글소스. */}
+          {SITE_FOOTER_NOTICES.map((notice) => (
+            <p key={notice} className="mt-2">
+              {notice}
+            </p>
+          ))}
           <p className="mt-2">
             © {new Date().getFullYear()} {BRAND.siteName}. All rights reserved.
           </p>
