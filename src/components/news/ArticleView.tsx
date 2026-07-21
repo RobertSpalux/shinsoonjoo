@@ -15,6 +15,7 @@ import ArticleCard from "@/components/news/ArticleCard";
 import ArticleCtaInline from "@/components/news/ArticleCtaInline";
 import ArticleCtaEnd from "@/components/news/ArticleCtaEnd";
 import MandatoryNotice from "@/components/news/MandatoryNotice";
+import ArticleNotice from "@/components/news/ArticleNotice";
 
 /** ## 소제목 추출 → 목차 (rehype-slug와 동일한 slugger로 앵커 일치) */
 function extractToc(markdown: string) {
@@ -233,6 +234,10 @@ export default function ArticleView({
             본 글은 공개 자료를 기반으로 한 전문가 해설이며, 특정 상품의 권유가 아닙니다.
           </p>
         </div>
+
+        {/* 게시글 필수 유의문구 2종 — 심의필과 무관하게 상시(§6.11-4, 회신 2026-07-21).
+            MandatoryNotice(심의필 조건부)와 별개 블록. */}
+        <ArticleNotice />
 
         {/* FAQ 섹션 (FAQPage 스키마와 쌍) */}
         {faqs.length > 0 && (

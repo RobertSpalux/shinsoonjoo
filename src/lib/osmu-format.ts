@@ -1,5 +1,5 @@
 import { marked } from "marked";
-import { BRAND, CONDITIONAL_NOTICES, renderMandatoryNotice, type ReviewInfo } from "./brand";
+import { BRAND, REQUIRED_NOTICES, renderMandatoryNotice, type ReviewInfo } from "./brand";
 
 /**
  * OSMU 채널별 원고 포맷 변환 — /admin 복사 버튼에서 사용. "복붙 1분"이 목표.
@@ -8,7 +8,7 @@ import { BRAND, CONDITIONAL_NOTICES, renderMandatoryNotice, type ReviewInfo } fr
  * ⚠️ 금소법 심의 체제(CLAUDE.md §6.3/§6.6/§6.9/§6.10):
  *   - 외부 채널(네이버/블로그스팟)은 게시 전 사전 심의 대상 = 업무광고.
  *   - 필수안내사항은 승인된 심의필(ad_reviews)이 있을 때만 말미에 붙는다(없으면 생략).
- *   - 개인의견 귀속 문구는 바이럴에서 본문에 1회 이상 노출한다(§6.10).
+ *   - 필수 유의문구 2종(REQUIRED_NOTICES)은 바이럴 본문에 1회 이상 노출한다(§6.11-4, 회신 2026-07-21).
  *   - /diagnosis CTA는 심의 전까지 내린다(includeDiagnosisCta로 게이트, 기본 off).
  */
 
@@ -62,43 +62,42 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * 플레인 텍스트(네이버)에 개인의견 귀속 문구를 1회 삽입.
+ * 플레인 텍스트(네이버)에 게시글 필수 유의문구 2종을 1회 삽입.
  * - 조언 블록이 있으면 그 블록 바로 아래, 없으면 본문 최하단.
- * - 멱등: 이미 같은 문장이 있으면 그대로 둔다.
+ * - 멱등: 2종이 모두 이미 있으면 그대로 둔다.
  */
-function insertPersonalOpinionText(text: string): string {
-  const opinion = CONDITIONAL_NOTICES.personalOpinion;
-  if (text.includes(opinion)) return text;
+function insertBodyNoticesText(text: string): string {
+  if (REQUIRED_NOTICES.every((n) => text.includes(n))) return text;
+  const block = REQUIRED_NOTICES.join("\n\n");
 
   const idx = text.indexOf(ADVICE_ANCHOR);
   if (idx >= 0) {
     const blockEnd = text.indexOf("\n\n", idx); // 조언 블록 끝(다음 빈 줄)
     if (blockEnd >= 0) {
-      return `${text.slice(0, blockEnd)}\n\n${opinion}${text.slice(blockEnd)}`;
+      return `${text.slice(0, blockEnd)}\n\n${block}${text.slice(blockEnd)}`;
     }
   }
-  return `${text.trimEnd()}\n\n${opinion}`;
+  return `${text.trimEnd()}\n\n${block}`;
 }
 
 /**
- * HTML(블로그스팟)에 개인의견 귀속 문구를 <p>로 1회 삽입.
+ * HTML(블로그스팟)에 게시글 필수 유의문구 2종을 <p>로 1회 삽입.
  * - 조언 인용블록(</blockquote>) 뒤, 없으면 본문 끝.
- * - 멱등: 이미 문장이 있으면 그대로 둔다. (문구에 <,>,& 없음 → 이스케이프본과 동일)
+ * - 멱등: 2종이 모두 이미 있으면 그대로 둔다. (문구에 <,>,& 없음 → 이스케이프본과 동일)
  */
-function insertPersonalOpinionHtml(html: string): string {
-  const opinion = CONDITIONAL_NOTICES.personalOpinion;
-  if (html.includes(opinion)) return html;
-  const p = `<p>${escapeHtml(opinion)}</p>`;
+function insertBodyNoticesHtml(html: string): string {
+  if (REQUIRED_NOTICES.every((n) => html.includes(n))) return html;
+  const block = REQUIRED_NOTICES.map((n) => `<p>${escapeHtml(n)}</p>`).join("\n");
 
   const aIdx = html.indexOf(ADVICE_ANCHOR);
   if (aIdx >= 0) {
     const close = html.indexOf("</blockquote>", aIdx);
     if (close >= 0) {
       const at = close + "</blockquote>".length;
-      return `${html.slice(0, at)}\n${p}${html.slice(at)}`;
+      return `${html.slice(0, at)}\n${block}${html.slice(at)}`;
     }
   }
-  return `${html}\n${p}`;
+  return `${html}\n${block}`;
 }
 
 /** 필수안내사항 전문(플레인) → HTML 단락들. 빈 줄=단락 분리, 줄바꿈=<br /> (이스케이프). */
@@ -114,7 +113,7 @@ function noticeToHtml(notice: string): string {
  * - ##→<h2>, 불릿→<ul>, 번호→<ol>, 표→<table>, 인용→<blockquote> (marked/GFM)
  * - [이미지] 마커 제거 (블로그스팟은 이미지 미사용 채널)
  * - 본진 언급("신순주의 선한 금융")을 기사 상세 링크 앵커로 — 브랜드명 텍스트는 그대로 유지
- * - 개인의견 귀속 문구(§6.10)를 본문에 1회 삽입
+ * - 필수 유의문구 2종(§6.11-4)을 본문에 1회 삽입
  * - 승인 심의필(review)이 있으면 <hr /> 뒤에 필수안내사항 전문을 붙인다(없으면 생략)
  */
 export function toBlogspotHtml(
@@ -141,8 +140,8 @@ export function toBlogspotHtml(
   const hashtags = toHashtags(tags);
   let out = hashtags ? `${linked}\n<p>${hashtags}</p>` : linked;
 
-  // 개인의견 귀속 문구 (§6.10 — 바이럴은 본문에 1회 이상)
-  out = insertPersonalOpinionHtml(out);
+  // 필수 유의문구 2종 (§6.11-4 — 바이럴은 본문에 1회 이상, 회신 2026-07-21)
+  out = insertBodyNoticesHtml(out);
 
   // 필수안내사항 — submission이면 항상(공란 심의필), publish면 승인 심의필 있을 때만.
   const notice = renderMandatoryNotice(opts?.review ?? undefined, opts?.mode ?? "publish");
@@ -158,7 +157,7 @@ export function toBlogspotHtml(
  * - ## 제거(소제목은 텍스트로), 굵게·기울임·인용(>) 마커 제거, 불릿 - → ·
  * - [이미지] 마커는 유지 (카드 PNG 삽입 위치 표시)
  * - 말미에 본진 기사 링크(네이버→본진 트래픽 다리) + 해시태그 자동 첨부
- * - 개인의견 귀속 문구(§6.10)를 본문에 1회 삽입
+ * - 필수 유의문구 2종(§6.11-4)을 본문에 1회 삽입
  * - /diagnosis CTA는 includeDiagnosisCta일 때만(기본 off, §6.6)
  * - 승인 심의필(review)이 있으면 말미에 구분선과 함께 필수안내사항 전문(없으면 생략)
  */
@@ -181,8 +180,8 @@ export function toNaverText(
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  // 개인의견 귀속 문구 (§6.10 — 조언 블록 아래, 없으면 본문 최하단)
-  text = insertPersonalOpinionText(text);
+  // 필수 유의문구 2종 (§6.11-4 — 조언 블록 아래, 없으면 본문 최하단, 회신 2026-07-21)
+  text = insertBodyNoticesText(text);
 
   if (opts?.slug) {
     const articleUrl = `${SITE_URL}/news/${opts.slug}`;
