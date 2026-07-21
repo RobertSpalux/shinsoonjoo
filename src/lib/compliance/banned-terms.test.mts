@@ -60,5 +60,31 @@ console.log("[findings 메타]");
   ok("§6.10 조항 근거 포함", r.findings.every((x) => x.reason.includes("§6.10")));
 }
 
+console.log("[신규 금지어 260521 — A block]");
+ok("어마무시한 → block", levelOf({ main_website_markdown: "어마무시한 보장입니다." }) === "block");
+ok("왕창 → block", levelOf({ main_website_markdown: "보험료 왕창 아끼는 법." }) === "block");
+ok("전설의 보험 → block", levelOf({ main_website_markdown: "전설의 보험이 있습니다." }) === "block");
+ok("3대천왕 → block", levelOf({ main_website_markdown: "실손 3대천왕 정리." }) === "block");
+ok("문의 폭주 → block", levelOf({ main_website_markdown: "문의 폭주 중입니다." }) === "block");
+ok("거지되기 싫으면 → block", levelOf({ main_website_markdown: "거지되기 싫으면 준비하세요." }) === "block");
+ok("호구 → block", levelOf({ main_website_markdown: "호구 되지 마세요." }) === "block");
+ok("호구조사 → clean(오탐 제외)", levelOf({ main_website_markdown: "옛 호구조사 자료입니다." }) === "clean");
+ok("쪽박찬다 → block", levelOf({ main_website_markdown: "쪽박찬다는 말이 있습니다." }) === "block");
+ok("미친 듯이 → block", levelOf({ main_website_markdown: "미친 듯이 오릅니다." }) === "block");
+ok("막차타세요 → block", levelOf({ main_website_markdown: "지금 막차타세요." }) === "block");
+ok("부자되는 보험 → block", levelOf({ main_website_markdown: "부자되는 보험입니다." }) === "block");
+ok("보험을 로또 비유 → block", levelOf({ main_website_markdown: "보험을 로또처럼 생각하면 안 됩니다." }) === "block");
+ok("간병파산 → block", levelOf({ main_website_markdown: "간병파산을 막으려면." }) === "block");
+ok("곧 없어진다 → block", levelOf({ main_website_markdown: "이 상품 곧 없어진다." }) === "block");
+ok("영상 삭제 전에 → block", levelOf({ main_website_markdown: "영상 삭제 전에 보세요." }) === "block");
+ok("보험사는 안 알려주는 → block", levelOf({ main_website_markdown: "보험사는 안 알려주는 사실." }) === "block");
+ok("보험사만 배불려준다 → block", levelOf({ main_website_markdown: "보험사만 배불려준다는 말." }) === "block");
+ok("보험사는 해지를 기다린다 → block", levelOf({ main_website_markdown: "보험사는 해지하기를 기다립니다." }) === "block");
+console.log("[신규 B등급 — warn + 동사 오탐 제외]");
+ok("미친 가성비 → warn", levelOf({ main_website_markdown: "완전 미친 가성비." }) === "warn");
+ok("영향을 미친다 → clean(동사 제외)", levelOf({ main_website_markdown: "보험료에 영향을 미친다." }) === "clean");
+ok("죽어도 → warn", levelOf({ main_website_markdown: "죽어도 안 나오는 경우가 있습니다." }) === "warn");
+ok("돈 날린다 → warn", levelOf({ main_website_markdown: "돈 날린다는 말이 있습니다." }) === "warn");
+
 console.log(`\n결과: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);
