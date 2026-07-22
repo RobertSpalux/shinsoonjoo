@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { BRAND, getCareer, REQUIRED_NOTICES } from "@/lib/brand";
+import {
+  BRAND,
+  getCareer,
+  REQUIRED_NOTICES,
+  CONDITIONAL_NOTICES,
+  SITE_REVIEW,
+  renderMandatoryNotice,
+} from "@/lib/brand";
 
 /**
  * 푸터 — 딥그린 대비 밴드 (DESIGN-SPEC 3-4).
@@ -83,6 +90,27 @@ function MapPinIcon({ className }: { className?: string }) {
 
 export default function Footer() {
   const { years } = getCareer();
+
+  // 사이트 골격 심의필(§6.11-8) — 표시 정책(§6.3 준수):
+  //  1) SITE_REVIEW(실제 심의필) 채워짐 → 상시 표시(publish).
+  //  2) SITE_REVIEW=null + NEXT_PUBLIC_SHOW_SITE_NOTICE==="1" → 제출용 공란 플레이스홀더(submission). 캡처 전용.
+  //  3) 그 외(라이브 기본: SITE_REVIEW=null & env 미설정) → 렌더 안 함(null).
+  // ⚠️ goodfinance.kr은 라이브다. 심의필 없는 필수안내사항을 라이브에 노출하면 미심의 광고물에 심의필
+  //    표기가 되어 §6.3 위반·제재 리스크 → 기본은 반드시 숨김. env는 로컬 캡처 때만 켠다(.env.local, 미커밋).
+  const showSubmissionPlaceholder =
+    !SITE_REVIEW && process.env.NEXT_PUBLIC_SHOW_SITE_NOTICE === "1";
+  const siteNotice = SITE_REVIEW
+    ? renderMandatoryNotice(SITE_REVIEW, "publish")
+    : showSubmissionPlaceholder
+      ? renderMandatoryNotice(null, "submission")
+      : null;
+  // §26 표시기준: 승환계약 [유의사항]을 다른 안내와 시각적으로 차별화하기 위해 표시상 두 조각으로 분리한다.
+  // indexOf 기준 슬라이스라 문구는 변형·축약 없이 전부 보존된다("[유의사항]" 라벨 포함).
+  const cautionIdx = siteNotice ? siteNotice.indexOf("[유의사항]") : -1;
+  const noticeMain =
+    siteNotice && cautionIdx >= 0 ? siteNotice.slice(0, cautionIdx).trimEnd() : siteNotice;
+  const noticeCaution =
+    siteNotice && cautionIdx >= 0 ? siteNotice.slice(cautionIdx) : null;
 
   return (
     <footer className="border-t border-[var(--color-gold)] bg-[var(--color-forest)]">
@@ -182,7 +210,30 @@ export default function Footer() {
               {notice}
             </p>
           ))}
-          <p className="mt-2">
+          {/* 담보·보험료 변동 조건부 안내 (brand.ts CONDITIONAL_NOTICES.premiumVariation) — 푸터에 정확히 1회.
+              REQUIRED_NOTICES(personalOpinion·policyReference)에는 포함돼 있지 않으므로 중복 아님. */}
+          <p className="mt-2">{CONDITIONAL_NOTICES.premiumVariation}</p>
+
+          {/* ── 광고 필수안내사항(협회 필수안내 전 항목) — 사이트 골격 심의필(§6.11-8) ──
+              §26 표시기준: 딥그린 바탕과 구별되는 밝은 크림(/85~/95), 8pt↑, 승환계약 [유의사항]은 시각 차별화(골드 보더).
+              SITE_REVIEW=null(미승인) → 제출용 공란 플레이스홀더(밑줄). 승인·번호 입력 시 실제 심의필 자동 노출.
+              ⚠️ brand.ts 문구는 축약·변형 없이 그대로 렌더(split은 표시 목적이며 텍스트 불변). */}
+          {siteNotice && (
+            <div className="mt-6 border-t border-[var(--color-gold-dim)] pt-5">
+              <p className="whitespace-pre-line text-[11px] leading-relaxed text-[var(--color-ink)]/85">
+                {noticeMain}
+              </p>
+              {noticeCaution && (
+                <div className="mt-3 border-l-2 border-[var(--color-gold)] pl-3">
+                  <p className="whitespace-pre-line text-[11px] font-medium leading-relaxed text-[var(--color-ink)]/95">
+                    {noticeCaution}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <p className="mt-6">
             © {new Date().getFullYear()} {BRAND.siteName}. All rights reserved.
           </p>
         </div>
