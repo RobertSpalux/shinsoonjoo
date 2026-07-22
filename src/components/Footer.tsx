@@ -199,33 +199,34 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 border-t border-[var(--color-ink)]/15 pt-6 text-[11px] leading-relaxed text-[var(--color-ink)]/70">
-          <p>
-            본 사이트의 콘텐츠는 금융 정보 제공을 목적으로 하며, 특정 상품의 권유가 아닙니다.
-            보험 계약 체결 전 상품설명서와 약관을 반드시 확인하시기 바랍니다.
-          </p>
-          {/* 필수 유의문구 2종 — 사이트 골격 심의용(§6.11-4). 게시글 본문에도 별도 노출. brand.ts 싱글소스. */}
-          {REQUIRED_NOTICES.map((notice) => (
-            <p key={notice} className="mt-2">
-              {notice}
+        <div className="mt-8 border-t border-[var(--color-ink)]/15 pt-5 text-[11px] text-[var(--color-ink)]/70">
+          {/* 일반 안내 4문장 — 문구 불변, 간격만 압축(space-y-1 · leading-snug). */}
+          <div className="space-y-1 leading-snug">
+            <p>
+              본 사이트의 콘텐츠는 금융 정보 제공을 목적으로 하며, 특정 상품의 권유가 아닙니다.
+              보험 계약 체결 전 상품설명서와 약관을 반드시 확인하시기 바랍니다.
             </p>
-          ))}
-          {/* 담보·보험료 변동 조건부 안내 (brand.ts CONDITIONAL_NOTICES.premiumVariation) — 푸터에 정확히 1회.
-              REQUIRED_NOTICES(personalOpinion·policyReference)에는 포함돼 있지 않으므로 중복 아님. */}
-          <p className="mt-2">{CONDITIONAL_NOTICES.premiumVariation}</p>
+            {/* 필수 유의문구 2종 — 사이트 골격 심의용(§6.11-4). 게시글 본문에도 별도 노출. brand.ts 싱글소스. */}
+            {REQUIRED_NOTICES.map((notice) => (
+              <p key={notice}>{notice}</p>
+            ))}
+            {/* 담보·보험료 변동 조건부 안내 (brand.ts CONDITIONAL_NOTICES.premiumVariation) — 푸터에 정확히 1회.
+                REQUIRED_NOTICES(personalOpinion·policyReference)에는 포함돼 있지 않으므로 중복 아님. */}
+            <p>{CONDITIONAL_NOTICES.premiumVariation}</p>
+          </div>
 
           {/* ── 광고 필수안내사항(협회 필수안내 전 항목) — 사이트 골격 심의필(§6.11-8) ──
               §26 표시기준: 딥그린 바탕과 구별되는 밝은 크림(/85~/95), 8pt↑, 승환계약 [유의사항]은 시각 차별화(골드 보더).
               SITE_REVIEW=null(미승인) → 제출용 공란 플레이스홀더(밑줄). 승인·번호 입력 시 실제 심의필 자동 노출.
-              ⚠️ brand.ts 문구는 축약·변형 없이 그대로 렌더(split은 표시 목적이며 텍스트 불변). */}
+              ⚠️ brand.ts 문구는 축약·변형 없이 그대로 렌더(split은 표시 목적이며 텍스트 불변). leading만 압축. */}
           {siteNotice && (
-            <div className="mt-6 border-t border-[var(--color-gold-dim)] pt-5">
-              <p className="whitespace-pre-line text-[11px] leading-relaxed text-[var(--color-ink)]/85">
+            <div className="mt-5 border-t border-[var(--color-gold-dim)] pt-4">
+              <p className="whitespace-pre-line text-[11px] leading-snug text-[var(--color-ink)]/85">
                 {noticeMain}
               </p>
               {noticeCaution && (
-                <div className="mt-3 border-l-2 border-[var(--color-gold)] pl-3">
-                  <p className="whitespace-pre-line text-[11px] font-medium leading-relaxed text-[var(--color-ink)]/95">
+                <div className="mt-2 border-l-2 border-[var(--color-gold)] pl-3">
+                  <p className="whitespace-pre-line text-[11px] font-medium leading-snug text-[var(--color-ink)]/95">
                     {noticeCaution}
                   </p>
                 </div>
@@ -233,7 +234,7 @@ export default function Footer() {
             </div>
           )}
 
-          <p className="mt-6">
+          <p className="mt-4">
             © {new Date().getFullYear()} {BRAND.siteName}. All rights reserved.
           </p>
         </div>
