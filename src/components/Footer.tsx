@@ -220,15 +220,23 @@ export default function Footer() {
               SITE_REVIEW=null(미승인) → 제출용 공란 플레이스홀더(밑줄). 승인·번호 입력 시 실제 심의필 자동 노출.
               ⚠️ brand.ts 문구는 축약·변형 없이 그대로 렌더(split은 표시 목적이며 텍스트 불변). leading만 압축. */}
           {siteNotice && (
-            <div className="mt-5 border-t border-[var(--color-gold-dim)] pt-4">
-              <p className="whitespace-pre-line text-[11px] leading-snug text-[var(--color-ink)]/85">
+            // 규정 고지 박스 — 딥그린 위 은은한 밝은 면 + 얇은 골드 톤 테두리로 "필수안내 영역" 시각 분리.
+            // ⚠️ 접기/토글 없음 — 항상 펼쳐진 상시노출.
+            <div className="mt-5 rounded-lg border border-[var(--color-gold-dim)]/40 bg-[var(--color-ink)]/20 p-5">
+              {/* 필수안내사항 전문 — md↑에서 CSS 2단 흐름(문자열 분할이 아니라 브라우저가 라인 흐름만 2단으로).
+                  ⚠️ 심의필 공란 줄(제_____호)이 컬럼 경계에서 어색하게 끊기면 아래 두 클래스
+                  (md:[column-count:2] md:[column-gap:2rem])만 제거해 1단으로 폴백한다. 문구는 불변. */}
+              <p className="whitespace-pre-line text-[11px] leading-snug text-[var(--color-ink)]/85 md:[column-count:2] md:[column-gap:2rem]">
                 {noticeMain}
               </p>
+              {/* 승환계약 유의사항 — 박스 전체폭. 상단 구분선 + 골드 좌보더(§26 차별화). */}
               {noticeCaution && (
-                <div className="mt-2 border-l-2 border-[var(--color-gold)] pl-3">
-                  <p className="whitespace-pre-line text-[11px] font-medium leading-snug text-[var(--color-ink)]/95">
-                    {noticeCaution}
-                  </p>
+                <div className="mt-3 border-t border-[var(--color-gold-dim)]/40 pt-3">
+                  <div className="border-l-2 border-[var(--color-gold)] pl-3">
+                    <p className="whitespace-pre-line text-[11px] font-medium leading-snug text-[var(--color-ink)]/95">
+                      {noticeCaution}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
