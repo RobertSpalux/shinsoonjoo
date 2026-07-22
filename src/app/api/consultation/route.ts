@@ -4,11 +4,25 @@ import { createClient } from "@supabase/supabase-js";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, phone, category, message, privacy_agreed } = body;
+    const {
+      name,
+      phone,
+      category,
+      message,
+      privacy_collect_agreed,
+      privacy_thirdparty_agreed,
+    } = body;
 
-    if (!name?.trim() || !phone?.trim() || !category || !privacy_agreed) {
+    // 필수 동의 2종 모두 참이어야 접수 (심의 반려 5)
+    if (
+      !name?.trim() ||
+      !phone?.trim() ||
+      !category ||
+      !privacy_collect_agreed ||
+      !privacy_thirdparty_agreed
+    ) {
       return NextResponse.json(
-        { error: "필수 항목을 입력해 주세요." },
+        { error: "필수 항목과 개인정보 동의 2종을 확인해 주세요." },
         { status: 400 }
       );
     }
@@ -43,7 +57,10 @@ export async function POST(request: Request) {
       phone: phone.trim(),
       category,
       message: message?.trim() || null,
-      privacy_agreed,
+      privacy_collect_agreed,
+      privacy_thirdparty_agreed,
+      // 기존 컬럼 호환 — 두 필수 동의가 모두 참일 때만 true
+      privacy_agreed: privacy_collect_agreed && privacy_thirdparty_agreed,
     });
 
     if (dbError) {

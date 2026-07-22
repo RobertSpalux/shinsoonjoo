@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { motion, useInView, AnimatePresence, useReducedMotion } from "framer-motion";
 import { BRAND, getCareer } from "@/lib/brand";
+import { CONSENT_COLLECT, CONSENT_THIRDPARTY } from "@/lib/privacy-policy";
 
 const categories = [
   "종신보험·사망보장",
@@ -26,9 +27,12 @@ export default function ConsultationForm() {
   const [phone, setPhone] = useState("");
   const [category, setCategory] = useState("");
   const [message, setMessage] = useState("");
-  const [privacyAgreed, setPrivacyAgreed] = useState(false);
+  // 필수 동의 2종 (심의 반려 5) — 첨부3 수집·이용 / 첨부4 제3자 제공
+  const [collectAgreed, setCollectAgreed] = useState(false);
+  const [thirdpartyAgreed, setThirdpartyAgreed] = useState(false);
 
-  const isValid = name.trim() && phone.trim() && category && privacyAgreed;
+  const isValid =
+    name.trim() && phone.trim() && category && collectAgreed && thirdpartyAgreed;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -44,7 +48,10 @@ export default function ConsultationForm() {
         phone: phone.trim(),
         category,
         message: message.trim() || null,
-        privacy_agreed: privacyAgreed,
+        privacy_collect_agreed: collectAgreed,
+        privacy_thirdparty_agreed: thirdpartyAgreed,
+        // 기존 컬럼 호환 — 두 필수 동의가 모두 참일 때만 true
+        privacy_agreed: collectAgreed && thirdpartyAgreed,
       }),
     });
 
@@ -59,7 +66,8 @@ export default function ConsultationForm() {
     setPhone("");
     setCategory("");
     setMessage("");
-    setPrivacyAgreed(false);
+    setCollectAgreed(false);
+    setThirdpartyAgreed(false);
     setTimeout(() => setFormState("idle"), 4000);
   }
 
@@ -244,25 +252,45 @@ export default function ConsultationForm() {
                 />
               </div>
 
-              {/* Privacy agreement */}
-              <div className="mb-6">
-                <label className="flex cursor-pointer items-start gap-2.5">
-                  <input
-                    type="checkbox"
-                    checked={privacyAgreed}
-                    onChange={(e) => setPrivacyAgreed(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-[var(--color-line)] accent-[var(--color-gold)]"
-                  />
-                  <span className="text-xs leading-relaxed text-[var(--color-text-muted)]">
-                    <strong className="font-semibold text-[var(--color-text-body)]">
-                      개인정보 수집 및 이용에 동의합니다.
-                    </strong>{" "}
-                    수집 항목: 이름, 연락처, 상담 분야·내용 / 이용 목적: 상담
-                    신청 확인 및 응대 / 보관 기간: 상담 완료 후 지체 없이
-                    파기합니다. 동의를 거부할 수 있으나, 거부 시 상담 신청이
-                    제한됩니다.
-                  </span>
-                </label>
+              {/* 필수 동의 2종 (심의 반려 5) — 전문 스크롤 박스 확인 후 체크. brand/privacy-policy 싱글소스. */}
+              <div className="mb-6 space-y-4">
+                {[
+                  {
+                    id: "consent-collect",
+                    consent: CONSENT_COLLECT,
+                    checked: collectAgreed,
+                    set: setCollectAgreed,
+                  },
+                  {
+                    id: "consent-thirdparty",
+                    consent: CONSENT_THIRDPARTY,
+                    checked: thirdpartyAgreed,
+                    set: setThirdpartyAgreed,
+                  },
+                ].map(({ id, consent, checked, set }) => (
+                  <div key={id}>
+                    <p className="mb-1.5 text-xs font-semibold text-[var(--color-text-body)]">
+                      {consent.title}
+                    </p>
+                    {/* 전문 스크롤 박스 — "다 확인한 후 동의" 요건. 원문 그대로. */}
+                    <div className="max-h-40 overflow-y-auto rounded-sm border border-[var(--color-line)] bg-white p-3">
+                      <p className="whitespace-pre-line text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+                        {consent.body}
+                      </p>
+                    </div>
+                    <label className="mt-2 flex cursor-pointer items-start gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => set(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-[var(--color-line)] accent-[var(--color-gold)]"
+                      />
+                      <span className="text-xs font-semibold leading-relaxed text-[var(--color-text-body)]">
+                        {consent.label}
+                      </span>
+                    </label>
+                  </div>
+                ))}
               </div>
 
               {/* Submit */}

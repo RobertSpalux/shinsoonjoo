@@ -161,6 +161,7 @@ export default function Footer() {
                 <li><Link href="/diagnosis" className="transition-colors hover:text-[var(--color-gold-light)]">자산진단</Link></li>
                 <li><Link href="/recruit" className="transition-colors hover:text-[var(--color-gold-light)]">인재채용</Link></li>
                 <li><Link href="/#consultation" className="transition-colors hover:text-[var(--color-gold-light)]">상담 예약</Link></li>
+                <li><Link href="/privacy" className="transition-colors hover:text-[var(--color-gold-light)]">개인정보 처리방침</Link></li>
               </ul>
             </div>
             <div>
