@@ -120,11 +120,20 @@ export default function CoverageMockup({ contractAnswer }: { contractAnswer?: Co
                           {r.verdict}
                         </p>
                       )}
+                      {/* 납입기간·만기 — 모든 행에 노출(조정 행 포함). 회색 캡션. 갱신형 추정 고지는 premiumBasis. */}
+                      <p className="mt-0.5 whitespace-nowrap text-[11px] tabular-nums text-[var(--color-text-muted)]">
+                        {r.term}
+                      </p>
                     </div>
                   </div>
                 );
               })}
             </div>
+
+            {/* 사례별 산출 기준 각주 — 카드 하단 1회. 회색·여러 줄 허용(§26 안내). */}
+            <p className="mt-4 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+              {c.premiumBasis}
+            </p>
           </article>
         ))}
       </div>

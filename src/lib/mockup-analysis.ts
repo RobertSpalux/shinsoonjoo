@@ -25,6 +25,8 @@ export interface MockupRow {
   after: string;
   verdict: Verdict;
   note?: string;
+  /** 신규 담보의 납입기간·만기 (예: '20년납 90세', '10년 갱신') — 갱신형은 추정 보험료 포함 */
+  term: string;
 }
 
 export interface MockupCase {
@@ -41,6 +43,8 @@ export interface MockupCase {
   /** 이 사례의 한 줄 핵심 */
   headline: string;
   rows: MockupRow[];
+  /** 카드 하단 산출 기준 각주 (연령·성별·직업·기준일·합계 기준·갱신형 추정 고지) */
+  premiumBasis: string;
 }
 
 export const MOCKUP_CASES: MockupCase[] = [
@@ -52,15 +56,17 @@ export const MOCKUP_CASES: MockupCase[] = [
     premiumAfter: 473983,
     premiumDelta: "월 31,938원 줄었습니다",
     deltaDirection: "down",
-    headline: "겹쳐 있던 사망보장을 정리하고, 비어 있던 간병·수술을 채웠습니다.",
+    headline: "겹쳐 있던 사망보장을 정리하고, 간병·수술 보장을 보강했습니다.",
     rows: [
-      { name: "질병사망", before: "1억 4,740만원", after: "조정", verdict: "조정", note: "5개 계약에 흩어져 있었습니다" },
-      { name: "상해사망", before: "2억 740만원", after: "1억원", verdict: "감액" },
-      { name: "간병인 사용일당", before: "14만원", after: "20만원", verdict: "증액" },
-      { name: "간호간병 통합서비스", before: "없음", after: "7만원", verdict: "신규" },
-      { name: "질병수술비", before: "없음", after: "200만원", verdict: "신규" },
-      { name: "특정질병수술비", before: "없음", after: "3,360만원", verdict: "신규" },
+      { name: "질병사망", before: "1억 4,740만원", after: "조정", verdict: "조정", note: "5개 계약에 흩어져 있었습니다", term: "20년납 종신" },
+      { name: "상해사망", before: "2억 740만원", after: "1억원", verdict: "감액", term: "20년납 90세" },
+      { name: "간병인 사용일당", before: "14만원", after: "20만원", verdict: "증액", term: "20년납 90세" },
+      { name: "간호간병 통합서비스", before: "5만원", after: "7만원", verdict: "증액", term: "20년납 90세" },
+      { name: "질병수술비", before: "20만원", after: "100만원", verdict: "증액", term: "20년납 90세" },
+      { name: "특정질병수술비", before: "2,000만원", after: "3,360만원", verdict: "증액", term: "20년납 90세" },
     ],
+    premiumBasis:
+      "산출 기준 · 만 57세 · 남 · 사무직(상해 2급) · 기준일 2026.7.13 · 기존 계약 10건의 월 보험료 합계 기준. 담보별 납입기간·만기는 각 항목에 표기했으며, 갱신형 상품은 추정 보험료가 포함되어 실제와 다를 수 있습니다.",
   },
   {
     id: "case-b",
@@ -72,13 +78,15 @@ export const MOCKUP_CASES: MockupCase[] = [
     deltaDirection: "up",
     headline: "운전자보험은 3개인데 항암치료비는 0원이었습니다. 그 자리를 채웠습니다.",
     rows: [
-      { name: "일반암", before: "7,800만원", after: "유지", verdict: "유지" },
-      { name: "유사암", before: "없음", after: "1억원", verdict: "신규" },
-      { name: "표적항암치료비", before: "없음", after: "7,000만원", verdict: "신규" },
-      { name: "항암 방사선치료비", before: "없음", after: "5,000만원", verdict: "신규" },
-      { name: "심장질환진단비", before: "없음", after: "2,000만원", verdict: "신규" },
-      { name: "상해사망", before: "6,000만원", after: "1억 100만원", verdict: "증액" },
+      { name: "일반암", before: "7,000만원", after: "1억원", verdict: "증액", term: "30년납 90세" },
+      { name: "유사암", before: "700만원", after: "2,000만원", verdict: "증액", term: "30년납 90세" },
+      { name: "표적항암치료비", before: "없음", after: "7,000만원", verdict: "신규", term: "10년 갱신" },
+      { name: "항암 방사선치료비", before: "없음", after: "5,000만원", verdict: "신규", term: "30년납 90세" },
+      { name: "심장질환진단비", before: "없음", after: "2,000만원", verdict: "신규", term: "30년납 90세" },
+      { name: "상해사망", before: "6,000만원", after: "1억 100만원", verdict: "증액", term: "30년납 90세" },
     ],
+    premiumBasis:
+      "산출 기준 · 만 48세 · 남 · 종교인(상해 1급) · 기준일 2026.6.29 · 기존 계약 8건의 월 보험료 합계 기준. 담보별 납입기간·만기는 각 항목에 표기했으며, 갱신형 상품은 추정 보험료가 포함되어 실제와 다를 수 있습니다.",
   },
 ];
 
