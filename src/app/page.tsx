@@ -4,6 +4,7 @@ import StatsBand from "@/components/StatsBand";
 import TrustSection from "@/components/TrustSection";
 import Timeline from "@/components/Timeline";
 import ClientStories from "@/components/ClientStories";
+import JourneyMap from "@/components/JourneyMap";
 import ConsultationForm from "@/components/ConsultationForm";
 import ArticleCard from "@/components/news/ArticleCard";
 import { getPublishedArticles } from "@/lib/articles";
@@ -79,6 +80,7 @@ export default async function Home() {
       )}
 
       <ClientStories />
+      <JourneyMap />
       <ConsultationForm />
     </main>
   );
