@@ -58,7 +58,7 @@ export default function JourneyMap() {
           className="mt-6 block h-px w-8 bg-[var(--color-gold)]"
           aria-hidden="true"
         />
-        <p className="mt-6 max-w-[52ch] text-[1.0625rem] leading-[1.85] text-[var(--color-ink)]/75">
+        <p className="mt-6 max-w-[44ch] text-[1.0625rem] leading-[1.85] text-[var(--color-ink)]/75">
           숙제를 드리지 않습니다. 흩어진 담보를 대신 합산해, 보이지 않던 보장을 펼쳐 드립니다.
         </p>
 
