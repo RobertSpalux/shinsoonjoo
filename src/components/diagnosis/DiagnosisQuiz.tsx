@@ -384,10 +384,46 @@ export default function DiagnosisQuiz() {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => gaEvent("kakao_cta_click", { position: "diagnosis_result" })}
-                  className="mt-6 inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-ink)] px-7 py-3.5 text-sm font-semibold text-[var(--color-forest)] transition-transform duration-300 hover:-translate-y-px"
+                  className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-[var(--color-ink)] px-7 py-3.5 text-[1.0625rem] font-semibold text-[var(--color-forest)] transition-transform duration-300 hover:-translate-y-px"
                 >
-                  카카오톡으로 상담 신청하기
+                  <svg
+                    aria-hidden="true"
+                    className="h-[18px] w-[18px]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"
+                    />
+                  </svg>
+                  신순주 지사장에게 상담받기
                 </a>
+                <p className="mt-2.5 text-[0.8125rem] text-[var(--color-ink)]/70">
+                  카카오톡으로 연결됩니다
+                </p>
+                <div className="mt-6 flex items-start justify-center gap-1.5">
+                  <svg
+                    aria-hidden="true"
+                    className="mt-[3px] h-[14px] w-[14px] shrink-0 text-[var(--color-gold)]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M4.5 12.75l6 6 9-13.5"
+                    />
+                  </svg>
+                  <span className="text-[0.9375rem] text-[var(--color-ink)]/80">
+                    지금 든 보험부터 함께 살펴봅니다.
+                  </span>
+                </div>
               </div>
             </div>
           </motion.div>
