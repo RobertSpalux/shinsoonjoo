@@ -9,6 +9,7 @@ import {
   STAGE2_SCHEMA,
   type EvergreenSeed,
 } from "@/lib/factory-prompt";
+import { scanPlainStyle, formatStyleViolations, type StyleViolation } from "@/lib/style-gate";
 
 /**
  * ⚠️ 300이 이 프로젝트의 상한이다 — 올리지 말 것(2026-07-14 실측).
@@ -429,7 +430,7 @@ export async function POST(request: Request) {
   ): Promise<
     | { error: { status: number; message: string } }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    | { data: any; issues: string[]; banned: string[] }
+    | { data: any; issues: string[]; banned: string[]; style: StyleViolation[] }
   > => {
     const t0 = Date.now();
     const first = await runStageOnce();
@@ -445,17 +446,22 @@ export async function POST(request: Request) {
     let data: any = first.data;
     let issues = validate(data);
     let banned = scanBannedTopics(data); // 단계별 부분 결과에 대해서도 그대로 동작(누락 필드는 빈 문자열)
+    let style = scanPlainStyle(data); // 문체(평서체) 검사 — 이 단계 본문 필드만 판정(누락 필드는 스킵)
     console.log(
       `[⏱️ ${label} 검증] ${
-        issues.length + banned.length === 0
+        issues.length + banned.length + style.length === 0
           ? "통과 — 재생성 없음"
-          : `실패 → 재생성: ${[...issues, ...banned.map((t) => `금지어:${t}`)].join(" / ")}`
+          : `실패 → 재생성: ${[
+              ...issues,
+              ...banned.map((t) => `금지어:${t}`),
+              ...style.map((v) => `문체:${v.field}`),
+            ].join(" / ")}`
       }`
     );
 
     let retryMs = 0;
     let retried = false;
-    if (issues.length + banned.length > 0) {
+    if (issues.length + banned.length + style.length > 0) {
       retried = true;
       const t1 = Date.now();
       try {
@@ -466,16 +472,20 @@ export async function POST(request: Request) {
           addUsage(retry.usage);
           const retryIssues = validate(retry.data);
           const retryBanned = scanBannedTopics(retry.data);
+          const retryStyle = scanPlainStyle(retry.data);
+          // 금지어는 최우선(있음→없음이면 무조건 채택). 그 외엔 issues+banned+style 총합이 적은 쪽.
           const preferRetry =
             banned.length > 0 && retryBanned.length === 0
               ? true
               : banned.length === 0 && retryBanned.length > 0
                 ? false
-                : retryIssues.length + retryBanned.length < issues.length + banned.length;
+                : retryIssues.length + retryBanned.length + retryStyle.length <
+                  issues.length + banned.length + style.length;
           if (preferRetry) {
             data = retry.data;
             issues = retryIssues;
             banned = retryBanned;
+            style = retryStyle;
           }
         }
       } catch (retryErr) {
@@ -484,7 +494,7 @@ export async function POST(request: Request) {
       }
     }
     onTiming(firstMs, retryMs, retried);
-    return { data, issues, banned };
+    return { data, issues, banned, style };
 
     async function runStageOnce() {
       return generateStage(label, schema, userMessage, maxTokens);
@@ -588,6 +598,14 @@ export async function POST(request: Request) {
       reviewReasons.push(`고위험 주제(${riskTokens.join("·")})`);
     }
 
+    // 문체 게이트(2026-07-23) — 뉴스·상록수 공통. 단계별 재생성(runStage) 후에도 병합 결과에
+    // 평서체가 임계를 넘으면 저장하되 사람 검수 강제(컷 아님). 관측은 텔레그램 ✍️ 라인.
+    const styleViolations = scanPlainStyle(article);
+    if (styleViolations.length > 0) {
+      needsHumanReview = true;
+      reviewReasons.push(`문체(평서체) 잔존(${formatStyleViolations(styleViolations)})`);
+    }
+
     // 상록수 사실검증 게이트(커밋 M2) — 원고 검증 최종 실패 또는 민감 사실 포함이면 사람 검수 강제.
     if (mode === "evergreen") {
       if (markdownIssues.length > 0) {
@@ -689,6 +707,8 @@ export async function POST(request: Request) {
       review_reasons: reviewReasons.length > 0 ? reviewReasons.join(" / ") : undefined,
       // 고위험 주제 감지 토큰 — 텔레그램 ⚖️ 라인 관측용
       high_risk_topics: riskTokens.length > 0 ? riskTokens : undefined,
+      // 문체 위반 필드 — 텔레그램 ✍️ 라인 관측용(재생성 후에도 남은 평서체). 위반 0이면 undefined.
+      style_violations: styleViolations.length > 0 ? styleViolations : undefined,
       usage, // 1·2차 + 재생성 전부 합산
       // ⏱️ 단계별 소요 — 300초 벽에 얼마나 근접했는지, 어느 단계가 재생성을 부르는지 관측용
       timing: { ...timing, total_ms: Date.now() - startedAt },

@@ -575,9 +575,19 @@ async function generateArticle(item) {
     needs_human_review: json.needs_human_review === true,
     review_reasons: json.review_reasons ?? null,
     high_risk_topics: json.high_risk_topics ?? null,
+    style_violations: json.style_violations ?? null, // 문체 위반 필드(✍️ 라인)
     usage: json.usage ?? null, // 캐시 적중 관측(💾 라인)
     timing: json.timing ?? null, // 소요시간 관측(⏱️ 라인)
   };
+}
+
+/** ✍️ 문체 라인 — 위반 0이면 "정상", 있으면 첫 위반 필드·비율·샘플 1개. */
+function fmtStyle(vs) {
+  if (!vs || vs.length === 0) return "✍️ 문체 정상";
+  const v = vs[0];
+  const more = vs.length > 1 ? ` 외 ${vs.length - 1}` : "";
+  const sample = v.samples?.[0] ? ` — "${v.samples[0]}"` : "";
+  return `✍️ 문체 위반: ${v.field} ${Math.round((v.ratio ?? 0) * 100)}%${more}${sample}`;
 }
 
 /** ⏱️ 라인 — 2단계 분리 후 각 단계가 300초 한도 안에 들어오는지 한눈에 보이게 */
@@ -650,6 +660,8 @@ function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, no
           // 고위험 주제(분쟁·판례·세법·의료) — 발행 전 원문 대조 필수
           (r.riskTopics?.length ? `\n   ⚖️ 고위험 주제: ${r.riskTopics.join("·")} — 원문 대조 후 발행` : "") +
           (r.needsReview ? `\n   🔴 사람 검수 필수: ${r.reviewReasons ?? "needs_human_review=true"}` : "") +
+          // ✍️ 문체 관측 — 항상 출력(위반 0이면 '정상'). 조용하면 게이트 작동 여부를 알 수 없으므로.
+          `\n   ${fmtStyle(r.styleViolations)}` +
           // ⏱️ 300초(Hobby 함수 한도) 대비 여유 — 어느 단계가 재생성을 부르는지도 함께 본다
           (r.timing ? `\n   ${fmtTiming(r.timing)}` : "")
       );
@@ -719,7 +731,7 @@ async function main() {
   for (const item of picked) {
     console.log(`[생성] ${item.title} (관련도 ${item.score})`);
     try {
-      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics, usage, timing } =
+      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics, style_violations, usage, timing } =
         await generateArticle(item);
       if (usage) cacheUsage.push(usage);
       if (timing) console.log(`  → ${fmtTiming(timing)}`);
@@ -743,6 +755,7 @@ async function main() {
         needsReview: needs_human_review,
         reviewReasons: review_reasons,
         riskTopics: high_risk_topics,
+        styleViolations: style_violations,
         timing,
       });
 

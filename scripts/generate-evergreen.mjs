@@ -382,6 +382,15 @@ function fmtTiming(t) {
   );
 }
 
+/** ✍️ 문체 라인 — 위반 0이면 "정상", 있으면 첫 위반 필드·비율·샘플 1개. */
+function fmtStyle(vs) {
+  if (!vs || vs.length === 0) return "✍️ 문체 정상";
+  const v = vs[0];
+  const more = vs.length > 1 ? ` 외 ${vs.length - 1}` : "";
+  const sample = v.samples?.[0] ? ` — "${v.samples[0]}"` : "";
+  return `✍️ 문체 위반: ${v.field} ${Math.round((v.ratio ?? 0) * 100)}%${more}${sample}`;
+}
+
 async function sendTelegramMessage(text) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -595,6 +604,8 @@ async function main() {
           (w === 0 && r === 0 ? " ⚠️ 캐싱 미작동" : "")
       );
     }
+    // ✍️ 문체 관측 — 항상 출력(위반 0이면 '정상'). 조용하면 게이트 작동 여부를 알 수 없으므로.
+    lines.push(fmtStyle(gen.style_violations));
     lines.push(
       full?.needs_human_review
         ? `🔴 사람 검수 필수: ${gen.review_reasons ?? "needs_human_review=true"}`
