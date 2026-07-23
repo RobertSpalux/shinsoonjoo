@@ -153,7 +153,12 @@ ${reviewLine}
  *   `제00000호` 등 임의번호 불가). review 값을 채우면 실번호(publish)로 자동 치환된다.
  *   ([폐기] 과거 "라이브 미승인 시 비표시(§6.3)" 방침은 반송 의견으로 상시노출로 전환됨.)
  */
-export const SITE_REVIEW: ReviewInfo | null = null;
+export const SITE_REVIEW: ReviewInfo | null = {
+  authority: "프라임에셋",
+  no: "2026-07-6977", // ⚠️ 번호만. 렌더러가 "프라임에셋 심의필 제…호" 접두·접미 자동 부착.
+  from: "2026.07.23", // 심의일자
+  to: "2027.07.22", // 광고유효기간
+};
 
 /**
  * 소재별 조건부 유의문구. 해당 소재를 다룰 때 본문에 삽입한다.
