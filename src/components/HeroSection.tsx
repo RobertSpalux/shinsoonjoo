@@ -67,7 +67,28 @@ export default function HeroSection() {
             <p className="mb-4 text-sm text-[var(--color-text-muted)]">
               지금 내고 있는 보험료, 제대로 쓰이고 있을까요?
             </p>
-            <div className="flex flex-wrap items-center gap-x-7 gap-y-4">
+
+            {/* 진단 티저 스니펫 (벤치마킹 C) — 카드 프레임 없이 CTA 블록에 통합 */}
+            <p className="mt-7 text-[0.8125rem] font-semibold text-[var(--color-text-muted)]">
+              보험 자산 진단
+            </p>
+            <div
+              aria-hidden="true"
+              className="mt-3 flex w-full max-w-[220px] gap-1"
+            >
+              <span className="h-[3px] flex-1 bg-[var(--color-forest)]" />
+              <span className="h-[3px] flex-1 bg-[var(--color-line)]" />
+              <span className="h-[3px] flex-1 bg-[var(--color-line)]" />
+              <span className="h-[3px] flex-1 bg-[var(--color-line)]" />
+              <span className="h-[3px] flex-1 bg-[var(--color-line)]" />
+              <span className="h-[3px] flex-1 bg-[var(--color-line)]" />
+              <span className="h-[3px] flex-1 bg-[var(--color-line)]" />
+            </div>
+            <p className="mt-3 text-[0.9375rem] leading-[1.7] text-[var(--color-text-body)]">
+              7개 문항으로 내 보험의 공백과 중복을 확인합니다.
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center gap-x-7 gap-y-4">
               <Link
                 href="/diagnosis"
                 className="inline-flex items-center rounded-sm bg-[var(--color-forest)] px-7 py-3.5 text-sm font-semibold text-[var(--color-ink)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-[var(--color-forest-soft)]"

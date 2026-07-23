@@ -130,7 +130,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="인스타그램"
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-transparent bg-[var(--color-ink)]/10 text-[var(--color-ink)] transition-colors hover:border-[var(--color-gold)]"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-gold)] text-[var(--color-ink)] transition-[border-color,transform] duration-300 hover:-translate-y-px hover:border-[var(--color-gold-light)]"
               >
                 <InstagramIcon className="h-5 w-5" />
               </a>
@@ -139,7 +139,7 @@ export default function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="카카오톡 채널"
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-transparent bg-[var(--color-ink)]/10 text-[var(--color-ink)] transition-colors hover:border-[var(--color-gold)]"
+                className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-gold)] text-[var(--color-ink)] transition-[border-color,transform] duration-300 hover:-translate-y-px hover:border-[var(--color-gold-light)]"
               >
                 <KakaoIcon className="h-5 w-5" />
               </a>
