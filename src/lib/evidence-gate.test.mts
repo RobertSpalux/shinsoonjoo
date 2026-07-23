@@ -58,6 +58,23 @@ ok("'원문 확인 권장' → not_primary", codesOf("원문 확인 권장, 2025
   ok("인용 보도 2025 → not_primary만(stale 아님)", c.includes("not_primary") && !c.includes("stale"));
 }
 
+console.log("[항구성 키워드 과대매칭 수정 — '법'/'제도' 제거]");
+{
+  // '판매방법'의 '법'에 강등되면 안 된다 → stale 유지(강등 금지)
+  const c = classifyBasis("실무 통용 해석. 회사별 판매방법 차이 2020", YEAR).map((r) => r.code);
+  ok("판매방법 2020 → stale 유지(강등 안 됨)", c.includes("stale") && !c.includes("stale_but_durable"));
+}
+ok(
+  "시행세칙·별표·표준사업방법서 2015 → durable 유지",
+  classifyBasis("보험업감독업무시행세칙 별표14 표준사업방법서 2015", YEAR).some(
+    (r) => r.code === "stale_but_durable"
+  )
+);
+ok(
+  "금융소비자보호법 제22조 2021 → durable",
+  classifyBasis("금융소비자보호법 제22조 2021", YEAR).some((r) => r.code === "stale_but_durable")
+);
+
 console.log("[정상 — 위반 0]");
 ok("2025 원문 → clean", scan({ verify_claims: [{ claim: "실손 실적", basis: "금융감독원 2025년 보도자료 원문" }] }).length === 0);
 ok("2025 자료 clean(경계 age1)", classifyBasis("금감원 2025 통계자료", YEAR).length === 0);
