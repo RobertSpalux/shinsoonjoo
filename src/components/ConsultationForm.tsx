@@ -82,82 +82,53 @@ export default function ConsultationForm() {
       className="relative w-full bg-[var(--color-ink)] py-24 md:py-32"
     >
       <div className="mx-auto max-w-6xl px-6 md:px-12 lg:px-20">
-        <div className="grid gap-16 md:grid-cols-2 md:gap-20">
+        <div className="grid items-start gap-12 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:gap-16">
           {/* Left - Intro text */}
           <motion.div
             initial={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 24 }}
             animate={isInView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.7 }}
-            className="flex flex-col justify-center"
+            className="lg:sticky lg:top-22 lg:self-start"
           >
-            <p className="mb-6 text-xs font-semibold tracking-[0.08em] uppercase text-[var(--color-text-muted)]">
+            <p className="text-[0.75rem] font-semibold tracking-[0.08em] uppercase text-[var(--color-text-muted)]">
               Private Consultation
             </p>
             <h2
-              className="mb-6 text-3xl font-semibold leading-snug tracking-[-0.01em] text-[var(--color-forest)] md:text-4xl"
+              className="mt-5 font-serif text-[2.25rem] font-semibold leading-[1.2] tracking-[-0.01em] text-[var(--color-forest)] lg:text-[2.75rem]"
               style={{ fontFamily: "var(--font-serif)" }}
             >
               프라이빗 상담 예약
             </h2>
-            <p className="mb-8 text-[15px] leading-relaxed text-[var(--color-text-body)]">
-              {years}년간 쌓아온 전문성으로 고객님의 상황에 맞는
-              <br className="hidden md:block" />
-              최적의 보장 설계를 제안해 드립니다.
-              <br className="hidden md:block" />
+            <span
+              className="mt-6 block h-px w-8 bg-[var(--color-gold)]"
+              aria-hidden="true"
+            />
+            <p className="mt-7 max-w-[34ch] text-[1.0625rem] leading-[1.85] text-[var(--color-text-body)]">
+              {years}년간 쌓아온 전문성으로 고객님의 상황에 맞는 최적의 보장 설계를 제안해 드립니다.
+            </p>
+            <p className="mt-4 text-[1.0625rem] font-semibold text-[var(--color-text-strong)]">
               부담 없이 문의해 주세요.
             </p>
 
-            <div className="space-y-4 border-t border-[var(--color-line)] pt-8">
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-ink-card)]">
-                  <svg
-                    className="h-4 w-4 text-[var(--color-gold)]"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-xs text-[var(--color-text-muted)]">전화 상담</p>
-                  <a
-                    href={`tel:${BRAND.phone}`}
-                    className="text-sm font-semibold tabular-nums text-[var(--color-text-strong)]"
-                  >
-                    {BRAND.phone}
-                  </a>
-                </div>
+            <div className="mt-10 h-px w-full bg-[var(--color-line)]" />
+            <dl className="mt-8 space-y-6">
+              <div>
+                <dt className="text-[0.8125rem] font-medium text-[var(--color-text-muted)]">
+                  전화 상담
+                </dt>
+                <dd className="mt-1.5 text-[1.375rem] font-semibold tabular-nums text-[var(--color-text-strong)]">
+                  <a href={`tel:${BRAND.phone}`}>{BRAND.phone}</a>
+                </dd>
               </div>
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-line)] bg-[var(--color-ink-card)]">
-                  <svg
-                    className="h-4 w-4 text-[var(--color-gold)]"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-xs text-[var(--color-text-muted)]">상담 가능 시간</p>
-                  <p className="text-sm font-semibold tabular-nums text-[var(--color-text-strong)]">
-                    평일 09:00 – 18:00
-                  </p>
-                </div>
+              <div>
+                <dt className="text-[0.8125rem] font-medium text-[var(--color-text-muted)]">
+                  상담 가능 시간
+                </dt>
+                <dd className="mt-1.5 text-[1.125rem] font-semibold tabular-nums text-[var(--color-text-strong)]">
+                  평일 09:00 – 18:00
+                </dd>
               </div>
-            </div>
+            </dl>
           </motion.div>
 
           {/* Right - Form */}
