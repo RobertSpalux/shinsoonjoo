@@ -5,12 +5,12 @@
  * - CONSENT_THIRDPARTY  = 첨부4(제3자 제공 동의) — 진단 신청 폼 상단
  * - PRIVACY_INTRO / PRIVACY_SECTIONS = 첨부5(개인정보 처리방침) — /privacy 페이지
  *
- * ⚠️ 미확정(원문 주석): ①시행일 ②문의 이메일(현재 jx22cc@naver.com → 추후 도메인 이메일).
- * 시행일이 확정되면 PRIVACY_EFFECTIVE_DATE만 채운다(공란이면 "시행일 별도 고지"로 렌더).
+ * ⚠️ 미확정(원문 주석): 문의 이메일(현재 jx22cc@naver.com → 추후 도메인 이메일). 시행일은 2026.7.23 확정.
+ * PRIVACY_EFFECTIVE_DATE를 채우면 헤더·제11조에 자동 반영된다(공란이면 "시행일 별도 고지"로 렌더).
  */
 
 /** 처리방침 시행일 — 공란이면 페이지에서 "시행일 별도 고지"로 렌더(§제11조). */
-export const PRIVACY_EFFECTIVE_DATE = "";
+export const PRIVACY_EFFECTIVE_DATE = "2026. 7. 23.";
 
 /** 시행일 표기값(공란 방어). */
 export const PRIVACY_EFFECTIVE_LABEL = PRIVACY_EFFECTIVE_DATE || "시행일 별도 고지";
