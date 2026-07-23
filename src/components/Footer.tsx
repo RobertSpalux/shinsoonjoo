@@ -124,24 +124,24 @@ export default function Footer() {
             <p className="mt-5 max-w-sm text-sm leading-relaxed text-[var(--color-ink)]/75">
               {BRAND.verse.tagline}
             </p>
-            <div className="mt-6 flex items-center gap-3">
+            <div className="mt-8 flex items-center gap-3">
               <a
                 href={BRAND.social.instagram}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="인스타그램"
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-gold)] text-[var(--color-ink)] transition-[border-color,transform] duration-300 hover:-translate-y-px hover:border-[var(--color-gold-light)]"
+                className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-forest)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-white"
               >
-                <InstagramIcon className="h-5 w-5" />
+                <InstagramIcon className="h-[22px] w-[22px]" />
               </a>
               <a
                 href={BRAND.social.kakao}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="카카오톡 채널"
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-[var(--color-gold)] text-[var(--color-ink)] transition-[border-color,transform] duration-300 hover:-translate-y-px hover:border-[var(--color-gold-light)]"
+                className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-forest)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-white"
               >
-                <KakaoIcon className="h-5 w-5" />
+                <KakaoIcon className="h-[22px] w-[22px]" />
               </a>
             </div>
           </div>
