@@ -384,7 +384,7 @@ export default function DiagnosisQuiz() {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => gaEvent("kakao_cta_click", { position: "diagnosis_result" })}
-                  className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-[var(--color-ink)] px-7 py-3.5 text-[1.0625rem] font-semibold text-[var(--color-forest)] transition-transform duration-300 hover:-translate-y-px"
+                  className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-[#FEE500] px-7 py-3.5 text-[1.0625rem] font-semibold text-[#191600] transition-transform duration-300 hover:-translate-y-px hover:bg-[#F5DC00]"
                 >
                   <svg
                     aria-hidden="true"

@@ -42,14 +42,14 @@ const STEPS: Step[] = [
 
 export default function JourneyMap() {
   return (
-    <section className="w-full bg-[var(--color-ink)] py-20 md:py-28">
+    <section className="w-full bg-[var(--color-forest)] py-20 md:py-28">
       <div className="mx-auto max-w-6xl px-5 md:px-8">
-        {/* 섹션 헤더 (DESIGN-SPEC 4-4) */}
-        <p className="text-[0.75rem] font-semibold tracking-[0.08em] uppercase text-[var(--color-text-muted)]">
+        {/* 섹션 헤더 (DESIGN-SPEC 4-4) — 딥그린 밴드 반전(DESIGN-SPEC 3-4) */}
+        <p className="text-[0.75rem] font-semibold tracking-[0.08em] uppercase text-[var(--color-ink)]/60">
           Customer Journey
         </p>
         <h2
-          className="mt-5 text-[1.75rem] font-semibold leading-[1.3] tracking-[-0.01em] text-[var(--color-forest)] md:text-[2.25rem]"
+          className="mt-5 text-[1.75rem] font-semibold leading-[1.3] tracking-[-0.01em] text-[var(--color-ink)] md:text-[2.25rem]"
           style={{ fontFamily: "var(--font-serif)" }}
         >
           발견에서 사후관리까지, 여섯 걸음
@@ -58,49 +58,40 @@ export default function JourneyMap() {
           className="mt-6 block h-px w-8 bg-[var(--color-gold)]"
           aria-hidden="true"
         />
-        <p className="mt-6 max-w-[52ch] text-[1.0625rem] leading-[1.85] text-[var(--color-text-body)]">
+        <p className="mt-6 max-w-[52ch] text-[1.0625rem] leading-[1.85] text-[var(--color-ink)]/75">
           숙제를 드리지 않습니다. 흩어진 담보를 대신 합산해, 보이지 않던 보장을 펼쳐 드립니다.
         </p>
 
         {/* 카드 6개 */}
         <ol className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {STEPS.map((step) => {
+            // 4번 강조는 골드 보더 하나뿐 — 배경·텍스트색은 6개 카드 동일(DESIGN-SPEC 3-4).
             const highlight = step.n === "4";
             return (
               <li
                 key={step.n}
                 className={
                   highlight
-                    ? "rounded-[16px] border border-transparent bg-[var(--color-forest)] p-7 md:p-8"
-                    : "rounded-[16px] border border-[var(--color-line)] bg-[var(--color-ink-card)] p-7 md:p-8"
+                    ? "rounded-[16px] border border-[var(--color-gold)] bg-transparent p-7 md:p-8"
+                    : "rounded-[16px] border border-[color-mix(in_srgb,var(--color-ink)_20%,transparent)] bg-transparent p-7 md:p-8"
                 }
               >
                 <span
                   className={
                     highlight
-                      ? "flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gold)] text-[0.875rem] font-semibold tabular-nums text-[var(--color-gold)]"
-                      : "flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-forest)] text-[0.875rem] font-semibold tabular-nums text-[var(--color-ink)]"
+                      ? "flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-gold)] bg-transparent text-[0.875rem] font-semibold tabular-nums text-[var(--color-gold)]"
+                      : "flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-ink)]/40 bg-transparent text-[0.875rem] font-semibold tabular-nums text-[var(--color-ink)]"
                   }
                 >
                   {step.n}
                 </span>
                 <h3
-                  className={
-                    highlight
-                      ? "mt-5 text-[1.25rem] font-semibold text-[var(--color-ink)] md:text-[1.5rem]"
-                      : "mt-5 text-[1.25rem] font-semibold text-[var(--color-forest)] md:text-[1.5rem]"
-                  }
+                  className="mt-5 text-[1.25rem] font-semibold text-[var(--color-ink)] md:text-[1.5rem]"
                   style={{ fontFamily: "var(--font-serif)" }}
                 >
                   {step.title}
                 </h3>
-                <p
-                  className={
-                    highlight
-                      ? "mt-3 text-[0.9375rem] leading-[1.75] text-[var(--color-ink)]/80 md:text-[1rem]"
-                      : "mt-3 text-[0.9375rem] leading-[1.75] text-[var(--color-text-body)] md:text-[1rem]"
-                  }
-                >
+                <p className="mt-3 text-[0.9375rem] leading-[1.75] text-[var(--color-ink)]/75 md:text-[1rem]">
                   {step.body}
                 </p>
               </li>
