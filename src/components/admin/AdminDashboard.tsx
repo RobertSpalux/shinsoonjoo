@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toBlogspotHtml, toNaverText } from "@/lib/osmu-format";
-import type { ReviewInfo } from "@/lib/brand";
+import { SITE_REVIEW, type ReviewInfo } from "@/lib/brand";
 import type { CheckResult } from "@/lib/compliance/banned-terms";
 import { classifyBasis } from "@/lib/evidence-gate";
 import ComplianceModal from "@/components/admin/ComplianceModal";
@@ -199,6 +199,49 @@ export default function AdminDashboard({
     }
     return m;
   }, [adReviews]);
+
+  // 팜스 동시 심사중 한도(§6.4) — 활성(최신) 행 중 status='submitted'만 센다.
+  // 반송(rejected)·승인(approved)은 카운트 제외(보완 건은 팜스 카운트에서 빠짐).
+  const SUBMIT_LIMIT = 3;
+  const submittedCount = useMemo(() => {
+    let n = 0;
+    for (const rec of reviewsByArticle.values()) {
+      for (const key of Object.keys(rec)) {
+        if (rec[key]?.status === "submitted") n++;
+      }
+    }
+    return n;
+  }, [reviewsByArticle]);
+  const canSubmit = submittedCount < SUBMIT_LIMIT;
+  const submitDisabledReason = `팜스 동시 심사중 ${SUBMIT_LIMIT}건 한도 — 회신 후 접수 가능`;
+
+  // 만료 임박 대시보드 rows에 사이트 골격 심의필(SITE_REVIEW 상수)을 같은 배지 로직으로 합류시킨다.
+  // ⚠️ SITE_REVIEW는 ad_reviews가 아니라 brand.ts 상수라 뷰(ad_reviews_expiring)에 안 잡힌다 → 여기서 직접 태운다.
+  // D-60 이내일 때만 노출(뷰와 동일 임계). 현재 6977은 ~2027-07-22라 아직 미노출.
+  const expiringRows = useMemo(() => {
+    const base: ExpiringReview[] = [...expiring];
+    if (SITE_REVIEW?.no && SITE_REVIEW.to) {
+      const toISO = SITE_REVIEW.to.replaceAll(".", "-");
+      const daysLeft = Math.round((Date.parse(toISO) - Date.parse(today)) / 86_400_000);
+      if (daysLeft <= 60) {
+        base.push({
+          id: "site-review",
+          article_id: "",
+          title: "사이트 골격 심의필 (전 페이지 공통)",
+          slug: "",
+          channel: "main",
+          review_no: SITE_REVIEW.no,
+          review_from: SITE_REVIEW.from.replaceAll(".", "-"),
+          review_to: toISO,
+          days_left: daysLeft,
+          posted_url: "https://goodfinance.kr",
+          url_registered_at: "site", // 사이트 상수라 게시위치 개념 없음 → 미등록 경고 억제
+        });
+      }
+    }
+    return base.sort((a, b) => a.days_left - b.days_left); // 임박 우선
+  }, [expiring, today]);
+
   // 심의 저장 후 로컬 반영 — 같은 (article,channel) 이전 행을 치우고 새 행을 맨 앞에.
   const upsertReview = useCallback((review: AdReview) => {
     setAdReviews((prev) => [
@@ -451,8 +494,8 @@ export default function AdminDashboard({
   return (
     <main className="min-h-screen bg-[var(--color-ink)] pt-16">
       <div className="mx-auto max-w-7xl px-6 py-10 md:px-12">
-        {/* 심의필 만료 임박 — 최상단 상시 노출 (§6.9) */}
-        <ExpiringDashboard rows={expiring} />
+        {/* 심의필 만료 임박 — 최상단 상시 노출 (§6.9). SITE_REVIEW(6977)도 같은 배지 로직에 합류. */}
+        <ExpiringDashboard rows={expiringRows} />
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-slate-900">운영 콘솔</h1>
@@ -470,6 +513,42 @@ export default function AdminDashboard({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* 심의 슬롯 게이지 — 팜스 동시 심사중 3건 한도(§6.4). 상시 표시. */}
+        <div
+          className={`mb-4 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border px-4 py-3 ${
+            canSubmit
+              ? "border-[var(--color-line)] bg-[var(--color-ink-card)]"
+              : "border-red-300 bg-red-50"
+          }`}
+        >
+          <span className="text-[11px] font-semibold text-slate-500">팜스 동시 심사중</span>
+          <span
+            className={`text-sm font-bold tabular-nums ${canSubmit ? "text-slate-800" : "text-red-700"}`}
+          >
+            {submittedCount}/{SUBMIT_LIMIT}
+          </span>
+          <span className="flex gap-1" aria-hidden>
+            {Array.from({ length: SUBMIT_LIMIT }).map((_, i) => (
+              <span
+                key={i}
+                className={`h-2.5 w-2.5 rounded-full ${
+                  i < submittedCount
+                    ? canSubmit
+                      ? "bg-amber-400"
+                      : "bg-red-500"
+                    : "bg-slate-200"
+                }`}
+              />
+            ))}
+          </span>
+          {!canSubmit && (
+            <span className="text-[11px] font-semibold text-red-700">{submitDisabledReason}</span>
+          )}
+          <span className="ml-auto text-[11px] text-slate-400">
+            반송(보완)·승인 건은 카운트 제외 — 심사중만 집계
+          </span>
         </div>
 
         {/* 오늘 할 일 요약 바 */}
@@ -833,6 +912,8 @@ export default function AdminDashboard({
                       onSaved={upsertReview}
                       onToast={showToast}
                       onCopy={copy}
+                      canSubmit={canSubmit}
+                      submitDisabledReason={submitDisabledReason}
                     />
 
                     {/* 인스타 세로 카드 썸네일 */}

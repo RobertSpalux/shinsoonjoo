@@ -170,7 +170,7 @@ export function ExpiringDashboard({ rows }: { rows: ExpiringReview[] }) {
             <span className="font-bold tabular-nums">
               {r.days_left <= 0 ? `만료 ${-r.days_left}일 경과` : `D-${r.days_left}`}
             </span>
-            <a href={`/news/${r.slug}`} target="_blank" className="font-semibold underline underline-offset-2">
+            <a href={r.slug ? `/news/${r.slug}` : "/"} target="_blank" className="font-semibold underline underline-offset-2">
               {r.title}
             </a>
             <span className="rounded-full border border-current/30 px-2 py-0.5">{labelOf(r.channel)}</span>
@@ -221,6 +221,8 @@ export function AdReviewPanel({
   onSaved,
   onToast,
   onCopy,
+  canSubmit = true,
+  submitDisabledReason,
 }: {
   article: ArticleLike;
   reviews: Record<string, AdReview | undefined>;
@@ -228,6 +230,9 @@ export function AdReviewPanel({
   onSaved: (review: AdReview) => void;
   onToast: (msg: string) => void;
   onCopy: (text: string, label: string) => void;
+  // 팜스 동시 심사중 3건 한도(§6.4) — 초과 시 접수 버튼 비활성.
+  canSubmit?: boolean;
+  submitDisabledReason?: string;
 }) {
   const [modal, setModal] = useState<ModalState>(null);
   const [showReason, setShowReason] = useState<string | null>(null);
@@ -334,8 +339,13 @@ export function AdReviewPanel({
 
               <div className="ml-auto flex flex-wrap items-center gap-1.5">
                 {(st === "none" || st === "rejected" || st === "expired") && (
-                  <button onClick={() => openSubmit(ch)} className={miniBtn}>
-                    {st === "expired" ? "재신청" : "신청 준비"}
+                  <button
+                    onClick={() => openSubmit(ch)}
+                    disabled={!canSubmit}
+                    title={!canSubmit ? submitDisabledReason : undefined}
+                    className={miniBtn}
+                  >
+                    {st === "expired" ? "재신청" : "접수"}
                   </button>
                 )}
                 {st === "submitted" && (
@@ -384,7 +394,7 @@ export function AdReviewPanel({
               <h3 className="text-sm font-bold text-slate-900">
                 {modal.channel.label} ·{" "}
                 {modal.kind === "submit"
-                  ? "광고심의 신청 준비"
+                  ? "광고심의 접수 (심사중 등록)"
                   : modal.kind === "approve"
                     ? "심의필 입력"
                     : modal.kind === "reject"
