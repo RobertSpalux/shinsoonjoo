@@ -91,19 +91,14 @@ function MapPinIcon({ className }: { className?: string }) {
 export default function Footer() {
   const { years } = getCareer();
 
-  // 사이트 골격 심의필(§6.11-8) — 표시 정책(§6.3 준수):
-  //  1) SITE_REVIEW(실제 심의필) 채워짐 → 상시 표시(publish).
-  //  2) SITE_REVIEW=null + NEXT_PUBLIC_SHOW_SITE_NOTICE==="1" → 제출용 공란 플레이스홀더(submission). 캡처 전용.
-  //  3) 그 외(라이브 기본: SITE_REVIEW=null & env 미설정) → 렌더 안 함(null).
-  // ⚠️ goodfinance.kr은 라이브다. 심의필 없는 필수안내사항을 라이브에 노출하면 미심의 광고물에 심의필
-  //    표기가 되어 §6.3 위반·제재 리스크 → 기본은 반드시 숨김. env는 로컬 캡처 때만 켠다(.env.local, 미커밋).
-  const showSubmissionPlaceholder =
-    !SITE_REVIEW && process.env.NEXT_PUBLIC_SHOW_SITE_NOTICE === "1";
+  // 광고 필수안내사항 — 심의 담당자 반송 의견에 따라 전 페이지 라이브 상시노출(반송 대응).
+  //  · SITE_REVIEW(실제 심의필) 채워짐 → 실번호 상시 표시(publish).
+  //  · SITE_REVIEW=null → 제출용 공란 예시(submission, 밑줄 제_____호) 상시 표시.
+  // ⚠️ 심사자가 "번호·유효기간 예시(공란) 표기로 상시노출"을 명시 요구 → env 게이트 폐기(항상 렌더).
+  // ⚠️ 임의번호 생성 금지(§6.3·§6.9) — 공란은 밑줄 형식 그대로. 심의 통과 시 SITE_REVIEW만 채우면 실번호 자동 치환.
   const siteNotice = SITE_REVIEW
     ? renderMandatoryNotice(SITE_REVIEW, "publish")
-    : showSubmissionPlaceholder
-      ? renderMandatoryNotice(null, "submission")
-      : null;
+    : renderMandatoryNotice(null, "submission");
   // §26 표시기준: 승환계약 [유의사항]을 다른 안내와 시각적으로 차별화하기 위해 표시상 두 조각으로 분리한다.
   // indexOf 기준 슬라이스라 문구는 변형·축약 없이 전부 보존된다("[유의사항]" 라벨 포함).
   const cautionIdx = siteNotice ? siteNotice.indexOf("[유의사항]") : -1;
