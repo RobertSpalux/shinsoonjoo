@@ -10,6 +10,7 @@ import {
   type EvergreenSeed,
 } from "@/lib/factory-prompt";
 import { scanPlainStyle, formatStyleViolations, type StyleViolation } from "@/lib/style-gate";
+import { scanEvidence, summarizeEvidence } from "@/lib/evidence-gate";
 
 /**
  * ⚠️ 300이 이 프로젝트의 상한이다 — 올리지 말 것(2026-07-14 실측).
@@ -606,6 +607,18 @@ export async function POST(request: Request) {
       reviewReasons.push(`문체(평서체) 잔존(${formatStyleViolations(styleViolations)})`);
     }
 
+    // 근거 검증 게이트(2026-07-23) — 뉴스·상록수 공통. ⚠️ 재생성 트리거 아님(재생성해도 새 자료 안 나옴).
+    // verify_claims의 basis에서 발표연도·증빙 가능성 검사 → violation 1건이라도면 사람 검수 강제. 관측은 텔레그램 📚 라인.
+    const evidenceIssues = scanEvidence(article);
+    const evidenceViolations = evidenceIssues.filter((e) => e.level === "violation");
+    if (evidenceViolations.length > 0) {
+      needsHumanReview = true;
+      const s = evidenceViolations[0];
+      reviewReasons.push(
+        `근거 미비(${summarizeEvidence(evidenceViolations)}) — "${(s.claim || "").slice(0, 30)}"`
+      );
+    }
+
     // 상록수 사실검증 게이트(커밋 M2) — 원고 검증 최종 실패 또는 민감 사실 포함이면 사람 검수 강제.
     if (mode === "evergreen") {
       if (markdownIssues.length > 0) {
@@ -709,6 +722,8 @@ export async function POST(request: Request) {
       high_risk_topics: riskTokens.length > 0 ? riskTokens : undefined,
       // 문체 위반 필드 — 텔레그램 ✍️ 라인 관측용(재생성 후에도 남은 평서체). 위반 0이면 undefined.
       style_violations: styleViolations.length > 0 ? styleViolations : undefined,
+      // 근거 검증 이슈 — 텔레그램 📚 라인 관측용(위반 + durable 관측 모두). 이슈 0이면 undefined.
+      evidence_issues: evidenceIssues.length > 0 ? evidenceIssues : undefined,
       usage, // 1·2차 + 재생성 전부 합산
       // ⏱️ 단계별 소요 — 300초 벽에 얼마나 근접했는지, 어느 단계가 재생성을 부르는지 관측용
       timing: { ...timing, total_ms: Date.now() - startedAt },

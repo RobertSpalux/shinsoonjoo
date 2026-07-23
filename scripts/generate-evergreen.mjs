@@ -391,6 +391,21 @@ function fmtStyle(vs) {
   return `✍️ 문체 위반: ${v.field} ${Math.round((v.ratio ?? 0) * 100)}%${more}${sample}`;
 }
 
+/** 📚 근거 라인 — 위반 0이면 "정상"(관측 durable 건수 표기), 있으면 code별 건수 + 샘플 1개. */
+function fmtEvidence(issues) {
+  const all = issues || [];
+  const vs = all.filter((i) => i.level === "violation");
+  if (vs.length === 0) {
+    const durable = all.filter((i) => i.code === "stale_but_durable").length;
+    return `📚 근거 정상${durable ? ` (durable ${durable})` : ""}`;
+  }
+  const counts = {};
+  for (const i of vs) counts[i.code] = (counts[i.code] || 0) + 1;
+  const codeStr = Object.entries(counts).map(([c, n]) => `${c} ${n}`).join(" · ");
+  const sample = vs[0].claim ? ` — "${String(vs[0].claim).slice(0, 30)}"` : "";
+  return `📚 근거 위반: ${codeStr}${sample}`;
+}
+
 async function sendTelegramMessage(text) {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -606,6 +621,8 @@ async function main() {
     }
     // ✍️ 문체 관측 — 항상 출력(위반 0이면 '정상'). 조용하면 게이트 작동 여부를 알 수 없으므로.
     lines.push(fmtStyle(gen.style_violations));
+    // 📚 근거 관측 — 항상 출력(위반 0이면 '정상').
+    lines.push(fmtEvidence(gen.evidence_issues));
     lines.push(
       full?.needs_human_review
         ? `🔴 사람 검수 필수: ${gen.review_reasons ?? "needs_human_review=true"}`

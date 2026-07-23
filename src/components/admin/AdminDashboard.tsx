@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import { toBlogspotHtml, toNaverText } from "@/lib/osmu-format";
 import type { ReviewInfo } from "@/lib/brand";
 import type { CheckResult } from "@/lib/compliance/banned-terms";
+import { classifyBasis } from "@/lib/evidence-gate";
 import ComplianceModal from "@/components/admin/ComplianceModal";
 import KinTab, { type KinAnswer } from "@/components/admin/KinTab";
 import {
@@ -1046,6 +1047,27 @@ export default function AdminDashboard({
                               {c.confidence && <>확신도 {c.confidence}</>}
                             </p>
                           )}
+                          {/* 근거 검증 배지(evidence-gate) — violation 빨강 / notice 회색. 발행은 막지 않음. */}
+                          {(() => {
+                            const codes = classifyBasis(c.basis ?? "");
+                            if (codes.length === 0) return null;
+                            return (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {codes.map((r, k) => (
+                                  <span
+                                    key={k}
+                                    className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${
+                                      r.level === "violation"
+                                        ? "border-red-300 bg-red-100 text-red-700"
+                                        : "border-slate-300 bg-slate-100 text-slate-500"
+                                    }`}
+                                  >
+                                    {r.code}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </li>
                     ))}

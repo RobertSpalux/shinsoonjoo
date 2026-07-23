@@ -576,6 +576,7 @@ async function generateArticle(item) {
     review_reasons: json.review_reasons ?? null,
     high_risk_topics: json.high_risk_topics ?? null,
     style_violations: json.style_violations ?? null, // 문체 위반 필드(✍️ 라인)
+    evidence_issues: json.evidence_issues ?? null, // 근거 검증 이슈(📚 라인)
     usage: json.usage ?? null, // 캐시 적중 관측(💾 라인)
     timing: json.timing ?? null, // 소요시간 관측(⏱️ 라인)
   };
@@ -588,6 +589,21 @@ function fmtStyle(vs) {
   const more = vs.length > 1 ? ` 외 ${vs.length - 1}` : "";
   const sample = v.samples?.[0] ? ` — "${v.samples[0]}"` : "";
   return `✍️ 문체 위반: ${v.field} ${Math.round((v.ratio ?? 0) * 100)}%${more}${sample}`;
+}
+
+/** 📚 근거 라인 — 위반 0이면 "정상"(관측 durable 건수 표기), 있으면 code별 건수 + 샘플 1개. */
+function fmtEvidence(issues) {
+  const all = issues || [];
+  const vs = all.filter((i) => i.level === "violation");
+  if (vs.length === 0) {
+    const durable = all.filter((i) => i.code === "stale_but_durable").length;
+    return `📚 근거 정상${durable ? ` (durable ${durable})` : ""}`;
+  }
+  const counts = {};
+  for (const i of vs) counts[i.code] = (counts[i.code] || 0) + 1;
+  const codeStr = Object.entries(counts).map(([c, n]) => `${c} ${n}`).join(" · ");
+  const sample = vs[0].claim ? ` — "${String(vs[0].claim).slice(0, 30)}"` : "";
+  return `📚 근거 위반: ${codeStr}${sample}`;
 }
 
 /** ⏱️ 라인 — 2단계 분리 후 각 단계가 300초 한도 안에 들어오는지 한눈에 보이게 */
@@ -662,6 +678,8 @@ function buildSummary({ sourceStats, collected, alreadyProcessed, batchDupes, no
           (r.needsReview ? `\n   🔴 사람 검수 필수: ${r.reviewReasons ?? "needs_human_review=true"}` : "") +
           // ✍️ 문체 관측 — 항상 출력(위반 0이면 '정상'). 조용하면 게이트 작동 여부를 알 수 없으므로.
           `\n   ${fmtStyle(r.styleViolations)}` +
+          // 📚 근거 관측 — 항상 출력(위반 0이면 '정상').
+          `\n   ${fmtEvidence(r.evidenceIssues)}` +
           // ⏱️ 300초(Hobby 함수 한도) 대비 여유 — 어느 단계가 재생성을 부르는지도 함께 본다
           (r.timing ? `\n   ${fmtTiming(r.timing)}` : "")
       );
@@ -731,7 +749,7 @@ async function main() {
   for (const item of picked) {
     console.log(`[생성] ${item.title} (관련도 ${item.score})`);
     try {
-      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics, style_violations, usage, timing } =
+      const { article, carousel_warning, needs_human_review, review_reasons, high_risk_topics, style_violations, evidence_issues, usage, timing } =
         await generateArticle(item);
       if (usage) cacheUsage.push(usage);
       if (timing) console.log(`  → ${fmtTiming(timing)}`);
@@ -756,6 +774,7 @@ async function main() {
         reviewReasons: review_reasons,
         riskTopics: high_risk_topics,
         styleViolations: style_violations,
+        evidenceIssues: evidence_issues,
         timing,
       });
 
