@@ -190,7 +190,6 @@ export async function POST(request: Request) {
     content?: string;
     /** 검수 대조용 원문 전문(무절단) — 미지정 시 content로 폴백 */
     source_fulltext?: string;
-    auto_publish?: boolean;
     /** 커밋 M2 — 미지정 = 'news' = 현행 그대로 */
     mode?: "news" | "evergreen";
     seed?: Partial<EvergreenSeed>;
@@ -201,7 +200,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "잘못된 JSON 요청" }, { status: 400 });
   }
 
-  // 발행 통제: 생성 = 초안(auto_publish 기본 false). 발행은 /admin에서 사람이 1클릭.
+  // 발행 통제: 생성은 항상 초안이다. 발행은 심의 등록 후 /admin에서만 한다.
   const {
     title,
     category,
@@ -209,7 +208,6 @@ export async function POST(request: Request) {
     source_name,
     content,
     source_fulltext,
-    auto_publish = false,
     mode = "news",
     seed,
   } = body;
@@ -696,7 +694,12 @@ export async function POST(request: Request) {
         verify_claims: verifyClaims.length > 0 ? verifyClaims : null,
         // 사람 검수 플래그 — 뉴스·상록수 공통(일화 날조·고위험 주제 게이트는 두 모드 모두 적용)
         needs_human_review: needsHumanReview,
-        is_main_published: auto_publish,
+        // 생성물은 항상 초안(false)으로 적재한다.
+        // 심의필은 생성 시점에 존재할 수 없다(ad_reviews가 기사 FK를 요구하므로 기사가 먼저다).
+        // 따라서 생성 시 발행 분기는 영원히 한쪽으로만 흐르는 죽은 코드이며, 파라미터를 두는 것
+        // 자체가 사고 경로다. 발행은 심의 등록 후 /admin에서만 한다.
+        // (백스톱: DB 트리거 trg_publish_gate가 BEFORE INSERT까지 커버해 true 삽입도 차단한다.)
+        is_main_published: false,
         // 초안이어도 published_at은 생성 시각으로 기록(정렬용). 노출 게이트는 is_main_published를
         // 함께 보므로 초안(false)은 웹에 뜨지 않음. 발행 시 admin이 published_at을 재기록.
         published_at: new Date().toISOString(),

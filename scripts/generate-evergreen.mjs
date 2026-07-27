@@ -6,7 +6,7 @@
  * 2. seed.sources(공공 1차 소스)를 fetch → 본문 추출로 groundingText 구성
  *    — 본문을 하나도 못 뽑으면 그 시드는 스킵하고 다음 시드로 (§9: 팩트 없는 원고 금지)
  * 3. /api/factory/generate 를 mode:'evergreen'으로 호출 → 초안 적재
- *    (auto_publish false — 발행은 /admin에서 사람이 1클릭)
+ *    (생성물은 항상 초안 — route.ts가 is_main_published=false 고정. 발행은 /admin에서만)
  * 4. 네이버/블로그스팟 원고 텔레그램 전송 + 실측 요약 알림(0건이어도 사유 명시)
  *    — 카드뉴스·네이버 이미지 세트는 후속 스텝 render-cards.mjs가 뉴스와 동일하게 처리
  *
@@ -342,8 +342,7 @@ async function generateEvergreen(seed, content, sourceFulltext) {
       content,
       // 검수 대조용 원문 전문 — 일화뱅크 주입분을 뺀 순수 그라운딩 원문만(원문 대조의 기준이어야 함)
       source_fulltext: sourceFulltext ?? content,
-      // 발행 통제: 초안으로만 적재(커밋 D 발행 게이트). 발행은 /admin에서 사람 검수 후 1클릭.
-      auto_publish: false,
+      // 발행 통제: 생성분은 항상 초안(route.ts가 is_main_published=false 고정). 발행은 /admin에서만.
     }),
   });
   // Vercel 함수 타임아웃/에러 페이지는 JSON이 아닌 텍스트를 반환 (실측: "An error occurred…")

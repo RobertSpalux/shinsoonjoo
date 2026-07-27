@@ -561,8 +561,7 @@ async function generateArticle(item) {
       content: `${item.title}\n\n${item.content}`,
       // 검수 대조용 원문 전문 — 모델 입력(content)과 별개로 무절단 저장된다(raw_source_fulltext)
       source_fulltext: item.contentFull ?? item.content,
-      // 발행 통제: 자동 수집·생성분은 초안으로만 적재. 발행은 /admin에서 사람 검수 후 1클릭.
-      auto_publish: false,
+      // 발행 통제: 생성분은 항상 초안(route.ts가 is_main_published=false 고정). 발행은 /admin에서만.
     }),
   });
   const json = await res.json();
