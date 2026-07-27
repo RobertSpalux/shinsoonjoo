@@ -76,6 +76,12 @@
 - **지적받은 것만 고치고 나머지를 안 보는 패턴 반복.** 제목 바꾸며 키워드 누락 등.
   한 곳 고치면 연관된 곳을 함께 점검한다.
 
+### 계정 전환 주의 (2026-07-24 확인)
+이 환경에 GitHub·Supabase 둘 다 계정 2개가 로그인돼 있음(RobertSpalux + Nhatrangbaksa).
+gh는 최근 인증된 계정을 활성으로 잡으므로, 나트랑박사 커넥터를 만진 뒤엔 활성 계정이
+넘어가 push가 403날 수 있음. 복구: `gh auth switch --user RobertSpalux`.
+Supabase도 같은 뿌리 — 나트랑박사 커넥터가 라우팅에 끼면 우리 프로젝트 쿼리가 권한오류.
+
 ### 미해결 (내일)
 - Supabase 커넥터 충돌 — 나트랑박사 커넥터 비활성화 후 우리 계정(lgbbflolunlseutvqaso)만 남기면 해소.
 - 파인 링크 삽입 / 창고 6편 삭제 / naver_images.py 표 헤더 하드코딩 제거 커밋(col_before·col_after·table_note)
