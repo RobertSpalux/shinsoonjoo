@@ -9,9 +9,15 @@
 DESIGN-SPEC 토큰 준수: 크림 배경 / 딥그린 밴드 / 골드는 헤어라인만 / 웜 차콜 텍스트
 
 ⚠️ 운영 규칙 (반드시 지킬 것)
-    이미지를 렌더한 config는 팜스 제출 전에 반드시 커밋한다. 커밋되지 않은 config로
-    렌더한 이미지는 재현 불가능하며, 원안 대조가 필요한 상황에서 대응할 수 없다.
-    실제 사고 1건 — 3호(daily-life-liability-deductible-nusu) config 유실, 2026-07-27.
+    1. 이미지를 렌더한 config는 팜스 제출 전에 반드시 커밋한다. 커밋되지 않은 config로
+       렌더한 이미지는 재현 불가능하며, 원안 대조가 필요한 상황에서 대응할 수 없다.
+    2. 렌더를 위해 스크립트 레이아웃(좌표·폰트 크기·줄간격)을 수정했다면 그 수정도
+       반드시 커밋한다. config만 커밋하고 스크립트 수정을 빠뜨리면 재현이 불가능하다.
+    3. 팜스 제출에 사용한 이미지 파일 자체를 저장소에 함께 보존한다 — 재현 가능성과
+       무관하게 원본이 남아야 원안 대조에 대응할 수 있다. (assets/naver/<slug>/)
+    실제 사고 — 3호(daily-life-liability-nusu-tenant), 2026-07-27:
+      config + 렌더 당시 스크립트 레이아웃 수정분이 함께 유실. 3-points-cta는 sha256
+      일치로 재현됐으나 1-thumb·2-table은 현재 스크립트로 재현 불가 → 커밋된 원본 PNG가 정본.
 """
 from PIL import Image, ImageDraw, ImageFont
 import json
