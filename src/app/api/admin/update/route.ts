@@ -19,6 +19,18 @@ const ALLOWED: Record<string, string[]> = {
   kin_answers: ["status", "posted_at", "answer_draft"],
 };
 
+/**
+ * 발행 플래그 → ad_reviews 채널키. DB 함수 has_valid_review와 동일한 채널 매핑.
+ * (앱단 심의 가드용 — DB 트리거 trg_publish_gate와 이중 방어. §6.9)
+ */
+const PUBLISH_FLAG_CHANNELS: Record<string, string> = {
+  is_main_published: "main",
+  is_naver_published: "naver",
+  is_blogspot_published: "blogspot",
+  is_instagram_published: "instagram",
+  is_threads_published: "threads",
+};
+
 export async function POST(request: Request) {
   if (!(await isAdminAuthed())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -45,6 +57,54 @@ export async function POST(request: Request) {
   }
 
   const supabase = createAdminClient();
+
+  // 앱단 심의 가드 (§6.9) — 발행 플래그를 false→true로 켜는 요청은 채널별 유효 심의필을 먼저 확인한다.
+  // DB 트리거 trg_publish_gate(BEFORE INSERT OR UPDATE)와 이중 방어 — 트리거가 드롭·비활성돼도 앱이 막는다.
+  // 검증 조건은 DB 함수 has_valid_review와 동일: approved + review_no 비어있지 않음 + 오늘 ∈ [from, to].
+  if (table === "premium_articles") {
+    const turningOn = Object.keys(patch).filter(
+      (k) => k in PUBLISH_FLAG_CHANNELS && patch[k] === true
+    );
+    if (turningOn.length > 0) {
+      // 트리거와 동일하게 false→true 전환만 검사한다(이미 켜진 채널 재저장은 트리거도 검사 안 함).
+      const { data: current } = await supabase
+        .from("premium_articles")
+        .select(
+          "is_main_published, is_naver_published, is_blogspot_published, is_instagram_published, is_threads_published"
+        )
+        .eq("id", id)
+        .maybeSingle();
+      const flags = (current ?? {}) as Record<string, unknown>;
+      const today = new Date().toISOString().slice(0, 10); // UTC = Postgres current_date
+      for (const flag of turningOn) {
+        const wasOn = flags[flag] === true;
+        if (wasOn) continue; // 이미 켜져 있던 채널(true→true)은 트리거도 검사하지 않음
+        const channel = PUBLISH_FLAG_CHANNELS[flag];
+        const { data: review } = await supabase
+          .from("ad_reviews")
+          .select("id")
+          .eq("article_id", id)
+          .eq("channel", channel)
+          .eq("status", "approved")
+          .not("review_no", "is", null)
+          .neq("review_no", "")
+          .not("review_from", "is", null)
+          .not("review_to", "is", null)
+          .lte("review_from", today)
+          .gte("review_to", today)
+          .limit(1)
+          .maybeSingle();
+        if (!review) {
+          // DB 에러 변환(23514)과 동일 문구·상태로 통일 — 사용자가 트리거/앱 차단을 구분할 필요 없게.
+          return NextResponse.json(
+            { error: "유효한 광고심의필이 없어 발행할 수 없습니다" },
+            { status: 409 }
+          );
+        }
+      }
+    }
+  }
+
   const { error } = await supabase.from(table).update(patch).eq("id", id);
   if (error) {
     console.error("admin update error:", error);
