@@ -687,6 +687,11 @@ export default function AdminDashboard({
                         // 발행 게이트(§6.9) — 본진 채널 유효 심의필 없으면 발행/예약 비활성
                         gateOk={reviewValid(reviewsByArticle.get(a.id)?.main, today)}
                         onPublish={async () => {
+                          // 발행 게이트(§6.9) — 버튼 disabled에만 의존하지 않고 핸들러에서 재확인.
+                          if (!reviewValid(reviewsByArticle.get(a.id)?.main, today)) {
+                            showToast("게시 전 광고심의가 필요합니다 (금소법 제22조)");
+                            return;
+                          }
                           if (!passReviewGate(a)) return;
                           const clearReview = a.needs_human_review === true ? { needs_human_review: false } : {};
                           const published_at = new Date().toISOString();
@@ -697,6 +702,11 @@ export default function AdminDashboard({
                           showToast(ok ? "발행 완료" : error ?? "발행 실패 — 새로고침(재로그인) 후 다시 시도하세요");
                         }}
                         onSchedule={async (iso) => {
+                          // 예약발행도 즉시 is_main_published=true → 동일 게이트 재확인.
+                          if (!reviewValid(reviewsByArticle.get(a.id)?.main, today)) {
+                            showToast("게시 전 광고심의가 필요합니다 (금소법 제22조)");
+                            return;
+                          }
                           if (!passReviewGate(a)) return;
                           const clearReview = a.needs_human_review === true ? { needs_human_review: false } : {};
                           const snapshot = articles;
