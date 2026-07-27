@@ -203,16 +203,26 @@ export default function AdminDashboard({
   // 팜스 동시 심사중 한도(§6.4) — 활성(최신) 행 중 status='submitted'만 센다.
   // 반송(rejected)·승인(approved)은 카운트 제외(보완 건은 팜스 카운트에서 빠짐).
   const SUBMIT_LIMIT = 3;
-  const submittedCount = useMemo(() => {
-    let n = 0;
+  // 슬롯 단위 = 광고물(기사 × 채널). 채널 수(=슬롯 소비)와 기사 수를 함께 집계해 오독을 막는다.
+  const submitted = useMemo(() => {
+    let channels = 0;
+    let articleN = 0;
     for (const rec of reviewsByArticle.values()) {
+      let hasSubmitted = false;
       for (const key of Object.keys(rec)) {
-        if (rec[key]?.status === "submitted") n++;
+        if (rec[key]?.status === "submitted") {
+          channels++;
+          hasSubmitted = true;
+        }
       }
+      if (hasSubmitted) articleN++;
     }
-    return n;
+    return { channels, articles: articleN };
   }, [reviewsByArticle]);
+  const submittedCount = submitted.channels; // 슬롯 소비 = 채널(광고물) 수
   const canSubmit = submittedCount < SUBMIT_LIMIT;
+  // 새 기사 1건 = 본진 + 네이버 2슬롯 필요. 남은 슬롯 < 2면 새 기사 접수 불가.
+  const remainingSlots = SUBMIT_LIMIT - submittedCount;
   const submitDisabledReason = `팜스 동시 심사중 ${SUBMIT_LIMIT}건 한도 — 회신 후 접수 가능`;
 
   // 만료 임박 대시보드 rows에 사이트 골격 심의필(SITE_REVIEW 상수)을 같은 배지 로직으로 합류시킨다.
@@ -327,8 +337,18 @@ export default function AdminDashboard({
     },
     [now]
   );
+  // "미배포" = 해당 채널의 유효 심의필이 있는데(has_valid_review 동일 조건) 아직 배포 안 한 글.
+  // ⚠️ 심의필이 없으면 배포 자체가 불가(§6.11-2 채널별 별건 심의)이므로 "미배포"가 아니다 —
+  //    이 구분이 없으면 main만 심의받은 1·2호가 영구히 노란 경고로 남아 경고 기능을 잃는다.
   const isUndistributed = (a: Article) =>
-    !a.is_naver_published || !a.is_blogspot_published || !a.is_instagram_published;
+    ([
+      ["naver", a.is_naver_published],
+      ["blogspot", a.is_blogspot_published],
+      ["instagram", a.is_instagram_published],
+    ] as const).some(
+      ([channel, published]) =>
+        reviewValid(reviewsByArticle.get(a.id)?.[channel], today) && !published
+    );
 
   const isEvergreen = (a: Article) => a.content_type === "evergreen";
   const evergreenCount = articles.filter(isEvergreen).length;
@@ -529,6 +549,11 @@ export default function AdminDashboard({
           >
             {submittedCount}/{SUBMIT_LIMIT}
           </span>
+          {submittedCount > 0 && (
+            <span className="text-[11px] font-medium text-slate-500 tabular-nums">
+              · 기사 {submitted.articles}건 × 채널 {submitted.channels}
+            </span>
+          )}
           <span className="flex gap-1" aria-hidden>
             {Array.from({ length: SUBMIT_LIMIT }).map((_, i) => (
               <span
@@ -543,11 +568,17 @@ export default function AdminDashboard({
               />
             ))}
           </span>
-          {!canSubmit && (
+          {!canSubmit ? (
             <span className="text-[11px] font-semibold text-red-700">{submitDisabledReason}</span>
+          ) : (
+            remainingSlots < 2 && (
+              <span className="text-[11px] font-semibold text-amber-700">
+                남은 슬롯 {remainingSlots}칸 — 새 기사 접수 불가(본진+네이버 2칸 필요)
+              </span>
+            )
           )}
           <span className="ml-auto text-[11px] text-slate-400">
-            반송(보완)·승인 건은 카운트 제외 — 심사중만 집계
+            슬롯 단위 = 광고물(기사×채널) · 반송·승인 제외, 심사중만 집계
           </span>
         </div>
 
@@ -579,9 +610,12 @@ export default function AdminDashboard({
           <>
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {([
-                ["news", `뉴스 (${articles.length - evergreenCount})`],
-                ["evergreen", `상록수 (${evergreenCount})`],
-              ] as const).map(([key, label]) => (
+                ["news", `뉴스 (${articles.length - evergreenCount})`, articles.length - evergreenCount],
+                ["evergreen", `상록수 (${evergreenCount})`, evergreenCount],
+              ] as const)
+                // 건수 0 항목은 렌더하지 않는다(필터는 유지 — Track A 폐기로 '뉴스(0)' 영구 노출 방지).
+                .filter(([, , count]) => count > 0)
+                .map(([key, label]) => (
                 <button key={key} onClick={() => setContentTab(key)} className={chipBtn(contentTab === key)}>
                   {label}
                 </button>
