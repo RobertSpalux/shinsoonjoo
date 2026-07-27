@@ -99,8 +99,13 @@
 ### 8. Supabase MCP 접속 문제 해결
 - 원인: 커넥터가 **잘못된 조직(Shinsoonjoo)**으로 승인돼 있었다. `shin-good-finance`는
   **Nhatrangbaksa 조직** 소속이다.
-- 해결: **조직 스코프(project_ref 없이) Nhatrangbaksa로 재승인** → 조직 내 두 프로젝트를 커넥터
-  하나로 접근. project_ref를 지정하면 단일 프로젝트에 고정되고 계정 수준 도구가 비활성화되므로 지정하지 않는다.
+- ⚠️ **project_id vs project_ref — 혼동 금지:**
+  - **`project_id`** = **도구 호출 인자.** SHIN은 항상 `lgbbflolunlseutvqaso`. 유효하다(계속 쓴다).
+  - **`project_ref`** = **커넥터 연결 URL 파라미터.** 지정하면 단일 프로젝트에 고정되고
+    계정 수준 도구(`list_projects` 등)가 비활성화된다. **지정하지 않는다.**
+- 해결: **조직 스코프(project_ref 없이)로 승인하되 조직은 `Nhatrangbaksa`를 선택**한다
+  (`shin-good-finance`가 이 조직 소속. `Shinsoonjoo`를 고르면 permission denied).
+  → 커넥터 하나로 `shin-good-finance`와 `Nhatrangbaksa's Project` 양쪽을 쓴다.
 - ⚠️ 계정·조직 라우팅 맥락은 07-24 「계정 전환 주의」 블록과 함께 본다(GitHub·Supabase 다계정 뿌리 동일).
 
 ---
