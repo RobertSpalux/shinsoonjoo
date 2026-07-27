@@ -2,41 +2,49 @@
 # -*- coding: utf-8 -*-
 """
 신순주의 선한 금융 — 네이버 블로그 이미지 3종 렌더러 (고정 틀)
-글마다 아래 CONFIG 의 텍스트만 교체해서 재사용한다.
+
+글별 설정은 configs/<slug>.json 에 두고, slug 인자로 로드한다:
+    python naver_images.py disclosure-exclusion-2026
+
 DESIGN-SPEC 토큰 준수: 크림 배경 / 딥그린 밴드 / 골드는 헤어라인만 / 웜 차콜 텍스트
+
+⚠️ 운영 규칙 (반드시 지킬 것)
+    이미지를 렌더한 config는 팜스 제출 전에 반드시 커밋한다. 커밋되지 않은 config로
+    렌더한 이미지는 재현 불가능하며, 원안 대조가 필요한 상황에서 대응할 수 없다.
+    실제 사고 1건 — 3호(daily-life-liability-deductible-nusu) config 유실, 2026-07-27.
 """
 from PIL import Image, ImageDraw, ImageFont
+import json
 import os
+import sys
 
 # ────────────────────────────────────────────────
-# CONFIG — 글마다 여기만 바꾼다
+# CONFIG 로더 — configs/<slug>.json (기본값 폴백 없음)
+#   · 파일·필수키가 없으면 즉시 에러. 이전 글 문구가 조용히 새 이미지에 박히는 사고를 코드가 막는다.
 # ────────────────────────────────────────────────
-CONFIG = {
-    "slug": "disclosure-exclusion-2026",
-    "overline": "가입·고지 가이드",
-    "title": "수술 이력 있는데\n보험 가입되나요?",
-    "subtitle": "거절보다 흔한 건 '조건부 가입'입니다",
-    # 정보 도식 — 비교표 (라벨, 좌, 우)
-    "table_title": "부담보, 두 가지가 다릅니다",
-    "table_head": ("기간 부담보", "전기간 부담보"),
-    "table_rows": [
-        ("보장 제외", "정해진 기간만", "계약 기간 내내"),
-        ("해제 시점", "기간이 지나면", "요건 충족 시"),
-        ("해제 요건", "기간 경과", "5년간 진단·치료 없을 것"),
-        ("청구 안 하면", "무관", "진료기록으로 판단"),
-    ],
-    "table_note": "금융감독원 분쟁 판단기준 · 약관에 따라 다를 수 있습니다",
-    # 핵심 포인트 카드
-    "points_title": "이건 반드시 알리셔야 합니다",
-    "points": [
-        "최근 3개월 — 확정진단·의심소견·치료·입원·수술·투약",
-        "최근 1년 — 건강검진 등에서 추가검사(재검사)를 받은 경우",
-        "최근 5년 — 입원·수술, 7일 이상 치료, 30일 이상 투약",
-    ],
-    "cta_line": "내 계약에 뭐가 빠져 있을까요?",
-    "cta_sub": "담보 단위로 리모델링 점검",
-    "cta_url": "goodfinance.kr/diagnosis",
-}
+CONFIG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "configs")
+
+# 렌더러 3종이 실제 참조하는 필수 키 — 하나라도 없으면 렌더 전에 막는다.
+REQUIRED_KEYS = [
+    "slug",
+    "overline", "title", "subtitle",
+    "table_title", "col_before", "col_after", "table_rows", "table_note",
+    "points_title", "points", "cta_line", "cta_sub", "cta_url",
+]
+
+
+def load_config(slug):
+    path = os.path.join(CONFIG_DIR, f"{slug}.json")
+    if not os.path.exists(path):
+        raise SystemExit(f"[config 없음] {path} — configs/<slug>.json 을 먼저 만들고 커밋하세요.")
+    with open(path, encoding="utf-8") as fp:
+        cfg = json.load(fp)
+    missing = [k for k in REQUIRED_KEYS if k not in cfg]
+    if missing:
+        raise SystemExit(f"[config 키 누락] {slug}.json — 필수 키 없음: {', '.join(missing)}")
+    if cfg["slug"] != slug:
+        raise SystemExit(f"[slug 불일치] 인자 '{slug}' ≠ config slug '{cfg['slug']}'")
+    return cfg
 
 OUT_DIR = "/home/claude/work/naver_out"
 
@@ -178,7 +186,8 @@ def render_table(cfg):
     col3 = pad + 420
 
     f_head = sans("bold", 24)
-    head_l, head_r = cfg.get("table_head", ("이전", "이후"))
+    head_l = cfg["col_before"]
+    head_r = cfg["col_after"]
     d.text((col2, top), head_l, font=f_head, fill=TEXT_MUTED)
     d.text((col3, top), head_r, font=f_head, fill=FOREST)
     d.line([(pad, top + 44), (W - pad, top + 44)], fill=LINE, width=1)
@@ -201,7 +210,7 @@ def render_table(cfg):
         d.line([(pad, y - 12), (W - pad, y - 12)], fill=LINE, width=1)
 
     f_note = sans("regular", 21)
-    d.text((pad, H - 78), cfg.get("table_note", ""), font=f_note, fill=TEXT_MUTED)
+    d.text((pad, H - 78), cfg["table_note"], font=f_note, fill=TEXT_MUTED)
 
     return img
 
@@ -245,8 +254,11 @@ def render_points_cta(cfg):
 
 
 def main():
+    if len(sys.argv) < 2:
+        raise SystemExit("사용법: python naver_images.py <slug>   (예: disclosure-exclusion-2026)")
+    slug = sys.argv[1]
+    cfg = load_config(slug)
     os.makedirs(OUT_DIR, exist_ok=True)
-    slug = CONFIG["slug"]
     jobs = [
         ("1-thumb", render_thumbnail),
         ("2-table", render_table),
@@ -254,8 +266,8 @@ def main():
     ]
     paths = []
     for name, fn in jobs:
-        img = fn(CONFIG)
-        p = f"{OUT_DIR}/{slug}-{name}.png"
+        img = fn(cfg)
+        p = f"{OUT_DIR}/{cfg['slug']}-{name}.png"
         img.save(p, "PNG", optimize=True)
         paths.append(p)
         print("saved:", p, img.size)
