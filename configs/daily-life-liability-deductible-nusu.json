@@ -1,6 +1,5 @@
 {
-  "_note": "반송본(2026-07-27) 재현용 — assets/naver/daily-life-liability-nusu-tenant/ 원본과 짝. 현행은 daily-life-liability-deductible-nusu.json. (loader는 이 키를 무시)",
-  "slug": "daily-life-liability-nusu-tenant",
+  "slug": "daily-life-liability-deductible-nusu",
   "overline": "보험 리모델링",
   "title": "일상생활배상책임보험\n누수, 전세면\n못 받을 수 있습니다",
   "subtitle": "매립배관은 집주인 책임입니다",
@@ -13,7 +12,7 @@
     ["증권에 주택 기재", "필요", "필요"],
     ["아랫집 도배·장판", "보상", "보상"]
   ],
-  "table_note": "금융감독원 금융꿀팁 153호 기준",
+  "table_note": "금융감독원 [금융꿀팁] 153호(2024.5.29. 발표) 기준",
   "points_title": "놓치기 쉬운 세 가지",
   "points": [
     "매립배관 파손은 임차인에게 배상책임이 없습니다",

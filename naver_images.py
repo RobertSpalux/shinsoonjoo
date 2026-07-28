@@ -188,8 +188,8 @@ def render_table(cfg):
     top = pad + 130
     row_h = 108
     col1 = pad
-    col2 = pad + 170
-    col3 = pad + 420
+    col2 = pad + 300
+    col3 = pad + 500
 
     f_head = sans("bold", 24)
     head_l = cfg["col_before"]
@@ -204,13 +204,13 @@ def render_table(cfg):
 
     y = top + 76
     for label, before, after in cfg["table_rows"]:
-        d.text((col1, y + 20), label, font=f_label, fill=TEXT_STRONG)
+        d.text((col1, y + 18), label, font=f_label, fill=TEXT_STRONG)
 
         for i, ln in enumerate(wrap(d, before, f_before, col3 - col2 - 24)):
-            d.text((col2, y + 6 + i * 34), ln, font=f_before, fill=TEXT_MUTED)
+            d.text((col2, y + 20 + i * 34), ln, font=f_before, fill=TEXT_MUTED)
 
         for i, ln in enumerate(wrap(d, after, f_after, W - pad - col3)):
-            d.text((col3, y + 4 + i * 36), ln, font=f_after, fill=FOREST)
+            d.text((col3, y + 18 + i * 36), ln, font=f_after, fill=FOREST)
 
         y += row_h
         d.line([(pad, y - 12), (W - pad, y - 12)], fill=LINE, width=1)
