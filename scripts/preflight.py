@@ -190,20 +190,21 @@ def check_notice_wiring():
 
 
 def check_sources(article):
-    """외부 기관 인용 문장에 4요소(최소 연도 4자리) 존재 여부. 없으면 실패."""
-    fails = []
+    """인용 서지(발행연도)가 본문에 1회 이상 있는지 — 문서 단위.
+    ⚠️ 줄 단위가 아니다. 첫 인용에 서지(기관·문서명·발행연도)를 넣고 이후 '같은 자료'로
+       약칭하는 것이 정본 설계(§6.10). 줄마다 연도를 강요하면 서비스명("금융감독원이 운영하는
+       파인")·귀속 문장까지 오탐한다. 따라서 기관을 언급한 본문이면 그 본문 어딘가에
+       발행연도(4자리)가 1회 이상 있으면 통과한다."""
     year_re = re.compile(r"(?:19|20)\d{2}")
+    fails = []
     for label, field in BODY_FIELDS:
         text = article.get(field) or ""
         if not text:
             continue
-        for line in text.splitlines():
-            if any(inst in line for inst in INSTITUTIONS):
-                if not year_re.search(line):
-                    snippet = line.strip()[:40]
-                    fails.append(f"{label}: 인용에 발행연도(4자리) 없음 — \"{snippet}…\"")
+        if any(inst in text for inst in INSTITUTIONS) and not year_re.search(text):
+            fails.append(f"{label}: 기관 인용이 있으나 본문에 발행연도(4자리) 서지가 없음")
     ok = not fails
-    return ok, ("통과 — 인용 문장에 연도 표기 확인" if ok else " / ".join(fails[:4]))
+    return ok, ("통과 — 인용 서지(발행연도) 본문 내 확인" if ok else " / ".join(fails))
 
 
 def check_writing_spec(article):
