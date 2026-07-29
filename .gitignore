@@ -45,3 +45,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 주제발굴 수집 산출물 (§9상 근거 아님 — 발굴 소스)
+data/naver_research_*.json
