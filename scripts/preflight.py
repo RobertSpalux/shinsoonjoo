@@ -5,7 +5,7 @@
 
     python scripts/preflight.py <slug>
 
-Supabase에서 기사를 읽어 8개 항목을 검사한다. 하나라도 실패하면 exit code 1.
+Supabase에서 기사를 읽어 9개 항목을 검사한다. 하나라도 실패하면 exit code 1.
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
@@ -39,6 +39,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BRAND_TS = os.path.join(ROOT, "src", "lib", "brand.ts")
 BANNED_TS = os.path.join(ROOT, "src", "lib", "compliance", "banned-terms.ts")
 CONFIGS_DIR = os.path.join(ROOT, "configs")
+SOURCES_JSON = os.path.join(CONFIGS_DIR, "sources.json")
+QUOTED_TITLE = re.compile(r"「([^」]+)」")
 
 # 인용 출처로 인정되는 공신력 기관 (§6.10 증빙 인정 기관). 금지어 목록이 아니므로 여기 소량 둔다.
 INSTITUTIONS = [
@@ -225,6 +227,32 @@ def check_sources(article):
     return ok, ("통과 — 인용 서지(발행연도) 본문 내 확인" if ok else " / ".join(fails))
 
 
+def parse_source_titles():
+    """자료명 정본 목록 — configs/sources.json 단일 출처.
+    파일이 없으면 검사를 건너뛰지 않고 실패시킨다(있어야 하는 파일이다)."""
+    if not os.path.exists(SOURCES_JSON):
+        sys.exit(f"[출처 대장 없음] {SOURCES_JSON} — 자료명 정본 대장을 먼저 만들고 커밋하세요.")
+    with open(SOURCES_JSON, encoding="utf-8") as fp:
+        data = json.load(fp)
+    return {s["title"] for s in data.get("sources", [])}
+
+
+def check_source_titles(article):
+    """본문 「」 안 자료명이 대장에 정확히 있는지 대조한다.
+    축약·변형하면 대장에 없으므로 걸린다.
+    근거: 2호 네이버 반송(2026-07-30) — 「계약 전 알릴의무 안내」로 축약해 반송."""
+    titles = parse_source_titles()
+    fails = []
+    for label, text in pending_bodies(article):
+        for m in QUOTED_TITLE.finditer(text):
+            got = m.group(1).strip()
+            if got not in titles:
+                fails.append(f"{label}: 대장에 없는 자료명 — 「{got}」")
+    ok = not fails
+    return ok, ("통과 — 자료명 정본 대조 완료" if ok else
+                " / ".join(fails) + "  → 원문 제목 확인 후 configs/sources.json에 등록하거나 본문을 원문 제목으로 고칠 것")
+
+
 def check_writing_spec(article):
     md = article.get("main_website_markdown") or ""
     checks = {
@@ -347,6 +375,7 @@ def main():
         ("변동 안내문구", *check_premium_variation(article)),
         ("필수 유의문구", *check_notice_wiring()),
         ("출처 4요소", *check_sources(article)),
+        ("출처 자료명", *check_source_titles(article)),
         ("WRITING-SPEC", *check_writing_spec(article)),
         ("분량", *check_length(article)),
         ("이미지 config", *check_image_config(slug, article)),
