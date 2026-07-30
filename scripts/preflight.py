@@ -5,7 +5,7 @@
 
     python scripts/preflight.py <slug>
 
-Supabase에서 기사를 읽어 6개 항목을 검사한다. 하나라도 실패하면 exit code 1.
+Supabase에서 기사를 읽어 8개 항목을 검사한다. 하나라도 실패하면 exit code 1.
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
@@ -52,6 +52,23 @@ BODY_FIELDS = [
     ("블로그스팟", "blogspot_content"),
 ]
 
+CHANNEL_OF = {"main_website_markdown": "main",
+              "naver_blog_content": "naver",
+              "blogspot_content": "blogspot"}
+# 동결 채널 — 발행하지 않으므로 심의도 받지 않는다(§6.9: 블로그스팟은 본진과 같은 구글 = 자기잠식).
+# ad_reviews row가 영구히 생기지 않아 frozen_channels로는 걸러지지 않는다 → 별도 제외.
+# 제출하지 않는 채널을 검사하면 영구 실패로 남아 게이트를 무시하게 만든다. 재개 시 이 집합에서 뺀다.
+DORMANT_CHANNELS = {"blogspot"}
+# 푸터가 커버하는 채널 — 사이트 안이므로 premiumVariation이 전 페이지 상시노출된다
+# (Footer.tsx → CONDITIONAL_NOTICES.premiumVariation, 사이트 골격 6977호).
+# 실측: 6088호(1호 본진)는 본문에 이 자구가 없이 승인됐다. 반면 네이버·블로그스팟은 사이트 밖이라
+# 푸터가 없어 본문에 자구가 있어야 한다(1호 네이버 반송 사유 ④의 구조적 원인).
+# → 렌더/익스포트로 주입되는 문구는 본문에서 찾지 않는다(check_notice_wiring과 동일 원칙).
+FOOTER_COVERED = {"main"}
+MANWON     = re.compile(r"[0-9][0-9,]*\s*만\s*원")
+MANWON_DAE = re.compile(r"[0-9][0-9,]*\s*만\s*원\s*대")
+ANY_MONEY  = re.compile(r"[0-9][0-9,]*\s*(?:만\s*원|억|원)")
+
 
 # ────────────────────────────────────────────────
 # env / Supabase
@@ -82,8 +99,9 @@ def fetch_article(slug):
     key = env.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
         sys.exit("[env 오류] NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 를 찾을 수 없습니다.")
-    cols = ("slug,title,naver_title,blogspot_title,category,"
-            "main_website_markdown,naver_blog_content,blogspot_content,verify_claims")
+    cols = ("id,slug,title,naver_title,blogspot_title,category,"
+            "main_website_markdown,naver_blog_content,blogspot_content,verify_claims,"
+            "ad_reviews(channel,status)")
     r = requests.get(
         f"{url}/rest/v1/premium_articles",
         params={"slug": f"eq.{slug}", "select": cols, "limit": "1"},
@@ -243,6 +261,79 @@ def check_image_config(slug, article):
     return False, f"configs/{slug}.json 없음(이미지 config 유실 위험)"
 
 
+def frozen_channels(article):
+    """심의 접수·승인된 채널 = 원안 수정 불가 → 제출 전 게이트의 검사 대상이 아니다.
+    이 스코프가 없으면 승인분(6088·6964·8289·8290)이 영구 실패로 남아 노이즈가 된다."""
+    rows = article.get("ad_reviews") or []
+    return {r.get("channel") for r in rows if r.get("status") in ("approved", "submitted")}
+
+
+def pending_bodies(article, exclude=frozenset()):
+    skip = frozen_channels(article) | DORMANT_CHANNELS | set(exclude)
+    out = []
+    for label, field in BODY_FIELDS:
+        if CHANNEL_OF.get(field) in skip:
+            continue
+        text = article.get(field) or ""
+        if text:
+            out.append((label, text))
+    return out
+
+
+def _units(text):
+    """줄 단위로 자른 뒤 각 줄을 마침표로 다시 자른다.
+    표·불릿은 마침표가 없어 줄이 유일한 경계이므로 두 단계가 모두 필요하다."""
+    out = []
+    for line in text.split("\n"):
+        for s in re.split(r"(?<=\.)\s+", line):
+            s = s.strip()
+            if s:
+                out.append(s)
+    return out
+
+
+def check_premium_notation(article):
+    """보험료 표기 검사 — 참고자료 ⑭.
+    보장금액의 만원 표기는 정상이므로 '보험료'와 같은 문장일 때만 잡는다."""
+    fails = []
+    for label, text in pending_bodies(article):
+        premium_money = False
+        for u in _units(text):
+            if MANWON_DAE.search(u):
+                fails.append(f"{label}: 'N만원대' 표기 — {u[:40]}")
+                continue
+            if "보험료" in u and MANWON.search(u):
+                fails.append(f"{label}: 보험료 만원 반올림 — {u[:50]}")
+            if "보험료" in u and ANY_MONEY.search(u):
+                premium_money = True
+        if premium_money and "산출기준" not in text:
+            fails.append(f"{label}: 보험료 금액 노출인데 산출기준 미기재"
+                         "(가입담보·나이·성별·직업(급수)·납기·만기)")
+    ok = not fails
+    return ok, ("통과 — 보험료 원 단위·산출기준 확인" if ok else " / ".join(fails))
+
+
+def parse_premium_variation():
+    ts = open(BRAND_TS, encoding="utf-8").read()
+    m = re.search(r'premiumVariation:\s*"([^"]+)"', ts, re.S)
+    if not m:
+        sys.exit("[파서 오류] brand.ts CONDITIONAL_NOTICES.premiumVariation 을 찾지 못했습니다.")
+    return m.group(1)
+
+
+def check_premium_variation(article):
+    """금액(가입금액·보험료) 노출 시 변동 가능성 안내문구 필수.
+    근거: 1호 네이버 반송 사유 ④ + 팜스 스레드 자동생성본에 동일 항목 존재(CLAUDE.md §6.3).
+    ⚠️ 본진은 제외한다 — 푸터가 상시노출하므로 본문 요구는 오탐(FOOTER_COVERED 주석 참조)."""
+    notice = parse_premium_variation()
+    fails = []
+    for label, text in pending_bodies(article, exclude=FOOTER_COVERED):
+        if ANY_MONEY.search(text) and notice not in text:
+            fails.append(f"{label}: 금액 노출인데 premiumVariation 자구 없음")
+    ok = not fails
+    return ok, ("통과 — 금액 노출 시 변동 안내문구 확인" if ok else " / ".join(fails))
+
+
 # ────────────────────────────────────────────────
 def main():
     if len(sys.argv) < 2:
@@ -252,6 +343,8 @@ def main():
 
     results = [
         ("금지어 §6.10", *check_banned(article)),
+        ("보험료 표기", *check_premium_notation(article)),
+        ("변동 안내문구", *check_premium_variation(article)),
         ("필수 유의문구", *check_notice_wiring()),
         ("출처 4요소", *check_sources(article)),
         ("WRITING-SPEC", *check_writing_spec(article)),
