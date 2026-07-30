@@ -21,6 +21,8 @@ Supabase에서 기사를 읽어 9개 항목을 검사한다. 하나라도 실패
 인증: 기존 .mjs 스크립트와 동일한 환경변수(NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY).
       REST(PostgREST)로 읽는다. 새 인증 방식을 만들지 않는다.
 """
+# ⚠️ 이 파일의 정규식을 SQL로 옮겨 검증하지 말 것. Postgres ARE는 `.`이 개행을 매치하고
+#    RE 전체 탐욕성을 첫 수량자가 결정해 결과가 달라진다(2026-07-30 실측: 3호 2,708 → 1,271 오판).
 import os
 import re
 import sys
@@ -269,7 +271,12 @@ def check_writing_spec(article):
 def check_length(article):
     md = article.get("main_website_markdown") or ""
     # 마크다운 제어문자 제거 후 글자 수(대략)
-    plain = re.sub(r"[#>*`|]|-{2,}|\[[^\]]*\]\([^)]*\)|<!--.*?-->", "", md)
+    # ⚠️ 여러 줄 주석·링크 텍스트 처리 결함 교정(2026-07-30).
+    #    표·헤딩·불릿을 포함하는 것은 의도된 정책이다 — 담보 단위 합산표가 이 브랜드의 실질이다.
+    # 순서 주의: 주석을 먼저 지워야 주석 안 링크가 본문으로 집계되지 않는다.
+    plain = re.sub(r"<!--.*?-->", "", md, flags=re.DOTALL)
+    plain = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", plain)  # 링크 텍스트는 본문 — URL만 제거
+    plain = re.sub(r"[#>*`|]|-{2,}", "", plain)
     plain = re.sub(r"\s+", "", plain)
     n = len(plain)
     ok = 2000 <= n <= 3200
