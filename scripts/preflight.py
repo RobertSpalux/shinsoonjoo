@@ -27,6 +27,7 @@ import os
 import re
 import sys
 import json
+from datetime import datetime, timezone
 
 import requests
 
@@ -118,6 +119,36 @@ def fetch_article(slug):
     if not rows:
         sys.exit(f"[기사 없음] slug='{slug}' 가 premium_articles에 없습니다.")
     return rows[0]
+
+
+def mark_preflight(article_id, passed):
+    """preflight 결과를 premium_articles.preflight_passed_at 에 남긴다 (2026-09-22).
+
+    종전에는 결과가 exit code 로만 나가서 "접수 대기 = preflight 통과본"을 셀 수 없었다.
+    통과하면 시각을 찍고, 실패하면 NULL 로 되돌린다 — 고치다가 깨진 원고가 통과본으로
+    남아 있으면 버퍼 숫자가 거짓이 된다.
+    기록에 실패해도 판정 결과(exit code)는 바꾸지 않는다. 검사기가 본업이다.
+    """
+    env = load_env()
+    url = env.get("NEXT_PUBLIC_SUPABASE_URL", "").rstrip("/")
+    key = env.get("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not url or not key or not article_id:
+        return "기록 생략 — env 또는 기사 id 없음"
+    stamp = datetime.now(timezone.utc).isoformat() if passed else None
+    try:
+        r = requests.patch(
+            f"{url}/rest/v1/premium_articles",
+            params={"id": f"eq.{article_id}"},
+            headers={"apikey": key, "Authorization": f"Bearer {key}",
+                     "Content-Type": "application/json", "Prefer": "return=minimal"},
+            json={"preflight_passed_at": stamp},
+            timeout=30,
+        )
+        if r.status_code not in (200, 204):
+            return f"기록 실패 HTTP {r.status_code}"
+    except Exception as e:  # noqa: BLE001
+        return f"기록 실패 {type(e).__name__}"
+    return f"preflight_passed_at = {stamp or 'NULL'}"
 
 
 # ────────────────────────────────────────────────
@@ -425,6 +456,9 @@ def main():
         mark = "통과" if ok else "실패"
         print(f"  [{name:<12}] {mark} — {detail}")
         all_ok = all_ok and ok
+    print()
+    기록 = mark_preflight(article.get("id"), all_ok)
+    print(f"  [{'기록':<12}] {기록}")
     print()
     if not all_ok:
         print("결과: 실패 — 위 항목을 해소한 뒤 팜스 제출하세요.")
