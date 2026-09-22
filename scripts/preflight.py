@@ -5,7 +5,7 @@
 
     python scripts/preflight.py <slug>
 
-Supabase에서 기사를 읽어 12개 항목을 검사한다. 하나라도 실패하면 exit code 1.
+Supabase에서 기사를 읽어 13개 항목을 검사한다. 하나라도 실패하면 exit code 1.
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
@@ -461,6 +461,58 @@ def check_simplified_issue(article):
     ok = not fails
     return ok, ("통과 — 유병자(간편) 안내문구 확인" if ok else " / ".join(fails)
                 + "  → brand.ts CONDITIONAL_NOTICES.simplifiedIssue 자구를 본문에 넣을 것")
+def check_naver_osmu_parity(article):
+    """네이버에 붙여넣는 원고가 **osmu-format 출력**과 같은 재료인가 (2026-09-22 신설).
+
+    🔴 왜: 관리자 복사 버튼이 raw naver_blog_content 를 그대로 내보내면 개인의견 귀속 문구
+       (REQUIRED_NOTICES)와 필수안내사항이 빠진 채 접수된다. 초안2 네이버가 실제로 그렇게
+       접수됐다. 버튼은 고쳤지만, 원고 쪽에서도 같은 사고를 막는 그물이 필요하다.
+
+    ⚠️ **완전 대조는 여기서 못 한다.** osmu-format 은 TypeScript 이고 본문에 원문 링크·해시태그·
+       필수안내사항을 붙이는데, 그건 저장된 원고가 아니라 **복사 시점에** 붙는다(심의필 번호가
+       그때 정해지므로 저장할 수도 없다). 그래서 저장분에 대고 "같은가"를 물으면 늘 틀린다.
+       대신 **osmu 가 손대는 자리를 원고가 미리 침범하지 않았는가**를 본다:
+         ① 필수안내사항을 원고에 직접 써 두지 않았는가 (복사 때 두 번 붙는다)
+         ② osmu 구분선(─────)을 원고가 이미 쓰고 있지 않은가
+         ③ 원문 링크·해시태그를 원고에 박아 두지 않았는가
+         ④ 마크다운 잔재(표·헤딩 기호·굵게)가 남아 있지 않은가 — osmu 가 지우는 것들이다
+       ⑤ 필수 유의문구 2종은 osmu 가 **본문에** 넣는다. 원고에 이미 있으면 osmu 가 건너뛰므로
+          있어도 되고 없어도 된다 — 검사하지 않는다.
+
+    남은 구멍: 버튼이 osmu 를 안 거치는 경우는 이 검사로 못 잡는다.
+      → 완전 대조를 원하면 방법은 하나다. `/api/admin/compose` 를 **유일한 복사 경로**로 두고
+        (게시용도 서버 조립으로 옮긴다), 서버가 조립 결과를 premium_articles 에
+        `naver_composed_at` 과 함께 남긴다. 그러면 이 함수가 "마지막 조립이 원고 수정보다
+        뒤인가"를 대조할 수 있다. 칸 하나와 라우트 한 곳을 고치는 일이라 별도 승인 후에 한다.
+    """
+    text = article.get("naver_blog_content") or ""
+    if not text:
+        return True, "네이버 원고 없음 — 검사 생략"
+    fails = []
+    if "[필수안내사항]" in text or "심의필 제" in text:
+        fails.append("필수안내사항이 원고에 박혀 있다 — 복사 시 osmu 가 붙이므로 두 번 들어간다")
+    if "─────" in text:
+        fails.append("osmu 구분선(─────)이 원고에 있다")
+    if re.search(r"goodfinance\.kr/news/", text):
+        fails.append("원문 링크가 원고에 박혀 있다 — osmu 가 붙인다")
+    if re.search(r"(^|\s)#[0-9A-Za-z가-힣]{2,}", text):
+        fails.append("해시태그가 원고에 박혀 있다 — osmu 가 tags 로 붙인다")
+    md = []
+    if re.search(r"^\s*#{1,6}\s", text, re.M):
+        md.append("헤딩(#)")
+    if re.search(r"\*\*[^*]+\*\*", text):
+        md.append("굵게(**)")
+    if re.search(r"^\s*\|.*\|\s*$", text, re.M):
+        md.append("표(|)")
+    if re.search(r"\[[^\]]+\]\(https?://", text):
+        md.append("링크([](…))")
+    if md:
+        fails.append("마크다운 잔재: " + ", ".join(md))
+    ok = not fails
+    return ok, ("통과 — osmu 가 붙이는 자리를 원고가 침범하지 않았다" if ok
+                else " / ".join(fails) + "  → 원고에서 빼라. 복사 시 osmu-format 이 붙인다")
+
+
 def check_naver_format(article):
     """네이버 원고가 **게시본 형식**인가 (2026-09-22 신설).
 
@@ -573,6 +625,7 @@ def main():
         ("출처 자료명", *check_source_titles(article)),
         ("제목 각도", *check_title_variation(article)),
         ("네이버 형식", *check_naver_format(article)),
+        ("네이버 osmu", *check_naver_osmu_parity(article)),
         ("WRITING-SPEC", *check_writing_spec(article)),
         ("분량", *check_length(article)),
         ("이미지 config", *check_image_config(slug, article)),

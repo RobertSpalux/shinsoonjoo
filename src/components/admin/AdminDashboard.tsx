@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toBlogspotHtml, toNaverText } from "@/lib/osmu-format";
+import { naverHeadings, toNaverRichHtml } from "@/lib/naver-rich";
 import { SITE_REVIEW, type ReviewInfo } from "@/lib/brand";
 import type { CheckResult } from "@/lib/compliance/banned-terms";
 import { classifyBasis } from "@/lib/evidence-gate";
@@ -292,7 +293,8 @@ export default function AdminDashboard({
 
   // 심의용 복사 — 서버(/api/admin/compose)에서 조립. §6.10 게이트를 서버가 다시 확인하므로
   // 버튼을 우회해도(콘솔에서 직접 호출) 미통과 원고는 내려오지 않는다.
-  const copyViaCompose = async (articleId: string, channel: "naver" | "blogspot", label: string) => {
+  const copyViaCompose = async (articleId: string, channel: "naver" | "blogspot", label: string,
+                                richImages?: string[]) => {
     try {
       const res = await fetch("/api/admin/compose", {
         method: "POST",
@@ -301,14 +303,79 @@ export default function AdminDashboard({
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.text) {
-        await navigator.clipboard.writeText(json.text);
-        showToast(`${label} 복사 완료`);
+        // [2026-09-22] 네이버는 서식째 복사. 서버가 조립한 osmu 출력(개인의견 귀속 문구 +
+        //   필수안내사항 포함) **그대로**에 크기만 입힌다 — 본문을 다시 만들지 않는다.
+        if (channel === "naver") {
+          await copyNaverRich(json.text, richImages ?? [], label);
+        } else {
+          await navigator.clipboard.writeText(json.text);
+          showToast(`${label} 복사 완료`);
+        }
       } else {
         showToast(json.error ?? "복사 실패");
       }
     } catch {
       showToast("복사 실패 — 네트워크·권한 확인");
     }
+  };
+
+  // ── 네이버 서식째 복사 (2026-09-22) ──────────────────────────────────────
+  // 🔴 네이버는 붙여넣기 서식을 지우지 않는다(관제탑 실측 재확인). 선택 영역을
+  //    execCommand("copy") 로 복사하면 글자 크기·굵게·사진·인용구가 그대로 들어간다.
+  //    색 지정만 네이버가 바꾸므로(딥그린 → 빨강) color 를 쓰지 않는다.
+  // 🔴 서식화 대상은 **반드시 osmu-format 출력**이다 — 개인의견 귀속 문구와 필수안내사항이
+  //    거기 들어 있다. raw naver_blog_content 를 서식화하면 그 둘이 빠진 채 접수된다
+  //    (2026-09-22 초안2 실제 사고).
+  const imagesAsDataUri = async (urls: string[]): Promise<string[]> => {
+    const out: string[] = [];
+    for (const u of urls) {
+      try {
+        const blob = await (await fetch(u)).blob();
+        out.push(await new Promise<string>((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = () => res(String(fr.result));
+          fr.onerror = rej;
+          fr.readAsDataURL(blob);
+        }));
+      } catch {
+        // 한 장이 실패해도 나머지는 넣는다. 자리를 지어내지 않는다.
+      }
+    }
+    return out;
+  };
+
+  /** 화면 밖 div 에 HTML 을 얹고 선택 영역을 복사한다. execCommand 가 서식을 가장 잘 옮긴다. */
+  const copyRich = async (html: string, plainText: string, label: string) => {
+    const host = document.createElement("div");
+    host.setAttribute("style",
+      "position:fixed;left:-99999px;top:0;width:800px;background:#fff;color:#000;");
+    host.innerHTML = html;
+    document.body.appendChild(host);
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(host);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+      const ok = document.execCommand("copy");
+      sel?.removeAllRanges();
+      if (ok) { showToast(`${label} 복사 완료 (서식 포함)`); return; }
+      await navigator.clipboard.write([new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([plainText], { type: "text/plain" }),
+      })]);
+      showToast(`${label} 복사 완료 (서식 포함)`);
+    } catch {
+      showToast("복사 실패 — 브라우저 권한을 확인하세요");
+    } finally {
+      host.remove();
+    }
+  };
+
+  /** 네이버 원고를 서식째 복사. text 는 반드시 osmu toNaverText 출력이어야 한다. */
+  const copyNaverRich = async (text: string, imageUrls: string[], label: string) => {
+    const images = await imagesAsDataUri(imageUrls);
+    await copyRich(toNaverRichHtml(text, { images }), text, label);
   };
 
   // 필터
@@ -807,7 +874,7 @@ export default function AdminDashboard({
                       {a.naver_blog_content && (
                         <>
                           <button
-                            onClick={() => copyViaCompose(a.id, "naver", "네이버 심의 신청용 원고")}
+                            onClick={() => copyViaCompose(a.id, "naver", "네이버 심의 신청용 원고", a.naver_image_paths ?? [])}
                             disabled={gateBlocked}
                             title={gateBlocked ? gateTip : "심의 신청용 캡처 원고(서버 조립) — 필수안내사항 전문 포함(심의필 줄만 공란). 비공개 게시 후 캡처해 제출하세요."}
                             className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400 disabled:cursor-not-allowed disabled:border-[var(--color-line)] disabled:bg-transparent disabled:text-slate-400"
@@ -817,14 +884,18 @@ export default function AdminDashboard({
                           {!naverReview && !gateBlocked && <SubmissionBadge />}
                           <button
                             onClick={() =>
-                              copy(
-                                `${a.naver_title ?? a.title}\n\n${toNaverText(a.naver_blog_content ?? "", {
+                              // [2026-09-22] 서식째 복사 — 제목은 별도 칸이라 본문만 넘긴다.
+                              //   서식화 대상은 osmu toNaverText 출력(개인의견 귀속 문구 +
+                              //   필수안내사항 포함) **그대로**다. 본문을 다시 만들지 않는다.
+                              copyNaverRich(
+                                toNaverText(a.naver_blog_content ?? "", {
                                   articleTitle: a.title,
                                   slug: a.slug,
                                   tags: a.tags,
                                   review: naverReview,
                                   mode: "publish",
-                                })}`,
+                                }),
+                                a.naver_image_paths ?? [],
                                 "네이버 게시용 원고 (필수안내사항 포함)"
                               )
                             }
@@ -1709,32 +1780,6 @@ function PublishControls({
 }
 
 /** 심의 신청 안내 배지 — [심의용 복사] 옆. 승인 심의필이 아직 없는 원고(§6.9). */
-/**
- * 네이버 원고의 소제목 목록 — 붙여넣은 뒤 **사람이 크기 24로 바꿀 줄**들.
- *
- * 🔴 네이버는 붙여넣기 서식을 전부 지운다(2026-09-22 관제탑 실측). 그래서 서식째 복사하는
- *    기능은 만들지 않는다 — 만들어도 값이 없고, 서식이 살아 있다고 착각하면 원고를 그 전제로 쓰게 된다.
- *    대신 어느 줄을 키워야 하는지만 알려 준다.
- *
- * 소제목 판정: 본진 마크다운의 `##`/`###` 가 toNaverText 를 거치며 기호가 떨어진 줄이다.
- *   짧고(40자 이하) · 마침표로 끝나지 않고 · 목록·인용 기호가 없는 줄을 소제목으로 본다.
- *   `▶`(한 줄 조언 라벨)와 `N.`(번호 목록)은 제외한다 — 본문이다.
- */
-function naverHeadings(text: string): string[] {
-  const out: string[] = [];
-  for (const raw of (text ?? "").split("\n")) {
-    const ln = raw.trim();
-    if (!ln || ln.length > 40) continue;
-    if (/^[-•▶>|]/.test(ln)) continue;
-    if (/^\d+\.\s/.test(ln)) continue;
-    if (/[.?!]$/.test(ln)) continue;
-    if (/^https?:\/\//.test(ln)) continue;
-    if (ln.includes(" · ")) continue;
-    out.push(ln);
-  }
-  return out;
-}
-
 function SubmissionBadge() {
   return (
     <span
