@@ -23,6 +23,7 @@ Supabase에서 기사를 읽어 13개 항목을 검사한다. 하나라도 실�
 """
 # ⚠️ 이 파일의 정규식을 SQL로 옮겨 검증하지 말 것. Postgres ARE는 `.`이 개행을 매치하고
 #    RE 전체 탐욕성을 첫 수량자가 결정해 결과가 달라진다(2026-07-30 실측: 3호 2,708 → 1,271 오판).
+import hashlib
 import os
 import re
 import sys
@@ -104,7 +105,8 @@ def fetch_article(slug):
     key = env.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
         sys.exit("[env 오류] NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 를 찾을 수 없습니다.")
-    cols = ("id,slug,title,naver_title,blogspot_title,category,"
+    cols = ("id,slug,title,naver_title,blogspot_title,category,tags,"
+            "naver_composed_at,naver_composed_hash,"
             "main_website_markdown,naver_blog_content,blogspot_content,verify_claims,"
             "ad_reviews(channel,status)")
     r = requests.get(
@@ -461,6 +463,35 @@ def check_simplified_issue(article):
     ok = not fails
     return ok, ("통과 — 유병자(간편) 안내문구 확인" if ok else " / ".join(fails)
                 + "  → brand.ts CONDITIONAL_NOTICES.simplifiedIssue 자구를 본문에 넣을 것")
+
+
+# src/lib/naver-compose-hash.ts 와 **같은 규칙**이어야 한다. 한쪽만 바꾸면 멀쩡한 원고가
+# 영구 실패로 남는다. 계약: 필드 순서 고정 · 없으면 빈 문자열 · tags 는 원래 순서 그대로
+#   UNIT 으로 이음 · 필드 구분 REC · 개행 LF 통일 · 줄끝 공백 제거 · 앞뒤 공백 제거
+_UNIT = "\u001f"
+_REC = "\u001e"
+
+
+def _norm_field(v):
+    t = "" if v is None else str(v)
+    t = re.sub(r"\r\n?", "\n", t)
+    t = re.sub(r"[ \t]+$", "", t, flags=re.M)
+    return t.strip()
+
+
+def naver_compose_hash(article):
+    """osmu 가 소비하는 재료의 sha256 — 조립 시점 값과 대조한다."""
+    tags = article.get("tags") or []
+    canonical = _REC.join([
+        _norm_field(article.get("naver_blog_content")),
+        _norm_field(article.get("title")),
+        _norm_field(article.get("naver_title")),
+        _norm_field(article.get("slug")),
+        _UNIT.join(_norm_field(t) for t in tags),
+    ])
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def check_naver_osmu_parity(article):
     """네이버에 붙여넣는 원고가 **osmu-format 출력**과 같은 재료인가 (2026-09-22 신설).
 
@@ -508,8 +539,30 @@ def check_naver_osmu_parity(article):
         md.append("링크([](…))")
     if md:
         fails.append("마크다운 잔재: " + ", ".join(md))
+    # ── 완전 대조 (2026-09-22) ──
+    #   /api/admin/compose 가 조립할 때 남긴 재료 해시를 지금 원고로 다시 계산해 비교한다.
+    #   같으면 "마지막 복사가 osmu 조립을 거쳤고 그 뒤로 원고가 안 바뀌었다"가 증명된다.
+    #   🔴 시각(naver_composed_at)으로는 대신할 수 없다 — trg_premium_articles_updated 가
+    #      모든 UPDATE 에서 updated_at 을 바꿔 조립 기록 자체가 updated_at 을 올린다.
+    stored = article.get("naver_composed_hash")
+    when = str(article.get("naver_composed_at") or "")[:16]
+    note = ""
+    if not stored:
+        # 🔴 기록이 없는 것은 **잘못이 아니다** — 아직 복사를 안 누른 새 원고일 뿐이다.
+        #   여기서 실패시키면 버퍼(접수 대기 = preflight 통과본)가 0으로 떨어지고,
+        #   06:30 크론이 "더 만들 편수"를 과다 계산해 초안을 계속 쌓는다.
+        #   실제 사고(귀속 문구·필수안내 누락)는 아래 두 그물이 잡는다:
+        #     · 조립 뒤 원고가 바뀌면 해시 불일치로 실패
+        #     · 원고가 osmu 자리를 침범하면 위 검사들이 실패
+        #   복사 경로가 compose 하나뿐이므로 "복사했는데 조립을 안 거쳤다"는 성립하지 않는다.
+        note = " · 조립 기록 없음(아직 복사 전) — 접수 전에 복사 버튼을 한 번 누를 것"
+    else:
+        now_hash = naver_compose_hash(article)
+        if now_hash != stored:
+            fails.append(
+                f"원고가 마지막 조립({when}) 뒤에 바뀌었다 — 복사 버튼을 다시 눌러 조립본을 쓰라")
     ok = not fails
-    return ok, ("통과 — osmu 가 붙이는 자리를 원고가 침범하지 않았다" if ok
+    return ok, ((f"통과 — osmu 조립본과 일치({when})" if stored else "통과" + note) if ok
                 else " / ".join(fails) + "  → 원고에서 빼라. 복사 시 osmu-format 이 붙인다")
 
 

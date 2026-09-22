@@ -293,24 +293,29 @@ export default function AdminDashboard({
 
   // 심의용 복사 — 서버(/api/admin/compose)에서 조립. §6.10 게이트를 서버가 다시 확인하므로
   // 버튼을 우회해도(콘솔에서 직접 호출) 미통과 원고는 내려오지 않는다.
-  const copyViaCompose = async (articleId: string, channel: "naver" | "blogspot", label: string,
-                                richImages?: string[]) => {
+  const copyViaCompose = async (
+    articleId: string,
+    channel: "naver" | "blogspot",
+    label: string,
+    opts?: { mode?: "submission" | "publish"; richImages?: string[] }
+  ) => {
     try {
       const res = await fetch("/api/admin/compose", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articleId, channel }),
+        body: JSON.stringify({ articleId, channel, mode: opts?.mode ?? "submission" }),
       });
       const json = await res.json().catch(() => ({}));
       if (res.ok && json.text) {
         // [2026-09-22] 네이버는 서식째 복사. 서버가 조립한 osmu 출력(개인의견 귀속 문구 +
         //   필수안내사항 포함) **그대로**에 크기만 입힌다 — 본문을 다시 만들지 않는다.
         if (channel === "naver") {
-          await copyNaverRich(json.text, richImages ?? [], label);
+          await copyNaverRich(json.text, opts?.richImages ?? [], label);
         } else {
           await navigator.clipboard.writeText(json.text);
           showToast(`${label} 복사 완료`);
         }
+        if (json.markWarning) showToast(json.markWarning);
       } else {
         showToast(json.error ?? "복사 실패");
       }
@@ -874,7 +879,12 @@ export default function AdminDashboard({
                       {a.naver_blog_content && (
                         <>
                           <button
-                            onClick={() => copyViaCompose(a.id, "naver", "네이버 심의 신청용 원고", a.naver_image_paths ?? [])}
+                            onClick={() =>
+                              copyViaCompose(a.id, "naver", "네이버 심의 신청용 원고", {
+                                mode: "submission",
+                                richImages: a.naver_image_paths ?? [],
+                              })
+                            }
                             disabled={gateBlocked}
                             title={gateBlocked ? gateTip : "심의 신청용 캡처 원고(서버 조립) — 필수안내사항 전문 포함(심의필 줄만 공란). 비공개 게시 후 캡처해 제출하세요."}
                             className="rounded-full border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-800 hover:border-amber-400 disabled:cursor-not-allowed disabled:border-[var(--color-line)] disabled:bg-transparent disabled:text-slate-400"
@@ -884,20 +894,15 @@ export default function AdminDashboard({
                           {!naverReview && !gateBlocked && <SubmissionBadge />}
                           <button
                             onClick={() =>
-                              // [2026-09-22] 서식째 복사 — 제목은 별도 칸이라 본문만 넘긴다.
-                              //   서식화 대상은 osmu toNaverText 출력(개인의견 귀속 문구 +
-                              //   필수안내사항 포함) **그대로**다. 본문을 다시 만들지 않는다.
-                              copyNaverRich(
-                                toNaverText(a.naver_blog_content ?? "", {
-                                  articleTitle: a.title,
-                                  slug: a.slug,
-                                  tags: a.tags,
-                                  review: naverReview,
-                                  mode: "publish",
-                                }),
-                                a.naver_image_paths ?? [],
-                                "네이버 게시용 원고 (필수안내사항 포함)"
-                              )
+                              // [2026-09-22] 게시용도 **서버 조립**으로 옮겼다.
+                              //   클라이언트에서 toNaverText 를 직접 부르면 조립을 거쳤는지
+                              //   아무도 알 수 없다 — 다음 사람이 raw 원고를 복사하면 귀속 문구와
+                              //   필수안내사항이 빠진다(초안2 실제 사고). 조립을 한 곳으로 모으고
+                              //   서버가 재료 해시를 남겨 preflight 가 대조한다.
+                              copyViaCompose(a.id, "naver", "네이버 게시용 원고 (필수안내사항 포함)", {
+                                mode: "publish",
+                                richImages: a.naver_image_paths ?? [],
+                              })
                             }
                             disabled={!naverReview}
                             title={naverReview ? "게시용 — 승인 심의필 실번호로 필수안내사항 첨부" : "심의 승인 후 활성화됩니다"}
