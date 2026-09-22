@@ -5,7 +5,7 @@
 
     python scripts/preflight.py <slug>
 
-Supabase에서 기사를 읽어 10개 항목을 검사한다. 하나라도 실패하면 exit code 1.
+Supabase에서 기사를 읽어 11개 항목을 검사한다. 하나라도 실패하면 exit code 1.
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
@@ -461,6 +461,39 @@ def check_simplified_issue(article):
     ok = not fails
     return ok, ("통과 — 유병자(간편) 안내문구 확인" if ok else " / ".join(fails)
                 + "  → brand.ts CONDITIONAL_NOTICES.simplifiedIssue 자구를 본문에 넣을 것")
+def _title_tail(t):
+    """제목의 뒷절 — 마지막 구분자(— – : |) 뒤. 구분자가 없으면 제목 전체."""
+    parts = re.split(r"\s*[—–:|]\s*", str(t or "").strip())
+    return re.sub(r"\s+", "", parts[-1]) if parts else ""
+
+
+def check_title_variation(article):
+    """본진 제목과 네이버 제목이 **다른 검색어를 노리는가**.
+
+    근거: 2026-09-22 수요 실측 — 같은 내용도 제도명으로 부르면 질문이 6분의 1이다
+    (「실손 전환 철회」 9.48 vs 「실손 갈아탄 후」 1.61, 블로그÷지식iN).
+    두 제목이 사실상 같으면 채널을 둘로 쓰는 값어치가 사라지고, 네이버에서는 본진과
+    같은 검색어로 우리끼리 경쟁한다.
+
+    판정: **뒷절(마지막 구분자 뒤)이 같으면 실패.** 앞절은 같은 소재를 가리키므로 겹쳐도 된다.
+    네이버 제목이 없으면 검사하지 않는다(그 채널을 안 쓰는 글이다).
+    """
+    main_t = article.get("title") or ""
+    nv_t = article.get("naver_title") or ""
+    if not nv_t:
+        return True, "네이버 제목 없음 — 검사 생략"
+    fails = []
+    tail_m, tail_n = _title_tail(main_t), _title_tail(nv_t)
+    if tail_m and tail_m == tail_n:
+        fails.append(f"본진·네이버 제목의 뒷절이 같다 — '{tail_m[:30]}'")
+    if re.sub(r"\s+", "", main_t) == re.sub(r"\s+", "", nv_t):
+        fails.append("두 제목이 완전히 같다")
+    ok = not fails
+    return ok, ("통과 — 본진·네이버 제목이 다른 각도" if ok else
+                " / ".join(fails) + "  → 네이버 제목은 소비자 검색어로 다시 잡을 것"
+                "(TOPIC-BANK 수요 실측 참고)")
+
+
 
 
 # ────────────────────────────────────────────────
@@ -478,6 +511,7 @@ def main():
         ("필수 유의문구", *check_notice_wiring()),
         ("출처 4요소", *check_sources(article)),
         ("출처 자료명", *check_source_titles(article)),
+        ("제목 각도", *check_title_variation(article)),
         ("WRITING-SPEC", *check_writing_spec(article)),
         ("분량", *check_length(article)),
         ("이미지 config", *check_image_config(slug, article)),

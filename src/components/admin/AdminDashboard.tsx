@@ -834,6 +834,20 @@ export default function AdminDashboard({
                           >
                             네이버 게시용 복사
                           </button>
+                          {/* 붙여넣은 뒤 크기 24로 바꿀 줄 — 네이버가 서식을 지우므로 사람이 한다 */}
+                          <details className="w-full rounded-lg border border-[var(--color-line)] bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                            <summary className="cursor-pointer font-semibold text-slate-700">
+                              소제목 {naverHeadings(a.naver_blog_content ?? "").length}줄 — 붙여넣은 뒤 크기 24로
+                            </summary>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                              네이버는 붙여넣기 서식을 전부 지웁니다. 아래 줄만 찾아 크기 24로 바꾸세요.
+                            </p>
+                            <ol className="mt-2 list-decimal space-y-1 pl-5">
+                              {naverHeadings(a.naver_blog_content ?? "").map((h) => (
+                                <li key={h} className="font-medium text-slate-800">{h}</li>
+                              ))}
+                            </ol>
+                          </details>
                         </>
                       )}
                       {a.blogspot_content && (
@@ -1695,6 +1709,32 @@ function PublishControls({
 }
 
 /** 심의 신청 안내 배지 — [심의용 복사] 옆. 승인 심의필이 아직 없는 원고(§6.9). */
+/**
+ * 네이버 원고의 소제목 목록 — 붙여넣은 뒤 **사람이 크기 24로 바꿀 줄**들.
+ *
+ * 🔴 네이버는 붙여넣기 서식을 전부 지운다(2026-09-22 관제탑 실측). 그래서 서식째 복사하는
+ *    기능은 만들지 않는다 — 만들어도 값이 없고, 서식이 살아 있다고 착각하면 원고를 그 전제로 쓰게 된다.
+ *    대신 어느 줄을 키워야 하는지만 알려 준다.
+ *
+ * 소제목 판정: 본진 마크다운의 `##`/`###` 가 toNaverText 를 거치며 기호가 떨어진 줄이다.
+ *   짧고(40자 이하) · 마침표로 끝나지 않고 · 목록·인용 기호가 없는 줄을 소제목으로 본다.
+ *   `▶`(한 줄 조언 라벨)와 `N.`(번호 목록)은 제외한다 — 본문이다.
+ */
+function naverHeadings(text: string): string[] {
+  const out: string[] = [];
+  for (const raw of (text ?? "").split("\n")) {
+    const ln = raw.trim();
+    if (!ln || ln.length > 40) continue;
+    if (/^[-•▶>|]/.test(ln)) continue;
+    if (/^\d+\.\s/.test(ln)) continue;
+    if (/[.?!]$/.test(ln)) continue;
+    if (/^https?:\/\//.test(ln)) continue;
+    if (ln.includes(" · ")) continue;
+    out.push(ln);
+  }
+  return out;
+}
+
 function SubmissionBadge() {
   return (
     <span
