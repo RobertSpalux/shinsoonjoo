@@ -52,6 +52,33 @@
       "evidence_file": "금융감독원, 금융분쟁조정위원회, 금융소비자 권익보호를 위해 간편심사보험의 계약전 알릴의무 범위를 명확화, 2026, 2026.7.27.pdf",
       "title_verified_at": "2026-09-22",
       "title_verified_by": "금감원 게시판 원문 + 기관 발행 파일명"
+    },
+    {
+      "key": "minwon-silson-2026",
+      "org": "금융감독원",
+      "prefix": "",
+      "title": "최근 민원사례로 알아보는 ‘실손의료보험’ 관련 유의사항",
+      "published": "2026.5.19",
+      "source_url": "https://www.fss.or.kr/fss/bbs/B0000188/view.do?nttId=217901&menuNo=200218",
+      "original_filename": "260519_(보도자료) 최근 민원사례로 알아보는 실손의료보험 관련 소비자 유의사항.hwp",
+      "evidence_file": "금융감독원, 최근 민원사례로 알아보는 실손의료보험 관련 유의사항, 2026, 2026.5.19.pdf",
+      "title_verified_at": "2026-09-22",
+      "title_verified_by": "보도자료 1쪽 문서 제목 그대로(따옴표 포함). 게시판 목록 제목(board_title)은 '소비자'가 더 붙어 다르다 — 보도자료명을 쓴다",
+      "note": "TOPIC-BANK A2·A3·A4 근거. 단체실손 납입중지 / 퇴직 후 1개월 재개 / 전환 6개월 철회 / 해외여행실손 비례보상",
+      "board_title": "최근 민원사례로 알아보는 실손의료보험 관련 소비자 유의사항"
+    },
+    {
+      "key": "eswl-2026",
+      "org": "금융감독원",
+      "prefix": "",
+      "title": "금융소비자 보호 및 실손보험금 누수 방지를 위해 체외충격파 치료 분쟁조정기준을 마련하였습니다",
+      "published": "2026.6.24",
+      "source_url": "https://www.fss.or.kr/fss/bbs/B0000188/view.do?nttId=218809&menuNo=200218",
+      "original_filename": "260624_(보도자료) 금융소비자 보호 및 실손보험금 누수 방지를 위해 체외충격파 치료 분쟁조정기준을 마련하였습니다..hwp",
+      "evidence_file": "금융감독원, 금융소비자 보호 및 실손보험금 누수 방지를 위해 체외충격파 치료 분쟁조정기준을 마련하였습니다, 2026, 2026.6.24.pdf",
+      "title_verified_at": "2026-09-22",
+      "title_verified_by": "금감원 게시판 원문 + 기관 발행 파일명",
+      "note": "미사용 — 증빙만 확보"
     }
   ]
 }
