@@ -270,19 +270,52 @@ def parse_source_titles():
     return {s["title"] for s in data.get("sources", [])}
 
 
+def parse_sources_full():
+    """대장 전체 — 자료명뿐 아니라 발표일까지 본다."""
+    with open(SOURCES_JSON, encoding="utf-8") as fp:
+        return json.load(fp).get("sources", [])
+
+
 def check_source_titles(article):
-    """본문 「」 안 자료명이 대장에 정확히 있는지 대조한다.
-    축약·변형하면 대장에 없으므로 걸린다.
-    근거: 2호 네이버 반송(2026-07-30) — 「계약 전 알릴의무 안내」로 축약해 반송."""
+    """자료명이 대장 정본과 **글자 그대로** 같은지 대조한다.
+
+    근거: 2호 네이버 반송(2026-07-30) — 「계약 전 알릴의무 안내」로 축약해 반송.
+
+    [2026-09-22] 보는 자리를 셋으로 넓혔다.
+      ① 본문 「」 (종전)
+      ② **raw_source_name** — ArticleView.tsx 가 화면에 출처 줄로 내보내는 값이다.
+         독자와 심의가 보는 자리인데 BODY_FIELDS 에 없어 검사 밖이었다.
+      ③ **「」 없이 쓴 변형** — 대장 자료명의 앞 12자를 본문에서 찾았는데 그 자리에
+         정본 전체가 없으면 축약·변형으로 본다. 8865 가 바로 이 형태였다.
+    그리고 자료를 날짜와 함께 인용했다면 **발표일 전체**여야 한다(연도만 쓰는 축약 금지)."""
     titles = parse_source_titles()
+    srcs = parse_sources_full()
     fails = []
-    for label, text in pending_bodies(article):
+    scopes = list(pending_bodies(article))
+    if article.get("raw_source_name"):
+        scopes.append(("출처줄", article["raw_source_name"]))
+    for label, text in scopes:
         for m in QUOTED_TITLE.finditer(text):
             got = m.group(1).strip()
             if got not in titles:
                 fails.append(f"{label}: 대장에 없는 자료명 — 「{got}」")
+        flat = re.sub(r"\s+", "", text)
+        for s_ in srcs:
+            t = s_.get("title") or ""
+            if len(t) < 14:
+                continue
+            stem = re.sub(r"\s+", "", t)[:12]
+            if stem and stem in flat and re.sub(r"\s+", "", t) not in flat:
+                fails.append(f"{label}: 자료명이 정본과 다르다(축약·변형) — 정본 「{t}」")
+            # 날짜와 함께 인용했다면 발표일 전체여야 한다
+            pub = (s_.get("published") or "").strip()
+            if pub and re.sub(r"\s+", "", t) in flat:
+                year = pub.split(".")[0]
+                if f"({year})" in flat and re.sub(r"\s+", "", f"({pub})") not in flat:
+                    fails.append(f"{label}: 발표일 축약 — ({year}) 가 아니라 ({pub}) 로 쓸 것")
+    fails = sorted(set(fails))
     ok = not fails
-    return ok, ("통과 — 자료명 정본 대조 완료" if ok else
+    return ok, ("통과 — 자료명 정본·발표일 대조 완료" if ok else
                 " / ".join(fails) + "  → 원문 제목 확인 후 configs/sources.json에 등록하거나 본문을 원문 제목으로 고칠 것")
 
 
