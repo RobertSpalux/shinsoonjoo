@@ -5,7 +5,7 @@
 
     python scripts/preflight.py <slug>
 
-Supabase에서 기사를 읽어 9개 항목을 검사한다. 하나라도 실패하면 exit code 1.
+Supabase에서 기사를 읽어 10개 항목을 검사한다. 하나라도 실패하면 exit code 1.
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
@@ -369,6 +369,36 @@ def check_premium_variation(article):
     return ok, ("통과 — 금액 노출 시 변동 안내문구 확인" if ok else " / ".join(fails))
 
 
+def parse_simplified_issue():
+    ts = open(BRAND_TS, encoding="utf-8").read()
+    m = re.search(r'simplifiedIssue:\s*"([^"]+)"', ts, re.S)
+    if not m:
+        sys.exit("[파서 오류] brand.ts CONDITIONAL_NOTICES.simplifiedIssue 를 찾지 못했습니다.")
+    return m.group(1)
+
+
+SIMPLIFIED_TOPIC = re.compile(r"유병자|간편\s*심사|간편보험|간편\s*가입|유병력")
+
+
+def check_simplified_issue(article):
+    """유병자(간편) 상품을 다루면 인수 거절 가능성 안내문구 필수.
+
+    근거: 2호 네이버 반송(2026-07-30, 심의 2026-07-8865) 사유 (4) — "유병자(간편) 상품
+    안내문구 누락". 자구는 brand.ts CONDITIONAL_NOTICES.simplifiedIssue 하나다(단일 출처).
+    ⚠️ 이 항목이 종전 9개 검사에 **없었다**(2026-09-22 대조에서 발견). 자구는 brand.ts 에
+       있었지만 그것을 요구하는 검사가 없어 같은 사유로 또 반송될 수 있었다.
+    본진은 제외하지 않는다 — premiumVariation 과 달리 푸터가 이 문구를 상시노출하지 않는다.
+    """
+    notice = parse_simplified_issue()
+    fails = []
+    for label, text in pending_bodies(article):
+        if SIMPLIFIED_TOPIC.search(text) and notice not in text:
+            fails.append(f"{label}: 유병자(간편) 언급인데 simplifiedIssue 자구 없음")
+    ok = not fails
+    return ok, ("통과 — 유병자(간편) 안내문구 확인" if ok else " / ".join(fails)
+                + "  → brand.ts CONDITIONAL_NOTICES.simplifiedIssue 자구를 본문에 넣을 것")
+
+
 # ────────────────────────────────────────────────
 def main():
     if len(sys.argv) < 2:
@@ -380,6 +410,7 @@ def main():
         ("금지어 §6.10", *check_banned(article)),
         ("보험료 표기", *check_premium_notation(article)),
         ("변동 안내문구", *check_premium_variation(article)),
+        ("유병자 안내문구", *check_simplified_issue(article)),
         ("필수 유의문구", *check_notice_wiring()),
         ("출처 4요소", *check_sources(article)),
         ("출처 자료명", *check_source_titles(article)),
