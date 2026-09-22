@@ -5,7 +5,7 @@
 
     python scripts/preflight.py <slug>
 
-Supabase에서 기사를 읽어 11개 항목을 검사한다. 하나라도 실패하면 exit code 1.
+Supabase에서 기사를 읽어 12개 항목을 검사한다. 하나라도 실패하면 exit code 1.
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
@@ -461,6 +461,66 @@ def check_simplified_issue(article):
     ok = not fails
     return ok, ("통과 — 유병자(간편) 안내문구 확인" if ok else " / ".join(fails)
                 + "  → brand.ts CONDITIONAL_NOTICES.simplifiedIssue 자구를 본문에 넣을 것")
+def check_naver_format(article):
+    """네이버 원고가 **게시본 형식**인가 (2026-09-22 신설).
+
+    🔴 왜 생겼나: 초안1이 옛 형식(`항목 — 설명` 줄)인데 11/11 을 통과했다. 검사가 없었다.
+       네이버는 붙여넣기 서식을 전부 지운다(관제탑 실측) — 구조가 글자 자체로 남아야 한다.
+
+    네 가지를 본다. 네이버 원고가 없으면 검사하지 않는다.
+      ① 용어 정의는 `N. 용어 · 설명` 번호 목록
+      ② 비교표는 `▶ 경우 · 값` 줄 (덜 풀린 `항목 — 설명` 줄이 남으면 실패)
+      ③ 소제목은 「알아두실 용어 N가지」 — 개수가 붙고 항목 수와 맞아야 한다
+      ④ 한 줄 조언 라벨은 `▶ 신순주 지사장의 한 줄 조언` (인용부호·HTML 주석 금지)
+    """
+    text = article.get("naver_blog_content") or ""
+    if not text:
+        return True, "네이버 원고 없음 — 검사 생략"
+    fails = []
+    rows = [ln.strip() for ln in text.split(chr(10))]
+
+    head = [ln for ln in rows if ln.startswith("알아두실 용어")]
+    if not head:
+        fails.append("소제목 「알아두실 용어 N가지」 없음")
+    elif not re.match(r"^알아두실 용어 \d+가지$", head[0]):
+        fails.append("소제목에 개수가 없다 — 「" + head[0] + "」 → 「알아두실 용어 N가지」")
+
+    if head:
+        i = rows.index(head[0])
+        # 소제목 다음 번호 목록 덩어리만 센다 — 고정 창으로 자르면 항목이 길 때 잘린다
+        numbered = []
+        for ln in rows[i + 1:]:
+            if not ln:
+                continue
+            if re.match(r"^\d+\.\s+.+?\s+·\s+\S", ln):
+                numbered.append(ln)
+            elif numbered:
+                break
+            elif len(numbered) == 0 and len(ln) > 0:
+                break
+        if len(numbered) < 2:
+            fails.append("용어 정의가 「N. 용어 · 설명」 번호 목록이 아니다")
+        m = re.match(r"^알아두실 용어 (\d+)가지$", head[0])
+        if m and numbered and int(m.group(1)) != len(numbered):
+            fails.append("소제목 개수(" + m.group(1) + ")와 항목 수(" + str(len(numbered)) + ")가 다르다")
+
+    bullets = [ln for ln in rows if ln.startswith("▶ ") and " · " in ln]
+    leftover = [ln for ln in rows if " — " in ln and len(ln) <= 90
+                and not ln.endswith(".") and not ln.startswith("▶")]
+    if leftover:
+        fails.append("표가 덜 풀렸다(「항목 — 설명」 줄 " + str(len(leftover)) + "개) — "
+                     "「▶ 항목 · 값」 으로 풀 것: " + leftover[0][:40])
+
+    if "신순주 지사장의 한 줄 조언" in text and "▶ 신순주 지사장의 한 줄 조언" not in text:
+        fails.append("한 줄 조언 라벨에 ▶ 가 없다")
+    if "<!--" in text:
+        fails.append("네이버 원고에 HTML 주석이 남아 있다")
+
+    ok = not fails
+    return ok, ("통과 — 번호 목록·▶ 줄 " + str(len(bullets)) + "개·소제목 개수·조언 라벨 확인" if ok
+                else " / ".join(fails) + "  → WRITING-SPEC 「네이버 원고에서 표를 푸는 두 형태」 참고")
+
+
 def _title_tail(t):
     """제목의 뒷절 — 마지막 구분자(— – : |) 뒤. 구분자가 없으면 제목 전체."""
     parts = re.split(r"\s*[—–:|]\s*", str(t or "").strip())
@@ -512,6 +572,7 @@ def main():
         ("출처 4요소", *check_sources(article)),
         ("출처 자료명", *check_source_titles(article)),
         ("제목 각도", *check_title_variation(article)),
+        ("네이버 형식", *check_naver_format(article)),
         ("WRITING-SPEC", *check_writing_spec(article)),
         ("분량", *check_length(article)),
         ("이미지 config", *check_image_config(slug, article)),
