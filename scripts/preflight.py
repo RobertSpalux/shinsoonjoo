@@ -105,7 +105,7 @@ def fetch_article(slug):
     key = env.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
         sys.exit("[env 오류] NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 를 찾을 수 없습니다.")
-    cols = ("id,slug,title,naver_title,blogspot_title,category,tags,"
+    cols = ("id,slug,title,naver_title,blogspot_title,category,tags,is_main_published,"
             "naver_composed_at,naver_composed_hash,"
             "main_website_markdown,naver_blog_content,blogspot_content,verify_claims,"
             "ad_reviews(channel,status)")
@@ -297,12 +297,13 @@ def check_actual_loss_notice(article):
         (fails if field == "main_website_markdown" else warns).append(label)
     detail = f"실손 주제 · 자구 「{notice}」"
     if fails:
-        detail += " · 누락(실패): " + ", ".join(fails)
+        detail += (" · 누락: " + ", ".join(fails)
+                   + " — 2026-09-23 팜스가 개인의견 블록에 요구한 한 줄이다")
     if warns:
         detail += " · 원고에 없음(경고 — osmu 가 주입): " + ", ".join(warns)
     if not fails and not warns:
         detail += " · 전 채널 원고 포함"
-    return not fails, detail
+    return soften_if_published(article, not fails, detail)
 
 
 def check_sources(article):
@@ -451,6 +452,36 @@ def frozen_channels(article):
     이 스코프가 없으면 승인분(6088·6964·8289·8290)이 영구 실패로 남아 노이즈가 된다."""
     rows = article.get("ad_reviews") or []
     return {r.get("channel") for r in rows if r.get("status") in ("approved", "submitted")}
+
+
+def approved_published(article):
+    """승인돼 **게시까지 끝난** 글인가 — 원안을 고칠 수 없는 상태다.
+
+    판정(관제탑 2026-09-23): `ad_reviews` 에 approved 행이 있고 `is_main_published=true`.
+    둘 다여야 한다. 승인만 받고 아직 안 올린 글은 지금 고쳐서 접수하면 되므로 대상이 아니다.
+
+    🔴 frozen_channels 와 다르다. 그쪽은 **채널 단위**로 검사 대상에서 빼는 것이고,
+       이쪽은 글 단위로 **실패를 경고로 낮추는** 것이다. 검사는 그대로 돌고 사유도 그대로
+       보이되, 고칠 수 없는 것을 고치라고 막아 세우지 않는다.
+
+    ⚠️ 게이트 완화가 아니다. 새 규칙이 생기면 이미 나간 글은 소급해서 못 맞춘다.
+       그때 할 수 있는 일은 「다음 갱신·재심의 때 반영」뿐이고, 그걸 잊지 않도록 계속
+       띄우는 것이 이 경로의 목적이다. 미발행분은 실패 그대로다 — 넣고 접수한다.
+    """
+    if not article.get("is_main_published"):
+        return False
+    rows = article.get("ad_reviews") or []
+    return any(r.get("status") == "approved" for r in rows)
+
+
+SOFT_MARK = "⚠️ 경고(승인 게시분 — 원안 수정 불가)"
+
+
+def soften_if_published(article, ok, detail):
+    """승인 게시분이면 실패를 경고로 낮춘다. 사유는 그대로 싣는다."""
+    if ok or not approved_published(article):
+        return ok, detail
+    return True, SOFT_MARK + " — " + detail + "  → 다음 갱신·재심의 때 반영할 것"
 
 
 def pending_bodies(article, exclude=frozenset()):
@@ -773,9 +804,12 @@ def main():
     ]
 
     print(f"\n── preflight: {slug} ──")
-    all_ok = True
+    all_ok, softened = True, []
     for name, ok, detail in results:
         mark = "통과" if ok else "실패"
+        if ok and detail.startswith(SOFT_MARK):
+            mark = "경고"
+            softened.append(name)
         print(f"  [{name:<12}] {mark} — {detail}")
         all_ok = all_ok and ok
     print()
@@ -785,7 +819,11 @@ def main():
     if not all_ok:
         print("결과: 실패 — 위 항목을 해소한 뒤 팜스 제출하세요.")
         sys.exit(1)
-    print("결과: 통과 — 팜스 제출 가능.")
+    if softened:
+        print("결과: 통과(경고 " + str(len(softened)) + "건 — " + ", ".join(softened) + ")")
+        print("  승인·게시분이라 원안을 고치지 않는다. 다음 갱신·재심의 때 반영한다.")
+    else:
+        print("결과: 통과 — 팜스 제출 가능.")
 
 
 if __name__ == "__main__":
