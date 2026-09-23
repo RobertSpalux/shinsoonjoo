@@ -9,7 +9,7 @@ Supabase에서 기사를 읽어 13개 항목을 검사한다. 하나라도 실�
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
-   - 필수 유의문구: src/lib/brand.ts 의 REQUIRED_NOTICES 를 파싱해 사용.
+   - 필수 유의문구: src/lib/brand.ts 의 REQUIRED_NOTICES·ACTUAL_LOSS_NOTICE 를 파싱해 사용.
    목록이 바뀌면 저 파일만 고치면 preflight도 자동으로 따라간다.
 
 배경: 3호 팜스 반송(2026-07-27) — ① 출처 미명확 ② 약관 참조 유의문구.
@@ -164,6 +164,27 @@ def parse_required_notices():
     return re.findall(r'"([^"]+)"', m.group(1))
 
 
+def parse_actual_loss_notice():
+    """실손 주제 글에만 붙는 세 번째 유의문구 + 주제 판정 정규식 — brand.ts 단일 소스.
+
+    🔴 CONDITIONAL_NOTICES.actualLoss("실비보험은 자기부담금을 제외한 ...")와 **다른 문장**이다.
+       PAMS 가 2026-09-23 반송하며 요구한 자구는 ACTUAL_LOSS_NOTICE 쪽이다. 섞지 마라.
+    """
+    ts = open(BRAND_TS, encoding="utf-8").read()
+    m = re.search(r'export const ACTUAL_LOSS_NOTICE\s*=\s*"([^"]+)"', ts)
+    if not m:
+        sys.exit("[파서 오류] brand.ts ACTUAL_LOSS_NOTICE 를 찾지 못했습니다.")
+    notice = m.group(1)
+    r = re.search(r"const ACTUAL_LOSS_RE\s*=\s*/(.+?)/", ts, re.S)
+    if not r:
+        sys.exit("[파서 오류] brand.ts ACTUAL_LOSS_RE 를 찾지 못했습니다.")
+    try:
+        rx = re.compile(r.group(1).strip())
+    except re.error:
+        sys.exit("[파서 오류] ACTUAL_LOSS_RE 를 파이썬 정규식으로 옮기지 못했습니다.")
+    return notice, rx
+
+
 def _term_block(ts, name):
     m = re.search(name + r"[^=]*=\s*\[(.*?)\n\];", ts, re.S)
     return m.group(1) if m else ""
@@ -230,18 +251,58 @@ def check_notice_wiring():
         except FileNotFoundError:
             return False
 
+    # [2026-09-23] 본진·osmu 는 requiredNoticesFor() 를 거친다(실손이면 3종).
+    #   푸터는 글 단위가 아니라 사이트 전역이라 기본 2종 그대로가 맞다.
     wiring = [
         ("본진 ArticleView→ArticleNotice", "src/components/news/ArticleView.tsx", "ArticleNotice"),
-        ("ArticleNotice→REQUIRED_NOTICES", "src/components/news/ArticleNotice.tsx", "REQUIRED_NOTICES"),
-        ("osmu 바이럴 본문 주입", "src/lib/osmu-format.ts", "REQUIRED_NOTICES"),
+        ("ArticleNotice→requiredNoticesFor", "src/components/news/ArticleNotice.tsx", "requiredNoticesFor"),
+        ("osmu 바이럴 본문 주입", "src/lib/osmu-format.ts", "requiredNoticesFor"),
         ("푸터", "src/components/Footer.tsx", "REQUIRED_NOTICES"),
+        ("실손 문구 상수", "src/lib/brand.ts", "ACTUAL_LOSS_NOTICE"),
     ]
     for label, path, needle in wiring:
         if not refs(path, needle):
             problems.append(f"{label} 끊김({path})")
     ok = not problems
-    return ok, ("통과 — 필수 2종 딜리버리 경로 정상(ArticleNotice·osmu·푸터)"
+    return ok, ("통과 — 필수 유의문구 딜리버리 경로 정상(ArticleNotice·osmu·푸터)"
                 if ok else " / ".join(problems))
+
+
+def check_actual_loss_notice(article):
+    """실손 주제 글이면 자기부담금 한 줄이 원고에 있는가 (2026-09-23 PAMS 반송 요구).
+
+    ⚠️ check_notice_wiring 과 반대로 **본문을 스캔한다.** 이유가 다르기 때문이다.
+       기본 2종은 저장 원고에 없고 렌더·조립 때 주입된다(본문 스캔이 곧 오탐).
+       자기부담금 문구는 PAMS 접수 원고 자체에 보여야 해서 본진 원고에 직접 박는다.
+    · 본진(main_website_markdown): 없으면 **실패**.
+    · 네이버·블로그스팟: osmu 가 조립할 때 넣어 주므로 없으면 **경고**(실패 아님).
+      단, raw 복사 사고(초안2)를 생각하면 원고에 박아 두는 편이 안전하다.
+    · 실손 주제가 아니면 검사 자체를 건너뛴다.
+    """
+    notice, rx = parse_actual_loss_notice()
+    probe = " ".join(
+        str(article.get(f) or "")
+        for f in ["title", "naver_title", "blogspot_title", "main_website_markdown"]
+    )
+    if not rx.search(probe):
+        return True, "해당 없음 — 실손 주제가 아닙니다"
+
+    fails, warns = [], []
+    for label, field in BODY_FIELDS:
+        text = article.get(field) or ""
+        if not text:
+            continue
+        if notice in text:
+            continue
+        (fails if field == "main_website_markdown" else warns).append(label)
+    detail = f"실손 주제 · 자구 「{notice}」"
+    if fails:
+        detail += " · 누락(실패): " + ", ".join(fails)
+    if warns:
+        detail += " · 원고에 없음(경고 — osmu 가 주입): " + ", ".join(warns)
+    if not fails and not warns:
+        detail += " · 전 채널 원고 포함"
+    return not fails, detail
 
 
 def check_sources(article):
@@ -674,6 +735,7 @@ def main():
         ("변동 안내문구", *check_premium_variation(article)),
         ("유병자 안내문구", *check_simplified_issue(article)),
         ("필수 유의문구", *check_notice_wiring()),
+        ("실손 자기부담금", *check_actual_loss_notice(article)),
         ("출처 4요소", *check_sources(article)),
         ("출처 자료명", *check_source_titles(article)),
         ("제목 각도", *check_title_variation(article)),

@@ -1,4 +1,4 @@
-import { REQUIRED_NOTICES } from "./brand";
+import { ACTUAL_LOSS_NOTICE, REQUIRED_NOTICES } from "./brand";
 
 /**
  * 네이버 붙여넣기용 HTML — **서식째 복사**.
@@ -54,8 +54,9 @@ function boldTerm(ln: string): string {
   return `${esc(m[1])}<b>${esc(m[2])}</b>${esc(m[3])}${esc(m[4])}`;
 }
 
+// 실손 글은 자기부담금 한 줄이 개인의견 블록에 같이 붙는다 — 같은 톤으로 낸다.
 const isNoticeLine = (ln: string) =>
-  REQUIRED_NOTICES.some((n) => ln.includes(n));
+  [...REQUIRED_NOTICES, ACTUAL_LOSS_NOTICE].some((n) => ln.includes(n));
 
 export interface NaverRichOptions {
   /** 본문에 넣을 사진(데이터 URI 권장). 없으면 사진 없이 만든다 — 자리를 지어내지 않는다. */

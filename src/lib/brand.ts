@@ -203,3 +203,38 @@ export const REQUIRED_NOTICES = [
   "상기 내용은 보험설계사의 의견이며, 계약체결에 따른 이익 또는 손실은 보험계약자 등에게 귀속됩니다.",
   "보험사 및 상품별로 상이할 수 있으므로, 관련한 세부사항은 반드시 해당 약관을 참조하시기 바랍니다.",
 ] as const;
+
+/**
+ * 실손 주제 글에 **개인의견 블록으로 함께** 나가는 세 번째 문장.
+ *
+ * 근거: 2026-09-23 PAMS 반송 — 실손 주제 글은 개인의견 귀속 문구에 이 한 줄이 더 있어야 한다.
+ * ⚠️ CONDITIONAL_NOTICES.actualLoss("실비보험은 자기부담금을 제외한 금액을 보장하는 보험입니다.")
+ *    와 **다른 문장이다.** 저쪽은 소재별 조건부 문구고, 이쪽은 개인의견 블록의 일부다.
+ *    자구가 비슷하다고 서로 대체하지 마라 — 반송 요구는 아래 자구다.
+ */
+export const ACTUAL_LOSS_NOTICE =
+  "실손보험은 자기부담금 제외 후 보장되는 보험입니다.";
+
+/**
+ * 이 글이 실손 주제인가 — 개인의견 블록에 ACTUAL_LOSS_NOTICE 를 붙일지 정한다.
+ *
+ * 제목·본문 어디든 실손 계열 낱말이 있으면 실손 주제로 본다. **넓게 잡는다** —
+ * 빠뜨리면 반송이고, 더 붙는 것은 반송 사유가 아니다(유의문구 과다 반려 없음, §6.11-4).
+ */
+const ACTUAL_LOSS_RE =
+  /실손|실비|자기부담금|공제금액|비급여|본인부담/;
+
+export function isActualLossTopic(...texts: Array<string | null | undefined>): boolean {
+  return texts.some((t) => ACTUAL_LOSS_RE.test(String(t ?? "")));
+}
+
+/**
+ * 그 글에 나갈 개인의견 블록 — 실손 주제면 3문장, 아니면 종전 2문장.
+ * 푸터처럼 글이 없는 자리는 인자 없이 불러 2문장을 쓴다.
+ * **이 함수가 단일 소스다** — ArticleNotice·osmu(네이버·블로그스팟)가 모두 이것을 부른다.
+ */
+export function requiredNoticesFor(...texts: Array<string | null | undefined>): string[] {
+  return isActualLossTopic(...texts)
+    ? [...REQUIRED_NOTICES, ACTUAL_LOSS_NOTICE]
+    : [...REQUIRED_NOTICES];
+}
