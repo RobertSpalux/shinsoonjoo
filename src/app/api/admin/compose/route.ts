@@ -101,6 +101,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "블로그스팟 원고 없음" }, { status: 400 });
     }
     const html = toBlogspotHtml(a.blogspot_content, a.slug, a.tags, {
+      articleTitle: a.title,
       review,
       mode: composeMode,
     });

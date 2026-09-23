@@ -235,9 +235,10 @@ export default function ArticleView({
           </p>
         </div>
 
-        {/* 게시글 필수 유의문구 2종 — 심의필과 무관하게 상시(§6.11-4, 회신 2026-07-21).
-            MandatoryNotice(심의필 조건부)와 별개 블록. */}
-        <ArticleNotice />
+        {/* 게시글 필수 유의문구 — 심의필과 무관하게 상시(§6.11-4, 회신 2026-07-21).
+            MandatoryNotice(심의필 조건부)와 별개 블록.
+            원고·제목을 넘겨 실손 주제면 자기부담금 문구까지 3종이 나가게 한다. */}
+        <ArticleNotice body={markdown} title={article.title} />
 
         {/* FAQ 섹션 (FAQPage 스키마와 쌍) */}
         {faqs.length > 0 && (
