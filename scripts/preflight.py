@@ -410,10 +410,33 @@ def check_length(article):
     return ok, f"본진 {n}자" + ("" if ok else " — 범위(2,000~3,200자) 이탈")
 
 
+def _card_fit(path):
+    """카드 config 폭 검사(fit_or_fail) — scripts/check_card_config.py 단일 소스.
+
+    [2026-09-23] 5호 첫 렌더에서 표 칸이 겹쳐 읽을 수 없었다(실측). 렌더러는 그래도
+    이미지를 만들어 내므로, 조용히 못 읽는 카드가 심의에 첨부되는 경로가 열려 있었다.
+    검사기가 없으면 여기서 잡을 방법이 없다 — 있으면 쓰고, 없으면 config 존재만 본다.
+    """
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import check_card_config as _ccc
+        import json as _json
+        cfg = _json.load(open(path, encoding="utf-8"))
+        return _ccc.check(cfg)
+    except Exception as e:  # noqa: BLE001
+        return [], [f"폭 검사를 돌리지 못했다({type(e).__name__}) — check_card_config.py 확인"]
+
+
 def check_image_config(slug, article):
     exact = os.path.join(CONFIGS_DIR, f"{slug}.json")
     if os.path.exists(exact):
-        return True, f"configs/{slug}.json"
+        bad, notes = _card_fit(exact)
+        tail = (" · 폭 경고 " + str(len(notes)) + "건") if notes else ""
+        if bad:
+            return False, (f"configs/{slug}.json — 칸이 넘쳐 겹친다: " + " / ".join(bad[:2])
+                           + ("" if len(bad) <= 2 else f" 외 {len(bad)-2}건")
+                           + "  → python scripts/check_card_config.py " + slug)
+        return True, f"configs/{slug}.json{tail}"
     # DB slug ↔ 렌더 slug 불일치 대응(3호 사례): 공통 접두 매칭
     stem = slug[:12]
     if os.path.isdir(CONFIGS_DIR):
