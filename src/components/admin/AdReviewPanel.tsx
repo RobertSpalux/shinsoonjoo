@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { normalizeReviewNo, REVIEW_NO_FORMAT_ERROR } from "@/lib/review-no";
 
 /**
  * 광고심의(ad_reviews) UI — 채널(광고물) 단위 심의 라이프사이클. (CLAUDE.md §6.9)
@@ -489,9 +490,18 @@ export function AdReviewPanel({
                     <input
                       value={reviewNo}
                       onChange={(e) => setReviewNo(e.target.value)}
-                      placeholder="예: 2026-0001"
+                      placeholder="예: 2026-09-7095 (번호만)"
                       className="mt-1 w-full rounded-lg border border-[var(--color-line)] px-3 py-2 text-sm text-slate-900 outline-none focus:border-[var(--color-gold)]"
                     />
+                    {reviewNo.trim() &&
+                      (normalizeReviewNo(reviewNo) ? (
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          저장값: {normalizeReviewNo(reviewNo)} → 표시: 프라임에셋 심의필 제
+                          {normalizeReviewNo(reviewNo)}호
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-[11px] text-red-600">{REVIEW_NO_FORMAT_ERROR}</p>
+                      ))}
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -517,14 +527,14 @@ export function AdReviewPanel({
                     </div>
                   </div>
                   <button
-                    disabled={busy}
+                    disabled={busy || !normalizeReviewNo(reviewNo)}
                     onClick={() =>
                       save(
                         {
                           action: "approve",
                           articleId: article.id,
                           channel: modal.channel.key,
-                          reviewNo: reviewNo.trim(),
+                          reviewNo: normalizeReviewNo(reviewNo) ?? reviewNo.trim(),
                           reviewFrom,
                           reviewTo,
                         },

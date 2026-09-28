@@ -573,6 +573,10 @@
 - **심의필 입력 형식:** `review_no`엔 **번호만**(예: `2026-07-6088`). 템플릿이
   `"{authority} 심의필 제{no}호"`로 접두·접미를 자동 부착한다. **전체 문자열을 넣으면 이중 렌더**
   (`제프라임에셋…호호`) → §6.3 위반 소지. (실측 사고 있었음, 교정 완료.)
+  **[확정 2026-09-28] 기계 강제:** 2026-09 4건(6710·6802·6803·7095) 재발 후 `src/lib/review-no.ts`
+  `normalizeReviewNo`가 입력(어드민 API가 접두·접미·공백을 벗겨 번호만 저장, 형식 불일치는 거절)과
+  표시(`renderMandatoryNotice`가 다시 벗겨 한 번만 감쌈, 형식 불일치는 표기 안 함) 양쪽을 막는다.
+  테스트: `npx tsx src/lib/review-no.test.mts`. `SITE_REVIEW.no`가 형식 불일치면 `next build`가 실패한다.
 - **admin 발행 버튼 경로는 `revalidatePath`가 붙어 ISR 즉시 반영**(MCP 직접 수정과 다름 — MCP는
   revalidate 미트리거).
 
