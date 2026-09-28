@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthed } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase-admin";
+import { normalizeReviewNo, REVIEW_NO_FORMAT_ERROR } from "@/lib/review-no";
 
 /**
  * 광고심의(ad_reviews) 관리 — 채널(광고물) 단위 상태 전환. (CLAUDE.md §6.9)
@@ -61,10 +62,18 @@ export async function POST(request: Request) {
     if (!DATE_RE.test(reviewFrom) || !DATE_RE.test(reviewTo)) {
       return NextResponse.json({ error: "날짜 형식 오류(YYYY-MM-DD)" }, { status: 400 });
     }
+    // 번호만 저장한다 — 「프라임에셋 심의필 제…호」는 렌더러가 붙인다(이중 표기 방지).
+    const no = normalizeReviewNo(reviewNo);
+    if (!no) {
+      return NextResponse.json(
+        { error: `${REVIEW_NO_FORMAT_ERROR} (입력값: ${reviewNo})` },
+        { status: 400 }
+      );
+    }
     patch = {
       status: "approved",
       reviewed_at: now,
-      review_no: reviewNo,
+      review_no: no,
       review_from: reviewFrom,
       review_to: reviewTo,
       review_authority: reviewAuthority || "프라임에셋",

@@ -3,6 +3,8 @@
  * 경력 표기는 하드코딩하지 않고 입사일 기준 자동 계산 (매년 갱신 불필요).
  */
 
+import { normalizeReviewNo } from "./review-no";
+
 /**
  * ⚠️ 필수안내사항 표시 기준 (손보규정 §26 ①, 협회 가이드북 Part II)
  * renderMandatoryNotice() 출력물을 화면에 실제로 렌더할 때 반드시 지킬 것.
@@ -111,7 +113,14 @@ export function renderMandatoryNotice(
   } else {
     // 게시용: 유효 심의필이 없으면 필수안내사항을 만들지 않는다(허위 표기 방지).
     if (!review || !review.no) return null;
-    reviewLine = `${review.authority} 심의필 제${review.no}호 (${review.from}~${review.to})`;
+    // 번호만 남긴다 — 값에 「심의필」·「제」·「호」가 이미 있어도 두 번 감싸지 않는다.
+    // 형식이 틀리면 찍지 않는다(틀린 번호 표기 = 허위 심의필, 집중 모니터링 ①).
+    const no = normalizeReviewNo(review.no);
+    if (!no) {
+      console.error(`[renderMandatoryNotice] 심의필 번호 형식 오류: ${JSON.stringify(review.no)}`);
+      return null;
+    }
+    reviewLine = `${review.authority} 심의필 제${no}호 (${review.from}~${review.to})`;
   }
 
   const { plannerName, plannerRegNo, agencyName, agencyRegNo } = COMPLIANCE;
@@ -159,6 +168,11 @@ export const SITE_REVIEW: ReviewInfo | null = {
   from: "2026.07.23", // 심의일자
   to: "2027.07.22", // 광고유효기간
 };
+
+// 빌드 가드: 사이트 심의필 번호가 「번호만」 형식이 아니면 모듈 로드(= next build)에서 실패한다.
+if (SITE_REVIEW && normalizeReviewNo(SITE_REVIEW.no) !== SITE_REVIEW.no) {
+  throw new Error(`SITE_REVIEW.no 형식 오류(번호만, 예: 2026-07-6977): ${JSON.stringify(SITE_REVIEW.no)}`);
+}
 
 /**
  * 소재별 조건부 유의문구. 해당 소재를 다룰 때 본문에 삽입한다.
