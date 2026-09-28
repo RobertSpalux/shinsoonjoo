@@ -12,6 +12,7 @@
  */
 import puppeteer from "puppeteer";
 import { createClient } from "@supabase/supabase-js";
+import { readFileSync } from "node:fs";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,6 +43,14 @@ const YEARS = Math.floor((Date.now() - CAREER_START.getTime()) / 86_400_000 / 36
 // ⚠️ src/lib/brand.ts BRAND.siteName과 반드시 동일하게 유지할 것
 // (이 렌더러는 단독 .mjs — CI Node 22가 TS 싱글소스를 import 못해 CAREER_START와 같은 동기화 규약)
 const SITE_NAME = "신순주의 선한 금융";
+// 명장 표기 — 정본은 src/lib/brand.ts GA_MASTER_LABEL(PAMS 7168 조건, 2026-09-28).
+// TS를 import 못 하므로 그 한 줄을 파싱한다(자구를 여기 적지 않는다 — 동기화 규약보다 강하다).
+const GA_MASTER = (() => {
+  const ts = readFileSync(new URL("../src/lib/brand.ts", import.meta.url), "utf8");
+  const m = ts.match(/export const GA_MASTER_LABEL\s*=\s*"([^"]+)"/);
+  if (!m) throw new Error("brand.ts 에서 GA_MASTER_LABEL 을 찾지 못했습니다");
+  return m[1];
+})();
 
 function esc(s) {
   return String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -128,7 +137,7 @@ function shell({ dark, index, total, overline, topRight = "", bgIndex = false, c
   <div class="bottom">
     <div class="footer">
       <div class="frow">
-        <span>신순주 · GA명장&nbsp;&nbsp;|&nbsp;&nbsp;비대면·전국</span>
+        <span>신순주 · ${esc(GA_MASTER)}&nbsp;&nbsp;|&nbsp;&nbsp;비대면·전국</span>
         <span class="fpage">${index + 1} / ${total}</span>
       </div>
       <div class="ptrack"><div class="pfill"></div></div>
@@ -445,7 +454,7 @@ function naverThumbHtml(title) {
       <h1 style="margin-top:auto; margin-bottom:auto; font-size:52px; font-weight:800; line-height:1.32;
         color:${CREAM}; letter-spacing:-0.03em; padding-right:110px;">${esc(title)}</h1>
       <div style="border-top:1px solid ${LINE_ON_DARK}; padding-top:20px; font-size:20px; font-weight:600;
-        color:${MUTED_ON_DARK};">신순주 지사장 · GA명장&nbsp;&nbsp;|&nbsp;&nbsp;비대면 전국</div>
+        color:${MUTED_ON_DARK};">신순주 지사장 · ${esc(GA_MASTER)}&nbsp;&nbsp;|&nbsp;&nbsp;비대면 전국</div>
     </div>`);
 }
 
@@ -579,7 +588,7 @@ async function main() {
       // fonts.load()에 실제 렌더 텍스트(한글 포함)를 인자로 넘겨 필요한 서브셋을 강제 로드해야 한다.
       // waitUntil:"load"로 스타일시트/@import 완료(=@font-face 등록) 보장 후, weight별로 로드하고 fonts.ready까지 await.
       // (networkidle0은 CDN 서브셋 스트리밍에서 idle 미도달 → 60s 타임아웃이라 사용 불가)
-      const uiText = "신순주GA명장비대면전국저장각리모델링진단확인포인트프로필링크★✓✕⚠→↓—";
+      const uiText = `신순주${GA_MASTER}비대면전국저장각리모델링진단확인포인트프로필링크★✓✕⚠→↓—`;
       const cardText = `${collectText(cards[i])}${article.category ?? ""}${uiText}0123456789/`;
       await page.setContent(html, { waitUntil: "load", timeout: 60000 });
       await page.evaluate(async (text) => {
@@ -625,7 +634,7 @@ async function main() {
       await page.setViewport({ width: spec.w, height: spec.h, deviceScaleFactor: 2 });
       // 폰트 서브셋 로드 텍스트 — 배너·라벨의 고정 문구 글리프를 모두 포함해야 폴백 폰트로 새지 않는다
       // (카톡 채널 배너 문구는 제거했고, 진단 배너의 goodfinance.kr 라틴 글리프를 추가함 — 2026-07-14)
-      const fontText = `${article.title}${collectText(cards)}${YEARS}${SITE_NAME}보험리모델링인사이트신순주지사장GA명장비대면전국리모델링진단핵심정리내새는곳없는지받기goodfinance.kr'★✓→0123456789|`;
+      const fontText = `${article.title}${collectText(cards)}${YEARS}${SITE_NAME}보험리모델링인사이트신순주지사장${GA_MASTER}비대면전국리모델링진단핵심정리내새는곳없는지받기goodfinance.kr'★✓→0123456789|`;
       await page.setContent(spec.html, { waitUntil: "load", timeout: 60000 });
       await page.evaluate(async (text) => {
         const weights = ["500", "600", "700", "800"];

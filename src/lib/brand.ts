@@ -59,6 +59,16 @@ export function careerLabel(now?: Date) {
   return `${years}년 (${days.toLocaleString("ko-KR")}일)`;
 }
 
+/**
+ * GA 명장 표기 — **새로 조립·생성하는 원고**의 유일한 정본 자구.
+ * PAMS 7168 승인 조건(2026-09-28): 「[GA명장] → [22년~25년 GA 명장] 등 기간 명시하시어 기재」.
+ * - 「GA명장」 단독 표기는 새 원고에 쓰지 않는다 → scripts/preflight.py 「GA 명장 기간」이 막는다.
+ * - ⚠️ 이미 심의받아 게시된 글·사이트 골격(6977, BRAND.credentials·pressMarks 등)은 원안이므로
+ *   여기서 바꾸지 않는다. 사이트 문구는 다음 골격 재심의 때 반영한다.
+ * - naver_images.py · scripts/render-cards.mjs · preflight.py 가 이 줄을 파싱해 쓴다(자구 하드코딩 금지).
+ */
+export const GA_MASTER_LABEL = "22년~25년 GA 명장";
+
 /* ────────────────────────────────────────────────────────────────────────
  * 금소법 광고 컴플라이언스 (CLAUDE.md §6)
  * ──────────────────────────────────────────────────────────────────────── */

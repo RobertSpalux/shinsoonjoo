@@ -5,7 +5,7 @@
 
     python scripts/preflight.py <slug>
 
-Supabase에서 기사를 읽어 13개 항목을 검사한다. 하나라도 실패하면 exit code 1.
+Supabase에서 기사를 읽어 15개 항목을 검사한다. 하나라도 실패하면 exit code 1.
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
@@ -31,6 +31,9 @@ import json
 from datetime import datetime, timezone
 
 import requests
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import ga_master  # noqa: E402  — GA 명장 정본 자구(brand.ts GA_MASTER_LABEL)
 
 # Windows 콘솔(CP949)에서도 한글·기호 출력이 깨지지 않게 UTF-8 강제.
 try:
@@ -108,6 +111,7 @@ def fetch_article(slug):
     cols = ("id,slug,title,naver_title,blogspot_title,category,tags,is_main_published,"
             "naver_composed_at,naver_composed_hash,"
             "main_website_markdown,naver_blog_content,blogspot_content,verify_claims,"
+            "instagram_caption,"
             "ad_reviews(channel,status)")
     r = requests.get(
         f"{url}/rest/v1/premium_articles",
@@ -445,6 +449,46 @@ def check_image_config(slug, article):
             if fn.endswith(".json") and fn.startswith(stem):
                 return True, f"configs/{fn} (⚠️ 인자 slug와 파일명 불일치 — 렌더 slug 확인)"
     return False, f"configs/{slug}.json 없음(이미지 config 유실 위험)"
+
+
+# 이미지에 글자를 박는 렌더러 — 본문 DB 필드가 아니라 코드에 브랜드 줄이 있다.
+IMAGE_RENDERERS = [
+    os.path.join(ROOT, "naver_images.py"),
+    os.path.join(ROOT, "scripts", "render-cards.mjs"),
+]
+TITLE_CHANNEL = {"title": "main", "naver_title": "naver", "blogspot_title": "blogspot"}
+
+
+def check_ga_master(slug, article, renderers=None):
+    """「GA명장」 단독 표기 금지 — 새 원고는 GA_MASTER_LABEL(「22년~25년 GA 명장」)만 쓴다.
+
+    근거: PAMS 7168 승인 조건(2026-09-28) 「[GA명장] → [22년~25년 GA 명장] 등 기간 명시」.
+    범위: 아직 접수 전인 채널의 제목·본문 + 인스타 캡션 + 이미지 config + 이미지 렌더러 브랜드 줄.
+    접수·승인 채널(frozen)은 원안이라 보지 않고, 승인 게시분은 경고로 낮춘다(soften_if_published).
+    """
+    label = ga_master.load_label()
+    skip = frozen_channels(article) | DORMANT_CHANNELS
+    hits = []
+    for field, ch in TITLE_CHANNEL.items():
+        if ch not in skip:
+            hits += [f"{field}: {h}" for h in ga_master.find_bare(article.get(field), label)]
+    for lbl, text in pending_bodies(article):
+        hits += [f"{lbl}: {h}" for h in ga_master.find_bare(text, label)]
+    if "instagram" not in skip:
+        hits += [f"인스타 캡션: {h}" for h in ga_master.find_bare(article.get("instagram_caption"), label)]
+    cfg = os.path.join(CONFIGS_DIR, f"{slug}.json")
+    if os.path.exists(cfg):
+        hits += [f"configs/{slug}.json: {h}" for h in
+                 ga_master.find_bare(open(cfg, encoding="utf-8").read(), label)]
+    for path in (IMAGE_RENDERERS if renderers is None else renderers):
+        if os.path.exists(path):
+            src = open(path, encoding="utf-8").read()
+            hits += [f"{os.path.basename(path)}: {h}" for h in ga_master.find_bare(src, label)]
+    if hits:
+        detail = (f"「GA명장」 단독 {len(hits)}건 → 「{label}」로 — "
+                  + " / ".join(hits[:3]) + ("" if len(hits) <= 3 else f" 외 {len(hits)-3}건"))
+        return soften_if_published(article, False, detail)
+    return True, f"단독 표기 0건(정본 「{label}」)"
 
 
 def frozen_channels(article):
@@ -801,6 +845,7 @@ def main():
         ("WRITING-SPEC", *check_writing_spec(article)),
         ("분량", *check_length(article)),
         ("이미지 config", *check_image_config(slug, article)),
+        ("GA 명장 기간", *check_ga_master(slug, article)),
     ]
 
     print(f"\n── preflight: {slug} ──")

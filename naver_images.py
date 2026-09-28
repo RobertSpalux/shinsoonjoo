@@ -24,6 +24,9 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "scripts"))
+import ga_master  # noqa: E402  — 정본 자구는 src/lib/brand.ts GA_MASTER_LABEL (PAMS 7168 조건)
+
 # ────────────────────────────────────────────────
 # CONFIG 로더 — configs/<slug>.json (기본값 폴백 없음)
 #   · 파일·필수키가 없으면 즉시 에러. 이전 글 문구가 조용히 새 이미지에 박히는 사고를 코드가 막는다.
@@ -166,9 +169,15 @@ def render_thumbnail(cfg):
     f_brand = sans("bold", 27)
     d.text((pad, H - 122), "신순주의 선한 금융", font=f_brand, fill=CREAM)
     f_brand_sub = sans("regular", 21)
-    d.text((pad, H - 84), "23년 차 GA명장 · 보험 리모델링", font=f_brand_sub, fill="#a9bfb5")
+    d.text((pad, H - 84), brand_sub_line(), font=f_brand_sub, fill="#a9bfb5")
 
     return img
+
+
+def brand_sub_line():
+    """썸네일 하단 브랜드 줄. 5호까지 승인본은 「23년 차 {단독 표기} · 보험 리모델링」이었고,
+    PAMS 7168 조건으로 명장 표기 자리만 기간 명시 자구로 바꾼다(나머지 글자는 그대로)."""
+    return f"23년 차 {ga_master.load_label()} · 보험 리모델링"
 
 
 # ────────────────────────────────────────────────
