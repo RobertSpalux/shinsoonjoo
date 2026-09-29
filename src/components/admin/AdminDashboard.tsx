@@ -1501,7 +1501,11 @@ export default function AdminDashboard({
       {/* 컴플라이언스 검사 모달 (§6.10) */}
       {complianceArticle && compliance[complianceArticle.id] && (
         <ComplianceModal
-          article={{ id: complianceArticle.id, title: complianceArticle.title }}
+          article={{
+            id: complianceArticle.id,
+            title: complianceArticle.title,
+            verify_claims: complianceArticle.verify_claims,
+          }}
           result={compliance[complianceArticle.id]}
           onClose={() => setComplianceArticle(null)}
           onResult={(r) =>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { CheckResult, Finding } from "@/lib/compliance/banned-terms";
+import { allClaimsHavePages, claimsMissingPages } from "@/lib/compliance/verify-pages";
 
 /**
  * 컴플라이언스 검사 모달 (§6.10) — 필드별 적발 구간 하이라이트 + 대체 표현 제안.
@@ -44,7 +45,7 @@ export default function ComplianceModal({
   onResult,
   onToast,
 }: {
-  article: { id: string; title: string };
+  article: { id: string; title: string; verify_claims?: unknown };
   result: CheckResult;
   onClose: () => void;
   onResult: (r: CheckResult) => void;
@@ -54,6 +55,29 @@ export default function ComplianceModal({
   const findings = result.findings;
   const aCount = findings.filter((f) => f.grade === "A").length;
   const bUnacked = findings.filter((f) => f.grade === "B" && !f.acked).length;
+
+  // 「근거 대조 완료 — 전체 확인」 — verify_claims 전 항목에 원문 쪽수가 있을 때만.
+  const pagesOk = allClaimsHavePages(article.verify_claims);
+  const missingPages = claimsMissingPages(article.verify_claims);
+  const bulkAck = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/compliance-ack", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ articleId: article.id, bulk: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.result) {
+        onResult(json.result as CheckResult);
+        onToast(`근거 대조 완료 — ${json.acked ?? 0}건 확인 처리`);
+      } else onToast(json.error ?? "전체 확인 실패");
+    } catch {
+      onToast("네트워크 오류");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   // 필드 순서 유지하며 그룹화.
   const fields = [...new Set(findings.map((f) => f.field))];
@@ -97,6 +121,24 @@ export default function ComplianceModal({
             닫기
           </button>
         </div>
+
+        {bUnacked > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-b border-[var(--color-line)] bg-amber-50/50 px-6 py-3">
+            <button
+              type="button"
+              disabled={busy || !pagesOk}
+              onClick={bulkAck}
+              className="rounded-md bg-[var(--color-forest)] px-3 py-1.5 text-xs font-bold text-white hover:bg-[var(--color-forest-soft)] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              근거 대조 완료 — 전체 확인 ({bUnacked})
+            </button>
+            <p className="text-[11px] text-slate-500">
+              {pagesOk
+                ? "남은 🟡 확인 항목을 한꺼번에 확인 처리합니다. 🔴 차단은 풀리지 않습니다."
+                : `근거(verify_claims)에 원문 쪽수가 없는 항목 ${missingPages || "전부"}건 — 쪽수를 적어야 활성화됩니다.`}
+            </p>
+          </div>
+        )}
 
         <div className="overflow-y-auto px-6 py-4">
           {findings.length === 0 && (
