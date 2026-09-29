@@ -66,6 +66,16 @@ class ReplyRuleTest(unittest.TestCase):
         reply = th.compose_reply(th.REPLY_PHRASE, MAIN_URL, "rid")
         self.assertEqual(th.compose_paste(BODY, reply), f"{BODY}\n\n[첫 댓글]\n{reply}")
         self.assertEqual(th.compose_paste(BODY, None), BODY, "댓글 없으면 본문만")
+        self.assertEqual(th.compose_paste(BODY, None, "간병"), f"{BODY}\n\n#간병", "태그는 맨 끝 한 줄")
+
+    def test_check_tag(self):
+        self.assertIsNone(th.check_tag(None))
+        self.assertEqual(th.check_tag("간병"), "간병")
+        self.assertEqual(th.check_tag("#간병보험"), "간병보험", "# 없이 저장")
+        for bad in ("", "#", "간병 보험", "간병,보험", "#간병#보험", "무료점검", "간병보험추천", "보험비교",
+                    "상담", "삼성화재", "한화생명", "OO생명", "무조건", "x" * 31):
+            with self.assertRaises(kit.KitError, msg=bad):
+                th.check_tag(bad)
 
     def test_body_limits(self):
         th.check_body(BODY)
@@ -160,6 +170,26 @@ class KitBuildTest(unittest.TestCase):
             self.assertTrue(os.path.isfile(os.path.join(k["sidecar"], "kit.json")))
             self.assertIn(k["sidecar"], open(k["txt"], encoding="utf-8").read())
 
+    def test_tag_goes_to_paste_end_kit_json_and_info(self):
+        k = th.build_threads_kit({}, art("submitted", MAIN_URL), body_path=self.body, server=self._Srv(),
+                                 out_dir=self.dir, tag="#간병")
+        z = zipfile.ZipFile(k["zip"])
+        paste = z.read("스레드 접수 원고.txt").decode()
+        self.assertTrue(paste.endswith("\n\n#간병"), "원고 txt 끝에 #태그 한 줄")
+        meta, body, _, _ = th.read_kit_parts(k["zip"])
+        self.assertEqual(meta["tag"], "간병")
+        self.assertEqual(body.decode(), BODY, "body.txt(게시 본문·해시 대상)에는 태그를 넣지 않는다")
+        txt = open(k["txt"], encoding="utf-8").read()
+        self.assertIn("\n태그: 간병\n", txt)
+        with self.assertRaises(kit.KitError):
+            th.build_threads_kit({}, art("submitted", MAIN_URL), body_path=self.body, server=self._Srv(),
+                                 out_dir=self.dir, tag="간병 보험")
+
+    def test_no_tag_no_tag_line(self):
+        k = self.build(art("submitted", MAIN_URL))
+        self.assertNotIn("\n태그:", open(k["txt"], encoding="utf-8").read())
+        self.assertIsNone(th.read_kit_parts(k["zip"])[0]["tag"])
+
     def test_read_kit_parts_stops_when_paste_and_body_differ(self):
         k = self.build(art("submitted", MAIN_URL))
         with open(os.path.join(k["sidecar"], "body.txt"), "wb") as fp:
@@ -243,6 +273,25 @@ class UploadTest(unittest.TestCase):
         notes = self.patched[0][1]["notes"]
         self.assertEqual(th.NOTES_BODY_RX.search(notes).group(1), hashlib.sha256(BODY.encode()).hexdigest())
         self.assertEqual(th.NOTES_REPLY_RX.search(notes).group(1), hashlib.sha256(reply.encode()).hexdigest())
+
+    def test_submitted_writes_tag_line_and_keeps_hashes(self):
+        p = os.path.join(self.d, "t.zip")
+        with zipfile.ZipFile(p, "w") as z:
+            z.writestr("스레드 접수 원고.txt", f"{BODY}\n\n#간병".encode())
+        side = th.sidecar_dir(p)
+        os.makedirs(side)
+        for n, data in (("body.txt", BODY.encode()),
+                        ("kit.json", json.dumps({"slug": "caregiver-daily-benefit-support-vs-use",
+                                                 "row_id": None, "tag": "간병"}).encode())):
+            with open(os.path.join(side, n), "wb") as fp:
+                fp.write(data)
+        a = art(extra=[{"id": "rid-t", "channel": "threads", "status": "submitted", "notes": "", "created_at": "2026-09-29"}])
+        th.upload_submitted(ENV, a, p)
+        notes = self.patched[0][1]["notes"]
+        self.assertIn("\n태그 #간병", notes, "태그는 새 줄 — robert-os 게시 게이트가 대조")
+        self.assertEqual(th.NOTES_BODY_RX.search(notes).group(1), hashlib.sha256(BODY.encode()).hexdigest())
+        self.assertIsNone(th.NOTES_REPLY_RX.search(notes))
+        self.assertEqual(self.up[0][1], BODY.encode(), "Storage body.txt 에는 태그가 없다")
 
     def test_no_reply_kit_uses_latest_submitted_row(self):
         a = art(extra=[{"id": "old", "channel": "threads", "status": "approved", "notes": "본문 u (sha256 aaaaaaaaaaaaaaaa)",

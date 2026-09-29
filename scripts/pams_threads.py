@@ -99,9 +99,52 @@ def compose_reply(phrase, post_url, row_id):
     return f"{check_reply_phrase(phrase)}\n{reply_url(post_url, row_id)}"
 
 
-def compose_paste(body, reply):
-    """PAMS 에 붙여 넣을 한 덩어리. 댓글이 없으면 본문만."""
-    return body if reply is None else f"{body}\n\n{PASTE_MARK}\n{reply}"
+def compose_paste(body, reply, tag=None):
+    """PAMS 에 붙여 넣을 한 덩어리. 댓글이 없으면 본문만. 주제 태그가 있으면 맨 끝에 「#태그」 한 줄.
+
+    🔴 태그도 심의받는다 — 승인 뒤 붙이면 심의본 가공이다(2026-09-29 관제탑). 그래서 접수 원고에 넣는다.
+       body.txt(게시 본문·해시 대상)에는 넣지 않는다 — 스레드 주제 태그는 본문이 아니라 따로 다는 칸이다.
+    """
+    text = body if reply is None else f"{body}\n\n{PASTE_MARK}\n{reply}"
+    return text if not tag else f"{text}\n\n#{tag}"
+
+
+# 주제 태그 — 글당 1개, 일반어만. 금소법 금지 표현·상품명·회사명 금지.
+TAG_RX = re.compile(r"[0-9A-Za-z가-힣_]{1,30}")
+TAG_FORBIDDEN = re.compile(r"상담|문의|연락|카톡|카카오|신청|무료|공짜|최고|최저|최대|유일|확실|반드시|무조건"
+                           r"|보장해|보장됨|보장받|100|비교|추천|순위|1위|절판|마감|다이렉트|온라인보험|지금|당장")
+INSURER_SUFFIX_RX = re.compile(r"[가-힣A-Za-z]{1,6}(생명|화재|해상|라이프|손해보험|손보)$")
+
+
+def insurer_names():
+    """banned-terms.ts INSURERS(국내 생·손보사 상호) — 금지어 대장이 단일 출처."""
+    import preflight
+    ts = open(preflight.BANNED_TS, encoding="utf-8").read()
+    m = re.search(r"const INSURERS = \[(.*?)\];", ts, re.S)
+    return re.findall(r'"([^"]+)"', m.group(1)) if m else []
+
+
+def check_tag(tag):
+    """주제 태그 1개 → # 없이 돌려준다. 없으면 None. 규칙 위반은 KitError(고쳐 쓰지 않는다)."""
+    if tag is None:
+        return None
+    t = tag.strip()
+    if t.startswith("#"):
+        t = t[1:]
+    if not t:
+        raise kit.KitError("주제 태그가 비었습니다")
+    if not TAG_RX.fullmatch(t):
+        raise kit.KitError(f"주제 태그는 1개, 공백·#·쉼표 없이 한글·영문·숫자 30자 이내 — {tag!r}")
+    m = TAG_FORBIDDEN.search(t)
+    if m:
+        raise kit.KitError(f"주제 태그에 금지 표현 「{m.group(0)}」 — 상담 유인·단정·비교·추천·무료 금지(금소법)")
+    if any(n in t for n in insurer_names()) or (INSURER_SUFFIX_RX.search(t)
+                                                and t not in ("생명보험", "화재보험", "손해보험")):
+        raise kit.KitError(f"주제 태그에 회사명 — {tag!r}. 간병·간병보험 같은 일반어만")
+    hits = banned_hits(t)
+    if hits:
+        raise kit.KitError(f"주제 태그에 금지어(A등급) — {', '.join(hits)}")
+    return t
 
 
 def notes_line(base, row_id, body_bytes, reply_bytes):
@@ -264,14 +307,15 @@ def read_kit_parts(zip_path):
         paste = z.read(PASTE_NAME) if PASTE_NAME in names else None
     if paste is not None:
         want = compose_paste(body.decode("utf-8"),
-                             reply.decode("utf-8") if reply is not None else None).encode("utf-8")
+                             reply.decode("utf-8") if reply is not None else None,
+                             meta.get("tag")).encode("utf-8")
         if paste != want:
             raise kit.KitError("zip 의 접수 원고와 내부 body/reply 가 다릅니다 — 심의본과 올릴 본문이 갈립니다")
     return meta, body, reply, photos
 
 
 def build_threads_kit(env, article, body_path=None, phrase=None, server=None, out_dir=kit.KIT_DIR,
-                      now=None, log=print, photos=None, stage_upload=False, name=None, prep_id=None):
+                      now=None, log=print, photos=None, stage_upload=False, name=None, prep_id=None, tag=None):
     slug = article["slug"]
     photo_list = check_photos(photos)
     body_path = body_path or default_body_path(slug)
@@ -281,6 +325,7 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
     body = body_bytes.decode("utf-8")
     check_body(body)
     fields = posting_fields(body, len(photo_list))
+    tag = check_tag(tag)
 
     link = main_link(article)
     phrase = check_reply_phrase(phrase or REPLY_PHRASE) if link else None
@@ -311,7 +356,7 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
     if hits:
         raise kit.KitError(f"스레드 원고에 금지어(A등급) — {', '.join(hits)}")
 
-    paste = compose_paste(body, reply)
+    paste = compose_paste(body, reply, tag)
     if name and not re.fullmatch(r"[0-9A-Za-z가-힣_-]{3,60}", name):
         raise kit.KitError(f"키트 이름은 한글·영문·숫자·_- 3~60자 — {name!r}")
     base = name or kit.kit_basename(slug, "threads", now)
@@ -349,7 +394,7 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
         put_side("reply.txt", reply.encode("utf-8"))
     put_side(KIT_META, json.dumps({"slug": slug, "article_id": article["id"], "row_id": row_id,
                                    "prep_id": prep_id, "photos": [n for n, _, _ in photo_list],
-                                   "posting_title": fields["게시명"],
+                                   "posting_title": fields["게시명"], "tag": tag,
                                    "main_url": link, "created": datetime.now(kit.KST).isoformat()},
                                   ensure_ascii=False, indent=1).encode("utf-8"))
     shutil.rmtree(side, ignore_errors=True)
@@ -368,7 +413,9 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
         f"[PAMS 접수 문자열] {kit.issue_label(slug)} · 스레드 · {slug}",
         "",
         f"게시명: {fields['게시명']}",
-    ] + [f"{k}: {fields[k]}" for k in ("게시위치", "규격") if k in fields] + [
+    ] + [f"{k}: {fields[k]}" for k in ("게시위치", "규격") if k in fields] + (
+        [f"태그: {tag}", "  (주제 태그 1개 — 접수 원고 끝 「#" + tag + "」 줄로 함께 심의. 승인 뒤 바꾸거나 더하지 않는다)"]
+        if tag else []) + [
         "광고형태: 스레드 · 심의유형: " + ("사진이 있으니 일반심의(이미지 첨부)" if photo_list else "스레드(텍스트)"),
         "첫 댓글: " + (f"있음 → {link} (스레드 행 {row_id}{' 새로 만듦' if created else ''})" if reply
                      else "없음 — 본진 글이 아직 승인·게시 전(본문만 접수, 7550 방식)"),
@@ -386,7 +433,7 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(lines) + "\n")
     return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": fields["게시명"], "sidecar": side,
-            "location": fields.get("게시위치"), "spec": fields.get("규격"),
+            "location": fields.get("게시위치"), "spec": fields.get("규격"), "tag": tag,
             "sources": [kit.source_line(s) for s, _ in evid], "files": files, "reply": reply,
             "row_id": row_id, "paste": paste, "prep_id": prep_id, "staged": staged}
 
@@ -441,6 +488,8 @@ def upload_submitted(env, article, zip_path):
     line = notes_line(env["NEXT_PUBLIC_SUPABASE_URL"], row["id"], body, reply)
     if photo_notes:  # 사진은 다음 줄 — 본문·댓글 해시 줄을 건드리지 않는다
         line += "\n" + " · ".join(photo_notes)
+    if meta.get("tag"):  # robert-os 게시 게이트가 대조한다 — 심의받은 태그 그대로만 단다
+        line += f"\n태그 #{meta['tag']}"
     # 🔴 새 줄에 쓴다 — robert-os 정규식은 줄 안에서 「본문」·「댓글」 첫 등장부터 sha256 을 찾는다.
     #    앞 메모에 「댓글」 낱말이 같은 줄에 있으면 본문 해시를 댓글 해시로 읽는다.
     head = (row.get("notes") or "").rstrip()
