@@ -204,5 +204,89 @@ class UploadTest(unittest.TestCase):
         self.assertEqual([u[0] for u in self.up], ["card-news/threads/new/body.txt"])
 
 
+class PhotoStageTest(unittest.TestCase):
+    """사진은 광고 내용 — 키트에 넣어 심의. --stage 는 준비 id 폴더에 미리 올린다(ad_reviews 는 안 만든다)."""
+
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+        self.body = os.path.join(self.d, "body.txt")
+        with open(self.body, "w", encoding="utf-8", newline="") as fp:
+            fp.write(BODY)
+        self.photos = []
+        for n in ("photo1.jpg", "photo2.jpg"):
+            p = os.path.join(self.d, n)
+            with open(p, "wb") as fp:
+                fp.write(n.encode())
+            self.photos.append(p)
+        self.up, self.rows = [], []
+        self._saved = (kit.gate, kit.preview_url, th.ensure_draft_row, th.banned_hits, th._upload,
+                       th._insert_submitted_row, th.requests.patch)
+        kit.gate = lambda url: "ok"
+        kit.preview_url = lambda srv, env, slug: "http://x"
+        th.ensure_draft_row = lambda env, a: self.fail("댓글 없으면 행을 만들면 안 된다")
+        th.banned_hits = lambda text: []
+        th._upload = lambda env, path, data, ct: (self.up.append((path, ct)) or f"https://p/{path}")
+        th._insert_submitted_row = lambda env, a, pid: (self.rows.append(pid) or
+                                                         {"id": pid, "channel": "threads", "status": "submitted", "notes": ""})
+
+        class R:
+            status_code = 204
+            text = ""
+        self.patched = []
+        th.requests.patch = lambda url, params=None, json=None, headers=None, timeout=None: (
+            self.patched.append(json) or R())
+
+    def tearDown(self):
+        (kit.gate, kit.preview_url, th.ensure_draft_row, th.banned_hits, th._upload,
+         th._insert_submitted_row, th.requests.patch) = self._saved
+
+    class _Srv:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+
+    def build(self, stage):
+        return th.build_threads_kit(ENV, art("submitted", MAIN_URL), body_path=self.body, server=self._Srv(),
+                                    out_dir=self.d, photos=self.photos, stage_upload=stage)
+
+    def test_photos_in_kit_in_order_no_notice(self):
+        k = self.build(stage=False)
+        z = zipfile.ZipFile(k["zip"])
+        self.assertIn("photo1.jpg", z.namelist())
+        self.assertIn("photo2.jpg", z.namelist())
+        self.assertNotIn("notice.png", z.namelist(), "필수안내 이미지는 접수 시 불필요")
+        self.assertEqual(json.loads(z.read("kit.json"))["photos"], ["photo1.jpg", "photo2.jpg"])
+        self.assertIsNone(k["prep_id"])
+        self.assertEqual(self.up, [], "--stage 없으면 올리지 않는다")
+        txt = open(k["txt"], encoding="utf-8").read()
+        self.assertIn("필수안내 이미지: 접수 시 불필요 — 승인 후 robert-os 가 번호 넣어 생성", txt)
+        self.assertIn("photo1.jpg → photo2.jpg", txt)
+
+    def test_stage_uploads_body_and_photos_to_prep_folder(self):
+        k = self.build(stage=True)
+        pid = k["prep_id"]
+        self.assertTrue(re.fullmatch(r"[0-9a-f-]{36}", pid))
+        self.assertEqual([u[0] for u in self.up], [f"card-news/threads/{pid}/body.txt",
+                                                   f"card-news/threads/{pid}/photo1.jpg",
+                                                   f"card-news/threads/{pid}/photo2.jpg"])
+        self.assertEqual(self.up[1][1], "image/jpeg")
+        self.assertEqual(self.rows, [], "--stage 는 ad_reviews 를 만들지 않는다")
+
+    def test_submitted_creates_row_with_prep_id_and_keeps_hash_lines_parseable(self):
+        k = self.build(stage=True)
+        self.up.clear()
+        th.upload_submitted(ENV, art("submitted", MAIN_URL), k["zip"])
+        self.assertEqual(self.rows, [k["prep_id"]], "준비 id 로 행을 만든다(폴더와 id 일치)")
+        notes = self.patched[0]["notes"]
+        self.assertEqual(th.NOTES_BODY_RX.search(notes).group(1), hashlib.sha256(BODY.encode()).hexdigest())
+        self.assertIsNone(th.NOTES_REPLY_RX.search(notes), "사진 줄이 댓글 해시로 잡히면 안 된다")
+        self.assertIn("사진 photo1.jpg", notes)
+
+    def test_bad_photo_rejected(self):
+        with self.assertRaises(kit.KitError):
+            th.check_photos([self.body])
+        with self.assertRaises(kit.KitError):
+            th.check_photos([os.path.join(self.d, "없음.jpg")])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
