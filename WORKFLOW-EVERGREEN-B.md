@@ -149,6 +149,7 @@
   - **자동:** 작업 스케줄러 `SHIN_PAMS_KIT`(10분)가 `scripts/pams_auto.py` 를 돌린다. 확인이 끝난 미발행 초안은 본진 키트를
     알아서 만들고(원고 해시가 같으면 다시 만들지 않음), PAMS접수 폴더에 넣은 네이버 캡처는 짝을 맞춰 네이버 키트를 만든다
     (애매하면 텔레그램으로 묻는다 — 파일명에 「7호」). 키트가 생기면 텔레그램 1통. 로그 `%LOCALAPPDATA%\SHIN\pams_auto.log`.
+  - **스레드(2026-09-29):** 한 건 = 본문 + 본인 첫 댓글(본진 링크). `python scripts/pams_kit.py <slug> threads` → PAMS 에 「본문 + 빈 줄 + [첫 댓글] + 댓글」 한 덩어리. 댓글은 본진 approved·posted_url 있을 때만(`?utm_source=threads&utm_campaign=<ad_reviews.id>`). 접수 뒤 `--submitted <zip>`(또는 pams_auto 자동)이 body/reply 를 `card-news/threads/<id>/` 에 올리고 notes 에 해시 — robert-os 무인 게시가 이것으로 대조한다. 규칙 정본 `scripts/pams_threads.py` 머리말.
     본진은 로컬 next dev 의 웹 심의용 미리보기를 Puppeteer 로 인쇄한다(심의필 줄 공란).
     🔴 컴플라이언스 확인(B등급)이 남아 있으면 /preview 서버 게이트가 막고 키트를 만들지 않는다(우회 없음).
     확인은 어드민 모달의 개별 체크 또는 **「근거 대조 완료 — 전체 확인」**(verify_claims 전 항목에 원문 쪽수가 있을 때만 활성, A등급은 안 풀림).
