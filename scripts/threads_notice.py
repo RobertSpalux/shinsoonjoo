@@ -106,17 +106,47 @@ d0 = ImageDraw.Draw(tmp)
 CW = W - PAD * 2          # 본문 폭
 WARN_IND = 26             # 경고 블록 좌측 들여쓰기(바 공간)
 
+# ── 줄바꿈 고정 — 8683호 스레드 게시본(2026-07-29) 실측 그대로 ──────────
+# 폰트(관제탑 CJK .ttc ↔ Windows KR VF)에 따라 폭이 몇 px 달라 자동 줄바꿈이 흔들린다
+# (실측: 「…심의일로부터 1년입니다.」가 VF 에서 3px 넘쳐 두 줄이 됐다). 그래서 게시본 줄바꿈을 고정한다.
+LAYOUT = {
+    BLOCK1_HEAD: ["1. 본 내용은 모집종사자 개인의 의견이며, 계약체결에 따른 이익 또는 손실은",
+                  "보험계약자 등에게 귀속됩니다."],
+    BLOCK1_REST[0]: ["보험사 상품별로 성별, 연령, 직업(급수)에 따라 가입가능한 담보와 가입금액,",
+                     "보험료 등은 상이할 수 있습니다."],
+    BLOCK1_REST[1]: ["보험사 상품별로 상이할 수 있으므로,관련한 세부사항은 반드시 약관을 참조",
+                     "바랍니다."],
+    BLOCK2_PRE[1]: ["본 광고는 광고심의기준을 준수하였으며, 유효기간은 심의일로부터 1년입니다."],
+    BLOCK2_WARN[0]: ["보험계약자가 기존 보험계약을 해지하고 새로운 보험계약을 체결하는", "과정에서"],
+    BLOCK2_WARN[1]: ["① 질병이력, 연령증가 등으로 가입이 거절되거나 보험료가 인상될 수", "있습니다."],
+    BLOCK2_WARN[2]: ["②가입 상품에 따라 새로운 면책기간 적용 및 보장 제한 등 기타 불이익이",
+                     "발생할 수 있습니다."],
+}
+for _src, _lines in LAYOUT.items():  # 고정 줄을 이으면 원문과 글자 하나까지 같아야 한다
+    assert " ".join(_lines) == _src, f"줄 고정이 자구를 바꿨다: {_src}"
+
+
+def lines_of(text, font, maxw, draw):
+    return LAYOUT.get(text) or wrap(text, font, maxw, draw)
+
+
 # ── 레이아웃 사전 계산 ──
 plan = []   # (kind, lines, font, color)
-plan.append(("p", wrap(BLOCK1_HEAD, f_b, CW, d0), f_b, INK))
+plan.append(("p", lines_of(BLOCK1_HEAD, f_b, CW, d0), f_b, INK))
 for t in BLOCK1_REST:
-    plan.append(("p", wrap(t, f_b, CW, d0), f_b, INK))
+    plan.append(("p", lines_of(t, f_b, CW, d0), f_b, INK))
 plan.append(("s", [BLOCK2_HEAD], f_h, GREEN))
 for t in BLOCK2_PRE:
-    plan.append(("p", wrap(t, f_b, CW, d0), f_b, INK))
+    plan.append(("p", lines_of(t, f_b, CW, d0), f_b, INK))
 for t in BLOCK2_WARN:
-    plan.append(("w", wrap(t, f_w, CW - WARN_IND, d0), f_w, GREEN))
+    plan.append(("w", lines_of(t, f_w, CW - WARN_IND, d0), f_w, GREEN))
 plan.append(("r", [REVIEW], f_s, MUTED))
+
+for kind, lines, font, _ in plan:  # 고정 줄이 폰트 차이로 넘쳐도 오른쪽 여백 절반 안이어야 한다
+    for ln in lines:
+        x0 = PAD + (WARN_IND if kind == "w" else 0)
+        if x0 + d0.textlength(ln, font=font) > W - PAD // 2:
+            sys.exit(f"줄이 이미지 폭을 넘는다: {ln}")
 
 H = PAD
 for kind, lines, font, _ in plan:
@@ -154,5 +184,6 @@ if args.dump:
     # 자구 대조용 — 줄바꿈 전 원문 문장 단위(렌더 폰트와 무관)
     src = [BLOCK1_HEAD, *BLOCK1_REST, BLOCK2_HEAD, *BLOCK2_PRE, *BLOCK2_WARN, REVIEW]
     with open(args.dump, "w", encoding="utf-8") as fp:
-        fp.write("\n".join(src) + "\n")
+        shown = [" | ".join(lines) for _, lines, _, _ in plan]  # 실제 이미지 줄바꿈( | = 줄바꿈)
+        fp.write("\n".join(src) + "\n\n# 이미지 줄바꿈\n" + "\n".join(shown) + "\n")
     print(f"dump: {args.dump}")
