@@ -33,6 +33,8 @@ export interface ComplianceAck {
   term: string;
   offset: number;
   ackedAt: string;
+  /** 「근거 대조 완료 — 전체 확인」으로 한꺼번에 확인된 항목. 개별 체크는 없음(undefined). */
+  bulk?: boolean;
 }
 
 export interface CheckResult {
