@@ -5,6 +5,9 @@ PAMS 접수 키트 생성 — 로버트는 zip 을 올리고 자가점검만 체
 
     python scripts/pams_kit.py <slug> main
     python scripts/pams_kit.py <slug> naver --capture <네이버 비공개 캡처(.pdf/.png/.jpg)>
+    python scripts/pams_kit.py <slug> threads [--body <본문.txt>] [--reply-phrase "<댓글 문구>"]
+    python scripts/pams_kit.py <slug> threads --submitted <키트.zip>   ← PAMS 접수 뒤 Storage 업로드
+    (스레드 규칙은 scripts/pams_threads.py 머리말)
     옵션: --base-url http://localhost:3000   (이미 떠 있는 서버를 쓸 때. 없으면 로컬 next dev 를 잠깐 띄운다)
 
 산출물 — %USERPROFILE%\\Downloads\\PAMS접수\\  (2026-09-29 로버트 지정. out\\pams\\ 는 쓰지 않는다)
@@ -54,8 +57,8 @@ KIT_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "PAMS접수")
 PRINT_JS = os.path.join(ROOT, "scripts", "pams-print.mjs")
 BLANK_REVIEW = "제_____호"
 GATE_TEXT = "컴플라이언스 검사 미통과"
-AD_FORM = {"main": "홈페이지", "naver": "바이럴(블로그 등)"}
-CH_LABEL = {"main": "본진", "naver": "네이버"}
+AD_FORM = {"main": "홈페이지", "naver": "바이럴(블로그 등)", "threads": "스레드"}
+CH_LABEL = {"main": "본진", "naver": "네이버", "threads": "스레드"}
 KST = timezone(timedelta(hours=9))
 # 창 없는 실행(작업 스케줄러에서 10분마다 창이 뜨지 않게)
 NO_WINDOW = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
@@ -63,7 +66,7 @@ NO_WINDOW = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) 
 ARTICLE_COLS = ("id,slug,title,naver_title,category,summary,key_points,remodeling_bridge,raw_source_name,"
                 "main_website_markdown,naver_blog_content,verify_claims,compliance_acks,naver_image_paths,"
                 "is_main_published,is_naver_published,created_at,"
-                "ad_reviews(channel,status,posting_title,created_at)")
+                "ad_reviews(id,channel,status,posting_title,posted_url,review_no,notes,created_at)")
 
 
 class KitError(Exception):
@@ -335,15 +338,26 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
-    ap.add_argument("channel", choices=["main", "naver"])
+    ap.add_argument("channel", choices=["main", "naver", "threads"])
     ap.add_argument("--capture")
     ap.add_argument("--base-url")
+    ap.add_argument("--body", help="스레드 본문 파일(threads). 기본 assets/threads/drafts/<slug>/body.txt")
+    ap.add_argument("--reply-phrase", help="첫 댓글 문구(threads). 기본 문구는 pams_threads.REPLY_PHRASE")
+    ap.add_argument("--submitted", metavar="ZIP",
+                    help="threads: PAMS 접수 뒤 — 그 키트의 body/reply 를 Storage 에 올리고 notes 에 해시 기록")
     a = ap.parse_args()
     env = load_env()
     try:
         art = fetch_article(env, a.slug)
         server = LocalServer(a.base_url) if a.base_url else None
-        kit = build_kit(env, art, a.channel, capture=a.capture, server=server)
+        if a.channel == "threads":
+            import pams_threads as th
+            if a.submitted:
+                print(th.upload_submitted(env, art, a.submitted))
+                return
+            kit = th.build_threads_kit(env, art, body_path=a.body, phrase=a.reply_phrase, server=server)
+        else:
+            kit = build_kit(env, art, a.channel, capture=a.capture, server=server)
     except KitError as e:
         print(f"\n⛔ {e}\n   키트를 만들지 않았습니다.", file=sys.stderr)
         sys.exit(3 if e.gate else 1)

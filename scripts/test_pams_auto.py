@@ -178,5 +178,15 @@ class CaptureTest(unittest.TestCase):
         self.assertEqual(len(h.built), 0)
 
 
+class ThreadsKitPickTest(unittest.TestCase):
+    def test_pick(self):
+        metas = [("a.zip", {"slug": "s", "row_id": None, "created": "2026-09-29T10"}),
+                 ("b.zip", {"slug": "s", "row_id": "r1", "created": "2026-09-29T11"}),
+                 ("c.zip", {"slug": "other", "row_id": None, "created": "2026-09-29T12"})]
+        self.assertEqual(auto.pick_threads_kit(metas, "s", "r1"), "b.zip", "같은 행 id 키트, 최근 것")
+        self.assertEqual(auto.pick_threads_kit(metas, "s", "r2"), "a.zip", "다른 행 id 키트는 못 쓴다(utm 불일치)")
+        self.assertIsNone(auto.pick_threads_kit(metas, "none", "r1"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

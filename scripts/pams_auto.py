@@ -229,6 +229,58 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
     return made
 
 
+# ── 스레드: 접수(submitted) 시점 Storage 업로드 ────────────────────
+def pick_threads_kit(metas, slug, row_id):
+    """키트 목록[(zip경로, kit.json)] 중 이 행에 쓸 스레드 키트. 가장 최근 것.
+    댓글이 있는 키트는 row_id 가 같아야 하고(utm_campaign), 댓글 없는 키트는 slug 만 맞으면 된다."""
+    ok = [(p, m) for p, m in metas
+          if m.get("slug") == slug and (m.get("row_id") in (None, row_id))]
+    ok.sort(key=lambda pm: pm[1].get("created") or "", reverse=True)
+    return ok[0][0] if ok else None
+
+
+def threads_kit_metas(kit_dir):
+    import zipfile
+    out = []
+    if not os.path.isdir(kit_dir):
+        return out
+    for fn in os.listdir(kit_dir):
+        if fn.endswith("_스레드.zip"):
+            p = os.path.join(kit_dir, fn)
+            try:
+                with zipfile.ZipFile(p) as z:
+                    out.append((p, json.loads(z.read("kit.json"))))
+            except Exception:
+                continue
+    return out
+
+
+def upload_submitted_threads(env, notify, kit_dir=kit.KIT_DIR):
+    """스레드 행이 submitted/under_review 인데 notes 에 본문 해시가 없으면 → 그 키트의 body/reply 를 올린다.
+    (robert-os pams_watch 가 PAMS 목록을 보고 status 를 submitted 로 바꾸면 다음 바퀴에 여기서 잡힌다)"""
+    import pams_threads as th
+    url, h = kit._rest(env)
+    rv = url.rsplit("/", 1)[0] + "/ad_reviews"
+    rows = requests.get(rv, params={"channel": "eq.threads", "status": "in.(submitted,under_review)",
+                                    "select": "id,article_id,notes,premium_articles(slug)"},
+                        headers=h, timeout=30).json()
+    metas = None
+    for r in rows:
+        if th.NOTES_BODY_RX.search(r.get("notes") or ""):
+            continue
+        slug = (r.get("premium_articles") or {}).get("slug")
+        metas = metas if metas is not None else threads_kit_metas(kit_dir)
+        zp = pick_threads_kit(metas, slug, r["id"])
+        if not zp:
+            continue  # 키트 없이 접수된 건(7550 이전 방식) — 건드리지 않는다
+        try:
+            msg = th.upload_submitted(env, kit.fetch_article(env, slug), zp)
+            log(f"스레드 접수 업로드: {msg}")
+            notify(f"[스레드 접수] {kit.issue_label(slug)} — body/reply 업로드·해시 기록 완료 ({os.path.basename(zp)})")
+        except kit.KitError as e:
+            log(f"스레드 접수 업로드 실패 {r['id']}: {e}")
+
+
 # ── 작업 스케줄러 ───────────────────────────────────────────
 def pythonw():
     """예약 작업용 인터프리터 — 시스템 Python 을 우선한다.
@@ -293,6 +345,7 @@ def main():
             server_factory=lambda: kit.LocalServer(log=log),
         )
         save_state(state)
+        upload_submitted_threads(env, notify=lambda t: telegram(env, t))
         if made:
             log(f"이번 바퀴 키트 {len(made)}개")
     except Exception:
