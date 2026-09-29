@@ -143,8 +143,12 @@
   본문의 기관 귀속 문장 ↔ 증빙 파일 **대응표(STEP 2)**를 zip에 함께 넣는다.
 - **5-5 zip 1개로 압축.**
   - **[2026-09-29] 본진·네이버 키트 자동화:** `python scripts/pams_kit.py <slug> main` /
-    `python scripts/pams_kit.py <slug> naver --capture <비공개 캡처>` → `out/pams/<slug>_<채널>.zip`
-    (캡처 PDF = 게시명.pdf + 증빙 원문 4요소 파일명) + 같은 이름 `.txt`(게시명·자료명 칸 문자열).
+    `python scripts/pams_kit.py <slug> naver --capture <비공개 캡처>` → `%USERPROFILE%\Downloads\PAMS접수\MMDD_<N호>_<본진|네이버>.zip`
+    (캡처 PDF = 게시명.pdf + 증빙 원문 4요소 파일명) + 같은 이름 `.txt`(게시명·자료명 칸 문자열). 호수는 `configs/issue_numbers.json`
+    — **새 초안을 넣을 때 호수도 함께 등록한다**(없으면 파일명에 slug).
+  - **자동:** 작업 스케줄러 `SHIN_PAMS_KIT`(10분)가 `scripts/pams_auto.py` 를 돌린다. 확인이 끝난 미발행 초안은 본진 키트를
+    알아서 만들고(원고 해시가 같으면 다시 만들지 않음), PAMS접수 폴더에 넣은 네이버 캡처는 짝을 맞춰 네이버 키트를 만든다
+    (애매하면 텔레그램으로 묻는다 — 파일명에 「7호」). 키트가 생기면 텔레그램 1통. 로그 `%LOCALAPPDATA%\SHIN\pams_auto.log`.
     본진은 로컬 next dev 의 웹 심의용 미리보기를 Puppeteer 로 인쇄한다(심의필 줄 공란).
     🔴 컴플라이언스 확인(B등급)이 남아 있으면 /preview 서버 게이트가 막고 키트를 만들지 않는다(우회 없음).
     확인은 어드민 모달의 개별 체크 또는 **「근거 대조 완료 — 전체 확인」**(verify_claims 전 항목에 원문 쪽수가 있을 때만 활성, A등급은 안 풀림).

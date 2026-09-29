@@ -1,0 +1,5 @@
+{
+  "_주석": "PAMS 키트 파일명(MMDD_<N호>_<본진|네이버>.zip)의 호수. DB 에 호수 필드가 없어 여기 둔다. 새 초안을 넣을 때 함께 등록한다. 없으면 파일명에 slug 가 대신 들어간다.",
+  "caregiver-daily-benefit-support-vs-use": 6,
+  "ltc-grade-home-care-rider-check": 7
+}
