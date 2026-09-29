@@ -29,10 +29,17 @@
     본문 해시를 잡는다(robert-os 정규식은 줄 단위).
 
 필수안내 이미지(notice.png)
-  · 승인 뒤 robert-os 가 scripts/threads_notice.py 로 번호를 넣어 만든다(THREADS_AUTO.md).
-  · 🔴 **접수 시점 이미지(7550 첨부본)에 심의필 줄을 어떻게 넣었는지 확인되지 않았다**(2026-09-29).
-    그래서 키트에 이미지를 넣지 않는다. 확인되면 여기에 추가한다 — 추측으로 만들지 않는다.
+  · 접수 시 불필요 — 승인 후 robert-os 가 번호 넣어 생성(scripts/threads_notice.py, THREADS_AUTO.md).
+    7550 도 원고(텍스트)만 접수했고, 승인 뒤 PAMS 「게시명·비고·심의필번호 확인」 화면의 번호·기간으로
+    만들어 게시했다(로버트 확인 2026-09-29 14:56). 그래서 키트에 넣지 않는다.
+
+사진(--photo, 여러 장)
+  · 사진은 **광고 내용**이다 → 키트에 넣어 심의받는다(게시 순서 = 인자 순서, 필수안내 이미지는 맨 뒤).
+  · 개인 사진은 저장소에 커밋하지 않는다. Storage 에만 올린다.
+  · --stage: 접수 전 준비 id(uuid)를 만들어 card-news/threads/<준비id>/ 에 body.txt·사진을 올린다.
+    PAMS 접수 뒤 --submitted 가 그 준비 id 로 ad_reviews 행을 만든다(robert-os 가 id 폴더를 먼저 본다).
 """
+import uuid
 import hashlib
 import json
 import os
@@ -170,9 +177,30 @@ def default_body_path(slug):
     return os.path.join(kit.ROOT, "assets", "threads", "drafts", slug, "body.txt")
 
 
+PHOTO_EXT = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
+
+
+def check_photos(photos):
+    """사진 경로 목록 → [(게시 파일명, 경로, content-type)]. 순서 = 게시 순서."""
+    out, seen = [], set()
+    for p in photos or []:
+        if not os.path.exists(p):
+            raise kit.KitError(f"사진 파일이 없습니다 — {p}")
+        name = os.path.basename(p)
+        ext = os.path.splitext(name)[1].lower()
+        if ext not in PHOTO_EXT:
+            raise kit.KitError(f"사진 형식은 jpg/png — {name}")
+        if name in seen or name in ("body.txt", "reply.txt", "notice.png", KIT_META):
+            raise kit.KitError(f"사진 파일명이 겹칩니다 — {name}")
+        seen.add(name)
+        out.append((name, p, PHOTO_EXT[ext]))
+    return out
+
+
 def build_threads_kit(env, article, body_path=None, phrase=None, server=None, out_dir=kit.KIT_DIR,
-                      now=None, log=print):
+                      now=None, log=print, photos=None, stage_upload=False):
     slug = article["slug"]
+    photo_list = check_photos(photos)
     body_path = body_path or default_body_path(slug)
     if not os.path.exists(body_path):
         raise kit.KitError(f"스레드 본문 파일이 없습니다 — {body_path}")
@@ -220,7 +248,11 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
         put("body.txt", body_bytes)
         if reply is not None:
             put("reply.txt", reply.encode("utf-8"))
+        for name, p, _ in photo_list:
+            put(name, open(p, "rb").read())
+        prep_id = str(uuid.uuid4()) if stage_upload else None
         put(KIT_META, json.dumps({"slug": slug, "article_id": article["id"], "row_id": row_id,
+                                  "prep_id": prep_id, "photos": [n for n, _, _ in photo_list],
                                   "main_url": link, "created": datetime.now(kit.KST).isoformat()},
                                  ensure_ascii=False, indent=1).encode("utf-8"))
         for _, p in evid:
@@ -232,25 +264,50 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
                 z.write(os.path.join(stage, fn), fn)
         os.replace(zip_path + ".part", zip_path)
 
+    staged = []
+    if stage_upload:
+        folder = f"card-news/threads/{prep_id}"
+        staged.append(("body.txt", _upload(env, f"{folder}/body.txt", body_bytes, "text/plain; charset=utf-8"),
+                       hashlib.sha256(body_bytes).hexdigest()))
+        for name, p, ct in photo_list:
+            data = open(p, "rb").read()
+            staged.append((name, _upload(env, f"{folder}/{name}", data, ct), hashlib.sha256(data).hexdigest()))
+
     lines = [
         f"[PAMS 접수 문자열] {kit.issue_label(slug)} · 스레드 · {slug}",
         "",
         f"게시명: {THREADS_PROFILE}",
-        "광고형태: 스레드 · 심의유형: 필수안내 이미지를 첨부하면 일반심의(7550 방식)",
+        "광고형태: 스레드 · 심의유형: " + ("사진이 있으니 일반심의(이미지 첨부)" if photo_list else "스레드(텍스트)"),
         "첫 댓글: " + (f"있음 → {link} (스레드 행 {row_id}{' 새로 만듦' if created else ''})" if reply
                      else "없음 — 본진 글이 아직 승인·게시 전(본문만 접수, 7550 방식)"),
-        "⚠️ 필수안내 이미지는 키트에 없다 — 접수 시점 심의필 줄 형식 미확인(pams_threads.py 머리말)",
+        "필수안내 이미지: 접수 시 불필요 — 승인 후 robert-os 가 번호 넣어 생성",
+        "사진: " + (" → ".join(n for n, _, _ in photo_list) + " (게시 순서, 필수안내 이미지는 맨 뒤)" if photo_list else "없음"),
         "",
         "증빙 자료명 (작성기관명, 자료명, 기준년도, 발표연도):",
     ] + [f"- {kit.source_line(s)}" for s, _ in evid] + [
-        "", "── PAMS 에 붙여 넣을 원고 ──", paste, "── 끝 ──", "",
+        "", "── PAMS 에 붙여 넣을 원고 ──", paste, "── 끝 ──", ""] + (
+        [f"Storage 준비 폴더 card-news/threads/{prep_id}/ (PAMS 접수 뒤 --submitted 가 이 id 로 ad_reviews 행을 만든다):"]
+        + [f"- {n}  {u}  sha256 {h}" for n, u, h in staged] + [""] if staged else []) + [
         "접수 뒤: python scripts/pams_kit.py " + slug + " threads --submitted \"" + zip_path + "\"",
         "", "zip 안 파일:"] + [f"- {fn}" for fn in files]
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(lines) + "\n")
     return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": THREADS_PROFILE,
             "sources": [kit.source_line(s) for s, _ in evid], "files": files, "reply": reply,
-            "row_id": row_id, "paste": paste}
+            "row_id": row_id, "paste": paste, "prep_id": prep_id, "staged": staged}
+
+
+def _insert_submitted_row(env, article, prep_id):
+    """PAMS 접수 뒤 — 준비 id 로 스레드 행을 만든다(Storage 폴더와 id 를 맞춘다)."""
+    url, h = _rest(env, "ad_reviews")
+    r = requests.post(url, json={"id": prep_id, "article_id": article["id"], "channel": "threads",
+                                 "status": "submitted", "submitted_at": datetime.now(kit.KST).isoformat(),
+                                 "review_type": "general", "ad_form": "스레드", "posting_title": THREADS_PROFILE},
+                      headers={**h, "Content-Type": "application/json", "Prefer": "return=representation"},
+                      timeout=30)
+    if r.status_code >= 300:
+        raise kit.KitError(f"스레드 접수 행을 만들지 못했습니다 — {r.status_code} {r.text[:200]}")
+    return r.json()[0]
 
 
 def upload_submitted(env, article, zip_path):
@@ -260,10 +317,15 @@ def upload_submitted(env, article, zip_path):
         meta = json.loads(z.read(KIT_META))
         body = z.read("body.txt")
         reply = z.read("reply.txt") if "reply.txt" in names else None
+        photos = [(n, z.read(n)) for n in json.loads(z.read(KIT_META)).get("photos") or []]
     if meta.get("slug") != article["slug"]:
         raise kit.KitError(f"키트의 글({meta.get('slug')})과 인자 slug 가 다릅니다")
     rows = [r for r in (article.get("ad_reviews") or []) if r.get("channel") == "threads"]
-    if meta.get("row_id"):
+    if meta.get("prep_id") and not meta.get("row_id"):
+        row = next((r for r in rows if r["id"] == meta["prep_id"]), None)
+        if not row:
+            row = _insert_submitted_row(env, article, meta["prep_id"])
+    elif meta.get("row_id"):
         row = next((r for r in rows if r["id"] == meta["row_id"]), None)
         if not row:
             raise kit.KitError(f"키트의 스레드 행 {meta['row_id']} 이 ad_reviews 에 없습니다")
@@ -281,7 +343,14 @@ def upload_submitted(env, article, zip_path):
     folder = f"card-news/threads/{row['id']}"
     body_url = _upload(env, f"{folder}/body.txt", body, "text/plain; charset=utf-8")
     reply_url_ = _upload(env, f"{folder}/reply.txt", reply, "text/plain; charset=utf-8") if reply is not None else None
+    photo_notes = []
+    for n, data in photos:
+        ct = PHOTO_EXT.get(os.path.splitext(n)[1].lower(), "application/octet-stream")
+        u = _upload(env, f"{folder}/{n}", data, ct)
+        photo_notes.append(f"사진 {n} {u} (sha256 {hashlib.sha256(data).hexdigest()})")
     line = notes_line(env["NEXT_PUBLIC_SUPABASE_URL"], row["id"], body, reply)
+    if photo_notes:  # 사진은 다음 줄 — 본문·댓글 해시 줄을 건드리지 않는다
+        line += "\n" + " · ".join(photo_notes)
     # 🔴 새 줄에 쓴다 — robert-os 정규식은 줄 안에서 「본문」·「댓글」 첫 등장부터 sha256 을 찾는다.
     #    앞 메모에 「댓글」 낱말이 같은 줄에 있으면 본문 해시를 댓글 해시로 읽는다.
     head = (row.get("notes") or "").rstrip()
