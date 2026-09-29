@@ -33,6 +33,9 @@ BODY = "\"간병비보험 있으니까 간병인 쓰면 다 나오겠지.\"\n상
        "여러분 증권의 간병 담보는 어느 쪽인지 알고 계세요?"
 
 
+PHOTO_BODY = "엄마가 31일 입원하셨다가 이틀 전에 퇴원하셨어요.\n" + BODY
+
+
 def art(main_status=None, main_url=None, extra=()):
     reviews = list(extra)
     if main_status:
@@ -211,7 +214,7 @@ class PhotoStageTest(unittest.TestCase):
         self.d = tempfile.mkdtemp()
         self.body = os.path.join(self.d, "body.txt")
         with open(self.body, "w", encoding="utf-8", newline="") as fp:
-            fp.write(BODY)
+            fp.write(PHOTO_BODY)
         self.photos = []
         for n in ("photo1.jpg", "photo2.jpg"):
             p = os.path.join(self.d, n)
@@ -226,7 +229,9 @@ class PhotoStageTest(unittest.TestCase):
         th.ensure_draft_row = lambda env, a: self.fail("댓글 없으면 행을 만들면 안 된다")
         th.banned_hits = lambda text: []
         th._upload = lambda env, path, data, ct: (self.up.append((path, ct)) or f"https://p/{path}")
-        th._insert_submitted_row = lambda env, a, pid: (self.rows.append(pid) or
+        self.titles = []
+        th._insert_submitted_row = lambda env, a, pid, title=th.THREADS_PROFILE: (
+            self.rows.append(pid) or self.titles.append(title) or
                                                          {"id": pid, "channel": "threads", "status": "submitted", "notes": ""})
 
         class R:
@@ -276,10 +281,55 @@ class PhotoStageTest(unittest.TestCase):
         self.up.clear()
         th.upload_submitted(ENV, art("submitted", MAIN_URL), k["zip"])
         self.assertEqual(self.rows, [k["prep_id"]], "준비 id 로 행을 만든다(폴더와 id 일치)")
+        self.assertEqual(self.titles, ["엄마가 31일 입원하셨다가 이틀 전에 퇴원하셨어요."],
+                         "사진 경로 행의 posting_title 은 PAMS 게시명(본문 첫 줄)")
         notes = self.patched[0]["notes"]
-        self.assertEqual(th.NOTES_BODY_RX.search(notes).group(1), hashlib.sha256(BODY.encode()).hexdigest())
+        self.assertEqual(th.NOTES_BODY_RX.search(notes).group(1), hashlib.sha256(PHOTO_BODY.encode()).hexdigest())
         self.assertIsNone(th.NOTES_REPLY_RX.search(notes), "사진 줄이 댓글 해시로 잡히면 안 된다")
         self.assertIn("사진 photo1.jpg", notes)
+
+    def test_custom_name_and_reused_prep_id(self):
+        pid = "7325c366-463e-4c8f-8e85-998e29cc9f04"
+        k = th.build_threads_kit(ENV, art("submitted", MAIN_URL), body_path=self.body, server=self._Srv(),
+                                 out_dir=self.d, photos=self.photos, stage_upload=True,
+                                 name="0929_스레드_간병가족", prep_id=pid)
+        self.assertTrue(k["zip"].endswith("0929_스레드_간병가족.zip"))
+        self.assertEqual(k["prep_id"], pid, "준비 id 를 다시 쓴다(같은 폴더)")
+        self.assertTrue(all(u[0].startswith(f"card-news/threads/{pid}/") for u in self.up))
+        for bad_name in ("../x", "a b", "x" * 61):
+            with self.assertRaises(kit.KitError):
+                th.build_threads_kit(ENV, art("submitted", MAIN_URL), body_path=self.body, server=self._Srv(),
+                                     out_dir=self.d, name=bad_name)
+        with self.assertRaises(kit.KitError):
+            th.build_threads_kit(ENV, art("submitted", MAIN_URL), body_path=self.body, server=self._Srv(),
+                                 out_dir=self.d, stage_upload=True, prep_id="not-a-uuid")
+
+    def test_photo_route_splits_title_location_spec(self):
+        """사진 있음 = 일반심의 → 업무광고 → 스레드: 게시명·게시위치·규격이 각각 다른 줄."""
+        k = self.build(stage=False)
+        txt = open(k["txt"], encoding="utf-8").read()
+        self.assertIn("\n게시명: 엄마가 31일 입원하셨다가 이틀 전에 퇴원하셨어요.\n", txt)
+        self.assertIn("\n게시위치: https://www.threads.com/@goodfinance_sj\n", txt)
+        self.assertIn("\n규격: 스레드 텍스트 + 이미지 2장\n", txt)
+        self.assertNotIn("게시명: https://", txt)
+        self.assertEqual(k["title"], "엄마가 31일 입원하셨다가 이틀 전에 퇴원하셨어요.")
+        meta = json.loads(zipfile.ZipFile(k["zip"]).read("kit.json"))
+        self.assertEqual(meta["posting_title"], k["title"])
+
+    def test_photo_route_forbidden_char_in_first_line_stops(self):
+        for ch in ("'", "?", '"', "&"):
+            with open(self.body, "w", encoding="utf-8", newline="") as fp:
+                fp.write(f"첫 줄{ch} 입니다\n" + BODY)
+            with self.assertRaises(kit.KitError, msg=ch):
+                self.build(stage=False)
+
+    def test_text_only_route_keeps_url_as_title(self):
+        """텍스트만 = 스레드 전용 경로: 칸이 하나라 종전대로 게시명 = 계정 URL, 게시위치 줄 없음."""
+        f = th.posting_fields(BODY, 0)
+        self.assertEqual(f, {"게시명": th.THREADS_PROFILE})
+        f2 = th.posting_fields(PHOTO_BODY, 3)
+        self.assertEqual(f2["규격"], "스레드 텍스트 + 이미지 3장")
+        self.assertEqual(f2["게시위치"], th.THREADS_PROFILE)
 
     def test_bad_photo_rejected(self):
         with self.assertRaises(kit.KitError):

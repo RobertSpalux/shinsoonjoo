@@ -53,6 +53,7 @@ import requests
 import pams_kit as kit
 
 THREADS_PROFILE = "https://www.threads.com/@goodfinance_sj"  # 7550 게시명 칸과 같은 값
+POSTING_TITLE_FORBIDDEN = "'?\"&"  # PAMS 게시명 금지 특수문자 — 있으면 멈춘다(임의 치환 금지)
 REPLY_PHRASE = "제도와 근거를 원문과 함께 정리해 둔 글입니다."
 BODY_MAX = 500  # 스레드 글자 수 한도(robert-os 도 같은 한도로 본다)
 PASTE_MARK = "[첫 댓글]"
@@ -197,8 +198,29 @@ def check_photos(photos):
     return out
 
 
+def posting_fields(body, n_photos):
+    """PAMS 칸 값 — 🔴 심의 경로에 따라 칸 수가 갈린다.
+
+    · 텍스트만(스레드 전용 경로 jumgumpyoji): 칸이 「게시명」 하나 → 종전대로 계정 URL(7550 방식).
+    · 사진 있음(일반심의 → 업무광고 → 광고형태 스레드, jumgumpyo #upadsaj): 칸이 둘이다.
+      게시명(gasinm) = 글 이름 = **body.txt 첫 줄 그대로**(새로 짓지 않는다),
+      게시(사용)위치(locations) = 계정 URL. 규격 = 「스레드 텍스트 + 이미지 N장」.
+      robert-os pams_apply 가 「게시명:」「게시위치:」 줄을 따로 읽는다(2026-09-29 관제탑).
+    · 첫 줄에 PAMS 금지 특수문자(' ? " &)가 있으면 멈춘다 — 고쳐 쓰면 심의본과 달라진다.
+    """
+    if not n_photos:
+        return {"게시명": THREADS_PROFILE}
+    first = body.split("\n", 1)[0]
+    if not first.strip():
+        raise kit.KitError("본문 첫 줄이 비어 있어 게시명을 만들 수 없습니다")
+    bad = [c for c in POSTING_TITLE_FORBIDDEN if c in first]
+    if bad:
+        raise kit.KitError(f"게시명(본문 첫 줄)에 PAMS 금지 특수문자 {' '.join(bad)} — 멈춤(임의 치환 금지): {first}")
+    return {"게시명": first, "게시위치": THREADS_PROFILE, "규격": f"스레드 텍스트 + 이미지 {n_photos}장"}
+
+
 def build_threads_kit(env, article, body_path=None, phrase=None, server=None, out_dir=kit.KIT_DIR,
-                      now=None, log=print, photos=None, stage_upload=False):
+                      now=None, log=print, photos=None, stage_upload=False, name=None, prep_id=None):
     slug = article["slug"]
     photo_list = check_photos(photos)
     body_path = body_path or default_body_path(slug)
@@ -207,6 +229,7 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
     body_bytes = open(body_path, "rb").read()
     body = body_bytes.decode("utf-8")
     check_body(body)
+    fields = posting_fields(body, len(photo_list))
 
     link = main_link(article)
     phrase = check_reply_phrase(phrase or REPLY_PHRASE) if link else None
@@ -238,7 +261,11 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
         raise kit.KitError(f"스레드 원고에 금지어(A등급) — {', '.join(hits)}")
 
     paste = compose_paste(body, reply)
-    base = kit.kit_basename(slug, "threads", now)
+    if name and not re.fullmatch(r"[0-9A-Za-z가-힣_-]{3,60}", name):
+        raise kit.KitError(f"키트 이름은 한글·영문·숫자·_- 3~60자 — {name!r}")
+    base = name or kit.kit_basename(slug, "threads", now)
+    if prep_id and not re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", prep_id):
+        raise kit.KitError(f"준비 id 는 uuid — {prep_id!r}")
     os.makedirs(out_dir, exist_ok=True)
     with tempfile.TemporaryDirectory() as stage:
         def put(name, data):
@@ -250,9 +277,10 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
             put("reply.txt", reply.encode("utf-8"))
         for name, p, _ in photo_list:
             put(name, open(p, "rb").read())
-        prep_id = str(uuid.uuid4()) if stage_upload else None
+        prep_id = (prep_id or str(uuid.uuid4())) if stage_upload else None
         put(KIT_META, json.dumps({"slug": slug, "article_id": article["id"], "row_id": row_id,
                                   "prep_id": prep_id, "photos": [n for n, _, _ in photo_list],
+                                  "posting_title": fields["게시명"],
                                   "main_url": link, "created": datetime.now(kit.KST).isoformat()},
                                  ensure_ascii=False, indent=1).encode("utf-8"))
         for _, p in evid:
@@ -276,7 +304,8 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
     lines = [
         f"[PAMS 접수 문자열] {kit.issue_label(slug)} · 스레드 · {slug}",
         "",
-        f"게시명: {THREADS_PROFILE}",
+        f"게시명: {fields['게시명']}",
+    ] + [f"{k}: {fields[k]}" for k in ("게시위치", "규격") if k in fields] + [
         "광고형태: 스레드 · 심의유형: " + ("사진이 있으니 일반심의(이미지 첨부)" if photo_list else "스레드(텍스트)"),
         "첫 댓글: " + (f"있음 → {link} (스레드 행 {row_id}{' 새로 만듦' if created else ''})" if reply
                      else "없음 — 본진 글이 아직 승인·게시 전(본문만 접수, 7550 방식)"),
@@ -292,17 +321,18 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
         "", "zip 안 파일:"] + [f"- {fn}" for fn in files]
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(lines) + "\n")
-    return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": THREADS_PROFILE,
+    return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": fields["게시명"],
+            "location": fields.get("게시위치"), "spec": fields.get("규격"),
             "sources": [kit.source_line(s) for s, _ in evid], "files": files, "reply": reply,
             "row_id": row_id, "paste": paste, "prep_id": prep_id, "staged": staged}
 
 
-def _insert_submitted_row(env, article, prep_id):
+def _insert_submitted_row(env, article, prep_id, posting_title=THREADS_PROFILE):
     """PAMS 접수 뒤 — 준비 id 로 스레드 행을 만든다(Storage 폴더와 id 를 맞춘다)."""
     url, h = _rest(env, "ad_reviews")
     r = requests.post(url, json={"id": prep_id, "article_id": article["id"], "channel": "threads",
                                  "status": "submitted", "submitted_at": datetime.now(kit.KST).isoformat(),
-                                 "review_type": "general", "ad_form": "스레드", "posting_title": THREADS_PROFILE},
+                                 "review_type": "general", "ad_form": "스레드", "posting_title": posting_title},
                       headers={**h, "Content-Type": "application/json", "Prefer": "return=representation"},
                       timeout=30)
     if r.status_code >= 300:
@@ -324,7 +354,8 @@ def upload_submitted(env, article, zip_path):
     if meta.get("prep_id") and not meta.get("row_id"):
         row = next((r for r in rows if r["id"] == meta["prep_id"]), None)
         if not row:
-            row = _insert_submitted_row(env, article, meta["prep_id"])
+            row = _insert_submitted_row(env, article, meta["prep_id"],
+                                        meta.get("posting_title") or THREADS_PROFILE)
     elif meta.get("row_id"):
         row = next((r for r in rows if r["id"] == meta["row_id"]), None)
         if not row:
