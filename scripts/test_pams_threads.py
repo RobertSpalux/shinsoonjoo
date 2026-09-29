@@ -128,8 +128,10 @@ class KitBuildTest(unittest.TestCase):
         self.assertEqual(self.created, [], "댓글이 없으면 DB 에 행을 만들지 않는다")
         names = zipfile.ZipFile(k["zip"]).namelist()
         self.assertNotIn("reply.txt", names)
-        self.assertIn("body.txt", names)
-        self.assertEqual(zipfile.ZipFile(k["zip"]).read("body.txt").decode(), BODY, "본문 바이트 그대로")
+        self.assertNotIn("body.txt", names)
+        self.assertEqual(open(os.path.join(k["sidecar"], "body.txt"), encoding="utf-8", newline="").read(), BODY,
+                         "본문 바이트 그대로(zip 밖)")
+        self.assertFalse(os.path.exists(os.path.join(k["sidecar"], "reply.txt")))
         self.assertEqual(k["paste"], BODY)
         self.assertTrue(any(n.startswith("금융감독원, 주요 민원사례로") for n in names), "증빙 동봉")
         self.assertTrue(k["name"].endswith("_6호_스레드.zip"))
@@ -138,10 +140,32 @@ class KitBuildTest(unittest.TestCase):
         k = self.build(art("approved", MAIN_URL))
         self.assertEqual(self.created, ["a1"])
         z = zipfile.ZipFile(k["zip"])
-        reply = z.read("reply.txt").decode()
+        meta, body, reply_b, _ = th.read_kit_parts(k["zip"])
+        reply = reply_b.decode()
         self.assertTrue(reply.endswith(MAIN_URL + "?utm_source=threads&utm_campaign=rid-9"))
-        self.assertEqual(json.loads(z.read("kit.json"))["row_id"], "rid-9")
-        self.assertEqual(z.read("스레드 접수 원고.txt").decode(), f"{BODY}\n\n[첫 댓글]\n{reply}")
+        self.assertEqual(meta["row_id"], "rid-9")
+        self.assertEqual(z.read("스레드 접수 원고.txt").decode(), f"{BODY}\n\n[첫 댓글]\n{reply}",
+                         "첫 댓글은 원고 txt 안의 「[첫 댓글]」 블록으로")
+        self.assertEqual(sorted(n for n in z.namelist() if n.endswith(".txt")), ["스레드 접수 원고.txt"])
+
+    def test_zip_holds_only_review_targets(self):
+        """PAMS 첨부 zip = 원고 txt 1개 + (사진) + 증빙. kit.json·body.txt·reply.txt 는 zip 밖."""
+        for a in (art("submitted", MAIN_URL), art("approved", MAIN_URL)):
+            k = self.build(a)
+            names = zipfile.ZipFile(k["zip"]).namelist()
+            for inner in ("kit.json", "body.txt", "reply.txt"):
+                self.assertNotIn(inner, names)
+            self.assertEqual([n for n in names if n.endswith(".txt")], ["스레드 접수 원고.txt"], "원고 txt 정확히 1개")
+            self.assertTrue(all(n.endswith((".txt", ".pdf", ".jpg", ".jpeg", ".png")) for n in names), names)
+            self.assertTrue(os.path.isfile(os.path.join(k["sidecar"], "kit.json")))
+            self.assertIn(k["sidecar"], open(k["txt"], encoding="utf-8").read())
+
+    def test_read_kit_parts_stops_when_paste_and_body_differ(self):
+        k = self.build(art("submitted", MAIN_URL))
+        with open(os.path.join(k["sidecar"], "body.txt"), "wb") as fp:
+            fp.write(("다른 본문" + BODY).encode())
+        with self.assertRaises(kit.KitError):
+            th.read_kit_parts(k["zip"])
 
     def test_gate_blocks(self):
         def blocked(url):
@@ -198,6 +222,27 @@ class UploadTest(unittest.TestCase):
         with self.assertRaises(kit.KitError):
             th.upload_submitted(ENV, a, self.zip_("rid-9"))
         self.assertEqual(self.up, [], "거절하면 아무것도 올리지 않는다")
+
+    def test_new_format_kit_reads_sidecar(self):
+        """새 키트: zip 에는 원고 txt 뿐, body/reply/kit.json 은 <키트이름>.kit/ — 해시·업로드는 그대로."""
+        p = os.path.join(self.d, "n.zip")
+        reply = "문구\nhttps://x"
+        with zipfile.ZipFile(p, "w") as z:
+            z.writestr("스레드 접수 원고.txt", f"{BODY}\n\n[첫 댓글]\n{reply}".encode())
+        side = th.sidecar_dir(p)
+        os.makedirs(side)
+        for n, data in (("body.txt", BODY.encode()), ("reply.txt", reply.encode()),
+                        ("kit.json", json.dumps({"slug": "caregiver-daily-benefit-support-vs-use",
+                                                 "row_id": "rid-9"}).encode())):
+            with open(os.path.join(side, n), "wb") as fp:
+                fp.write(data)
+        a = art(extra=[{"id": "rid-9", "channel": "threads", "status": "draft", "notes": ""}])
+        th.upload_submitted(ENV, a, p)
+        self.assertEqual([u[0] for u in self.up], ["card-news/threads/rid-9/body.txt", "card-news/threads/rid-9/reply.txt"])
+        self.assertEqual(self.up[0][1], BODY.encode(), "sidecar 본문 바이트 그대로 올린다")
+        notes = self.patched[0][1]["notes"]
+        self.assertEqual(th.NOTES_BODY_RX.search(notes).group(1), hashlib.sha256(BODY.encode()).hexdigest())
+        self.assertEqual(th.NOTES_REPLY_RX.search(notes).group(1), hashlib.sha256(reply.encode()).hexdigest())
 
     def test_no_reply_kit_uses_latest_submitted_row(self):
         a = art(extra=[{"id": "old", "channel": "threads", "status": "approved", "notes": "본문 u (sha256 aaaaaaaaaaaaaaaa)",
@@ -259,7 +304,10 @@ class PhotoStageTest(unittest.TestCase):
         self.assertIn("photo1.jpg", z.namelist())
         self.assertIn("photo2.jpg", z.namelist())
         self.assertNotIn("notice.png", z.namelist(), "필수안내 이미지는 접수 시 불필요")
-        self.assertEqual(json.loads(z.read("kit.json"))["photos"], ["photo1.jpg", "photo2.jpg"])
+        self.assertEqual(th.read_kit_parts(k["zip"])[0]["photos"], ["photo1.jpg", "photo2.jpg"])
+        self.assertEqual([n for n in z.namelist() if n.endswith(".txt")], ["스레드 접수 원고.txt"])
+        self.assertNotIn("kit.json", z.namelist())
+        self.assertNotIn("body.txt", z.namelist())
         self.assertIsNone(k["prep_id"])
         self.assertEqual(self.up, [], "--stage 없으면 올리지 않는다")
         txt = open(k["txt"], encoding="utf-8").read()
@@ -313,7 +361,7 @@ class PhotoStageTest(unittest.TestCase):
         self.assertIn("\n규격: 스레드 텍스트 + 이미지 2장\n", txt)
         self.assertNotIn("게시명: https://", txt)
         self.assertEqual(k["title"], "엄마가 31일 입원하셨다가 이틀 전에 퇴원하셨어요.")
-        meta = json.loads(zipfile.ZipFile(k["zip"]).read("kit.json"))
+        meta = th.read_kit_parts(k["zip"])[0]
         self.assertEqual(meta["posting_title"], k["title"])
 
     def test_photo_route_forbidden_char_in_first_line_stops(self):
