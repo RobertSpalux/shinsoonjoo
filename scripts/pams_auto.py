@@ -240,16 +240,17 @@ def pick_threads_kit(metas, slug, row_id):
 
 
 def threads_kit_metas(kit_dir):
-    import zipfile
+    """스레드 키트 목록[(zip경로, kit.json)]. kit.json 은 zip 밖 <키트이름>.kit/ 에 있다(옛 키트는 zip 안).
+    이름을 준 키트(--name, 예: 0929_스레드_간병가족.zip)도 잡는다 — 「_스레드」가 들어간 zip 전부."""
+    import pams_threads as th
     out = []
     if not os.path.isdir(kit_dir):
         return out
     for fn in os.listdir(kit_dir):
-        if fn.endswith("_스레드.zip"):
+        if fn.endswith(".zip") and "_스레드" in fn:
             p = os.path.join(kit_dir, fn)
             try:
-                with zipfile.ZipFile(p) as z:
-                    out.append((p, json.loads(z.read("kit.json"))))
+                out.append((p, th.read_kit_parts(p)[0]))
             except Exception:
                 continue
     return out

@@ -44,6 +44,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 import zipfile
 from datetime import datetime
@@ -58,6 +59,8 @@ REPLY_PHRASE = "제도와 근거를 원문과 함께 정리해 둔 글입니다.
 BODY_MAX = 500  # 스레드 글자 수 한도(robert-os 도 같은 한도로 본다)
 PASTE_MARK = "[첫 댓글]"
 KIT_META = "kit.json"
+PASTE_NAME = "스레드 접수 원고.txt"
+SIDECAR_SUFFIX = ".kit"  # zip 밖 내부 파일 폴더 — <키트이름>.kit/{kit.json, body.txt, reply.txt}
 # 첫 댓글 문구 금지(금소법 — 상담 유인·단정·비교·무료). 금지어 대장(banned-terms.ts)은 따로 한 번 더 본다.
 REPLY_FORBIDDEN = re.compile(r"상담|문의|연락|카톡|카카오|신청|무료|공짜|최고|최저|유일|확실|반드시|무조건|보장해|비교|추천|지금 바로|늦기 전")
 NOTES_BODY_RX = re.compile(r"본문[^\n]*?sha256\s*([0-9a-fA-F]{8,64})")   # robert-os threads_post.py 와 같은 식
@@ -219,6 +222,54 @@ def posting_fields(body, n_photos):
     return {"게시명": first, "게시위치": THREADS_PROFILE, "규격": f"스레드 텍스트 + 이미지 {n_photos}장"}
 
 
+def sidecar_dir(zip_path):
+    """zip 밖 내부 파일 폴더(<키트이름>.kit).
+
+    🔴 PAMS 첨부 zip 에는 **심사 대상만** 넣는다 — 접수 원고 txt 1개 + 광고 사진 + 증빙 PDF(2026-09-29 관제탑).
+       kit.json(slug·article_id·prep_id)은 내부 관리용이라 심사자에게 보일 이유가 없고,
+       body.txt 는 원고 txt 와 바이트까지 같은 중복이다. reply.txt 는 원고 txt 의 「[첫 댓글]」 블록과 같다.
+       셋은 이 폴더에 두고, 접수 뒤 --submitted(sha256 대조·Storage 업로드)가 여기서 읽는다.
+    """
+    stem = zip_path[:-4] if zip_path.lower().endswith(".zip") else zip_path
+    return stem + SIDECAR_SUFFIX
+
+
+def read_kit_parts(zip_path):
+    """키트 내용 — (meta, body bytes, reply bytes|None, [(사진 이름, bytes)]).
+
+    내부 파일은 zip 옆 <키트이름>.kit/ 에서, 사진은 zip 에서 읽는다.
+    그 폴더가 없으면 옛 키트(zip 안에 kit.json·body.txt 가 든 것)로 읽는다 — 0929 이전 키트 호환.
+    zip 에 원고 txt 가 있으면 body/reply 로 다시 조립한 것과 바이트까지 같아야 한다.
+    다르면 심의받은 원고와 올릴 본문이 갈린 것이므로 멈춘다.
+    """
+    side = sidecar_dir(zip_path)
+    with zipfile.ZipFile(zip_path) as z:
+        names = set(z.namelist())
+        if os.path.isdir(side):
+            def rd(n):
+                p = os.path.join(side, n)
+                if not os.path.exists(p):
+                    return None
+                with open(p, "rb") as fp:
+                    return fp.read()
+        else:
+            def rd(n):
+                return z.read(n) if n in names else None
+        meta_b, body = rd(KIT_META), rd("body.txt")
+        if meta_b is None or body is None:
+            raise kit.KitError(f"키트 내부 파일(kit.json·body.txt)이 없습니다 — {side}")
+        meta = json.loads(meta_b)
+        reply = rd("reply.txt")
+        photos = [(n, z.read(n)) for n in meta.get("photos") or []]
+        paste = z.read(PASTE_NAME) if PASTE_NAME in names else None
+    if paste is not None:
+        want = compose_paste(body.decode("utf-8"),
+                             reply.decode("utf-8") if reply is not None else None).encode("utf-8")
+        if paste != want:
+            raise kit.KitError("zip 의 접수 원고와 내부 body/reply 가 다릅니다 — 심의본과 올릴 본문이 갈립니다")
+    return meta, body, reply, photos
+
+
 def build_threads_kit(env, article, body_path=None, phrase=None, server=None, out_dir=kit.KIT_DIR,
                       now=None, log=print, photos=None, stage_upload=False, name=None, prep_id=None):
     slug = article["slug"]
@@ -271,18 +322,11 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
         def put(name, data):
             with open(os.path.join(stage, name), "wb") as fp:
                 fp.write(data)
-        put("스레드 접수 원고.txt", paste.encode("utf-8"))
-        put("body.txt", body_bytes)
-        if reply is not None:
-            put("reply.txt", reply.encode("utf-8"))
+        # 🔴 zip = 심사 대상만(원고 txt 1개 + 사진 + 증빙). 내부 파일은 아래 sidecar_dir 로 — sidecar_dir 주석 참조
+        put(PASTE_NAME, paste.encode("utf-8"))
         for name, p, _ in photo_list:
             put(name, open(p, "rb").read())
         prep_id = (prep_id or str(uuid.uuid4())) if stage_upload else None
-        put(KIT_META, json.dumps({"slug": slug, "article_id": article["id"], "row_id": row_id,
-                                  "prep_id": prep_id, "photos": [n for n, _, _ in photo_list],
-                                  "posting_title": fields["게시명"],
-                                  "main_url": link, "created": datetime.now(kit.KST).isoformat()},
-                                 ensure_ascii=False, indent=1).encode("utf-8"))
         for _, p in evid:
             put(os.path.basename(p), open(p, "rb").read())
         files = sorted(os.listdir(stage))
@@ -291,6 +335,25 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
             for fn in files:
                 z.write(os.path.join(stage, fn), fn)
         os.replace(zip_path + ".part", zip_path)
+
+    side = sidecar_dir(zip_path)
+    side_tmp = side + ".part"
+    shutil.rmtree(side_tmp, ignore_errors=True)
+    os.makedirs(side_tmp)
+
+    def put_side(n, data):
+        with open(os.path.join(side_tmp, n), "wb") as fp:
+            fp.write(data)
+    put_side("body.txt", body_bytes)
+    if reply is not None:
+        put_side("reply.txt", reply.encode("utf-8"))
+    put_side(KIT_META, json.dumps({"slug": slug, "article_id": article["id"], "row_id": row_id,
+                                   "prep_id": prep_id, "photos": [n for n, _, _ in photo_list],
+                                   "posting_title": fields["게시명"],
+                                   "main_url": link, "created": datetime.now(kit.KST).isoformat()},
+                                  ensure_ascii=False, indent=1).encode("utf-8"))
+    shutil.rmtree(side, ignore_errors=True)
+    os.replace(side_tmp, side)
 
     staged = []
     if stage_upload:
@@ -318,10 +381,11 @@ def build_threads_kit(env, article, body_path=None, phrase=None, server=None, ou
         [f"Storage 준비 폴더 card-news/threads/{prep_id}/ (PAMS 접수 뒤 --submitted 가 이 id 로 ad_reviews 행을 만든다):"]
         + [f"- {n}  {u}  sha256 {h}" for n, u, h in staged] + [""] if staged else []) + [
         "접수 뒤: python scripts/pams_kit.py " + slug + " threads --submitted \"" + zip_path + "\"",
-        "", "zip 안 파일:"] + [f"- {fn}" for fn in files]
+        "", f"키트 내부 파일(zip 밖 — PAMS 에 올리지 않음, 접수 뒤 --submitted 가 읽음): {side}",
+        "", "zip 안 파일(PAMS 첨부 = 심사 대상만):"] + [f"- {fn}" for fn in files]
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(lines) + "\n")
-    return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": fields["게시명"],
+    return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": fields["게시명"], "sidecar": side,
             "location": fields.get("게시위치"), "spec": fields.get("규격"),
             "sources": [kit.source_line(s) for s, _ in evid], "files": files, "reply": reply,
             "row_id": row_id, "paste": paste, "prep_id": prep_id, "staged": staged}
@@ -342,12 +406,7 @@ def _insert_submitted_row(env, article, prep_id, posting_title=THREADS_PROFILE):
 
 def upload_submitted(env, article, zip_path):
     """PAMS 접수 뒤 — 키트의 body/reply 를 그대로 올리고 notes 에 해시 줄을 붙인다."""
-    with zipfile.ZipFile(zip_path) as z:
-        names = set(z.namelist())
-        meta = json.loads(z.read(KIT_META))
-        body = z.read("body.txt")
-        reply = z.read("reply.txt") if "reply.txt" in names else None
-        photos = [(n, z.read(n)) for n in json.loads(z.read(KIT_META)).get("photos") or []]
+    meta, body, reply, photos = read_kit_parts(zip_path)
     if meta.get("slug") != article["slug"]:
         raise kit.KitError(f"키트의 글({meta.get('slug')})과 인자 slug 가 다릅니다")
     rows = [r for r in (article.get("ad_reviews") or []) if r.get("channel") == "threads"]
