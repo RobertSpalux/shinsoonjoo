@@ -280,6 +280,11 @@ export function AdReviewPanel({
 
   const save = async (payload: Record<string, unknown>, successMsg: string) => {
     setBusy(true);
+    // 스레드는 한 글에 원글이 여러 개 — 승인·반려·URL 은 이 패널이 보고 있는 행 id 로만 갱신(접수는 새 행).
+    const ch = String(payload.channel);
+    if (ch === "threads" && payload.action !== "submit" && reviews[ch]?.id) {
+      payload = { ...payload, reviewId: reviews[ch]?.id };
+    }
     const { ok, error, review } = await callAdReview(payload);
     setBusy(false);
     if (ok && review) {
@@ -657,6 +662,7 @@ export function UrlReminderBanner({
       articleId: article.id,
       channel,
       postedUrl: url,
+      ...(channel === "threads" && reviews[channel]?.id ? { reviewId: reviews[channel]?.id } : {}),
     });
     setBusy("");
     if (ok && review) {
