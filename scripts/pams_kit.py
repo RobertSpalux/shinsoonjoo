@@ -346,6 +346,8 @@ def main():
     ap.add_argument("--photo", action="append", help="threads: 사진(여러 번, 게시 순서). 키트에 넣어 심의받는다")
     ap.add_argument("--stage", action="store_true",
                     help="threads: 준비 id 로 card-news/threads/<id>/ 에 body·사진을 미리 올린다(ad_reviews 는 안 만든다)")
+    ap.add_argument("--name", help="threads: 키트 파일 이름(확장자 없이). 기본 MMDD_N호_스레드 — 같은 글 두 건이면 구분 이름을 준다")
+    ap.add_argument("--prep-id", help="threads --stage: 이미 쓰던 준비 id 폴더를 다시 쓴다")
     ap.add_argument("--submitted", metavar="ZIP",
                     help="threads: PAMS 접수 뒤 — 그 키트의 body/reply 를 Storage 에 올리고 notes 에 해시 기록")
     a = ap.parse_args()
@@ -359,7 +361,8 @@ def main():
                 print(th.upload_submitted(env, art, a.submitted))
                 return
             kit = th.build_threads_kit(env, art, body_path=a.body, phrase=a.reply_phrase, server=server,
-                                       photos=a.photo, stage_upload=a.stage)
+                                       photos=a.photo, stage_upload=a.stage,
+                                       name=a.name, prep_id=a.prep_id)
         else:
             kit = build_kit(env, art, a.channel, capture=a.capture, server=server)
     except KitError as e:
