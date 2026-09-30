@@ -56,3 +56,10 @@ __pycache__/
 #   정본 보관: robert-os/shared/finance/ (비공개 저장소)
 soonjoo_profile.json
 interview_20q.md
+
+# 분석 프로그램(Soonjoo_AI) 덤프·백업 — 고객 계약 실데이터. 어떤 경우에도 이 저장소에 두지 않는다(§6.1).
+_dump_*
+*backup*.json
+
+# 증빙 압축본 — 접수 키트가 매번 다시 만든다. 원문(PDF·HWP)만 추적한다.
+compliance/evidence/*.zip

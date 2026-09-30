@@ -1,0 +1,19 @@
+#!/bin/sh
+# 커밋 전 비밀·개인정보 검사.
+#   켜기(이 PC 에서 한 번): sh scripts/install_hooks.sh
+#   gitleaks 가 깔려 있으면 그것으로(.gitleaks.toml), 없으면 scripts/secret_scan.py 로 거른다.
+#   걸리면 커밋을 막는다. 값은 화면에 찍지 않는다.
+root=$(git rev-parse --show-toplevel) || exit 1
+cd "$root" || exit 1
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact=100 --no-banner || {
+    echo "⛔ 커밋 막음 — gitleaks 가 비밀로 보이는 것을 찾았습니다(.gitleaks.toml)."
+    exit 1
+  }
+fi
+
+# 파일명 검사(덤프·백업·.env)와 주민등록번호 꼴은 이쪽이 맡는다 — gitleaks 유무와 관계없이 돈다.
+py=python
+command -v python >/dev/null 2>&1 || py=python3
+"$py" scripts/secret_scan.py --staged || exit 1

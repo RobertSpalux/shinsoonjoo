@@ -1,0 +1,45 @@
+# 비밀·개인정보 검사 — 푸시·PR 마다 돈다. 설정은 .gitleaks.toml(기본 규칙 + 주민등록번호 꼴).
+# 배경: 2026-09-30 저장소 비밀 감사(키·토큰·고객정보 0건) — 재발 방지를 기계에 맡긴다.
+# 로컬 짝: .githooks/pre-commit (sh scripts/install_hooks.sh)
+name: Secret scan
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GITLEAKS_VERSION: 8.30.1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 이력 전체 — 새 커밋만이 아니라 지난 커밋에 섞인 것도 본다
+
+      # 공식 릴리스 바이너리를 체크섬 대조 후 실행한다(서드파티 액션·라이선스 키 없이).
+      - name: gitleaks 받기
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          file="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -sSfLO "$base/$file"
+          curl -sSfLO "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          grep " $file\$" "gitleaks_${GITLEAKS_VERSION}_checksums.txt" | sha256sum -c -
+          tar -xzf "$file" gitleaks
+          rm -f "$file" "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+
+      - name: 이력 전체 검사
+        run: ./gitleaks git --log-opts="--all" --redact=100 --no-banner .
+
+      - name: 파일명·주민등록번호 꼴 검사(현재 파일)
+        run: |
+          rm -f gitleaks
+          git ls-files -z | xargs -0 python3 scripts/secret_scan.py
+
+      - name: 검사 스크립트 시험
+        run: python3 scripts/test_secret_scan.py

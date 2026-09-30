@@ -1,2 +1,6 @@
 # 스레드 심의 원고는 바이트(sha256)가 심의본의 정체다 — git 자동 줄바꿈 변환(CRLF)을 막는다
 assets/threads/**/*.txt text eol=lf
+
+# 셸 훅은 LF 로만 — CRLF 로 풀리면 sh 가 못 읽는다
+.githooks/* text eol=lf
+*.sh text eol=lf
