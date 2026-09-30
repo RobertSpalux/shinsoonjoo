@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { BRAND, getCareer } from "@/lib/brand";
+import { getCareer } from "@/lib/brand";
 import { computeDiagnosis, type DiagnosisAnswers } from "@/lib/diagnosis-score";
 import { gaEvent } from "@/lib/ga";
+import { BRIDGE_COPY, KAKAO_CHAT_URL, buildKakaoMessage } from "@/lib/diagnosis-bridge";
 import CoverageMockup, { type ContractAnswer } from "@/components/CoverageMockup";
 
 /**
@@ -108,6 +109,30 @@ export default function DiagnosisQuiz() {
 
   const result = useMemo(() => computeDiagnosis(answers), [answers]);
   const score = result.total;
+
+  // 결과 → 카톡 다리(A안): 첫 메시지를 복사해 두고 채팅창을 연다. 복사 실패해도 이동은 막지 않는다.
+  const kakaoMessage = buildKakaoMessage(score, answers.contracts as string | undefined);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const onKakaoClick = () => {
+    const report = (copied: boolean) => {
+      setCopyState(copied ? "copied" : "failed");
+      // 유효 리드 지표 — 퀴즈 완료 → 카톡 대화창 열기. 기존 퍼널 이벤트에 변형·복사 여부만 더한다.
+      // 어느 글에서 왔는지(ref = 글 slug) · 어느 채널에서 왔는지(utm_source) — 글별 상담 기여 측정(#48)
+      const q = new URLSearchParams(window.location.search);
+      gaEvent("kakao_cta_click", {
+        position: "diagnosis_result", variant: "A", copied: copied ? 1 : 0, score,
+        ref: q.get("ref") || "", utm_source: q.get("utm_source") || "",
+      });
+    };
+    try {
+      navigator.clipboard.writeText(kakaoMessage).then(
+        () => report(true),
+        () => report(false)
+      );
+    } catch {
+      report(false);
+    }
+  };
 
   // GA4 전환 퍼널: diagnosis_start(첫 응답) → diagnosis_complete(4문항 완료) → kakao_cta_click(상담 전환)
   const startedRef = useRef(false);
@@ -370,24 +395,19 @@ export default function DiagnosisQuiz() {
               <div className="text-center">
                 <span aria-hidden className="mx-auto mb-4 block h-px w-6 bg-[var(--color-gold)]" />
                 <p className="mx-auto max-w-md font-serif text-lg font-semibold leading-snug text-[var(--color-ink)] md:text-xl">
-                  전 계약을 조회해, 담보 단위로 봐드립니다
+                  {BRIDGE_COPY.headline}
                 </p>
                 <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[var(--color-ink)]/85">
-                  위와 같은 표는 상담에서 실제 계약을 조회해야 나옵니다. 중복·과설계·보장 공백을
-                  담보 단위로 정밀 분석해 드립니다.
+                  {BRIDGE_COPY.body}
                 </p>
                 <p className="mt-2 text-xs text-[var(--color-ink)]/60">
                   {years}년 경험을 담아 직접 개발한 분석 시스템으로 진행합니다.
                 </p>
                 <a
-                  href={BRAND.social.kakao}
+                  href={KAKAO_CHAT_URL}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={() => {
-                    // 어느 글에서 왔는지(ref = 글 slug) · 어느 채널에서 왔는지(utm_source) — 글별 상담 기여 측정
-                    const q = new URLSearchParams(window.location.search);
-                    gaEvent("kakao_cta_click", { position: "diagnosis_result", ref: q.get("ref") || "", utm_source: q.get("utm_source") || "" });
-                  }}
+                  onClick={onKakaoClick}
                   className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-[#FEE500] px-7 py-3.5 text-[1.0625rem] font-semibold text-[#191600] transition-transform duration-300 hover:-translate-y-px hover:bg-[#F5DC00]"
                 >
                   <svg
@@ -404,10 +424,23 @@ export default function DiagnosisQuiz() {
                       d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z"
                     />
                   </svg>
-                  신순주 지사장에게 상담받기
+                  {BRIDGE_COPY.button}
                 </a>
-                <p className="mt-2.5 text-[0.8125rem] text-[var(--color-ink)]/70">
-                  카카오톡으로 연결됩니다
+                <p className="mx-auto mt-2.5 max-w-md text-[0.8125rem] text-[var(--color-ink)]/70">
+                  {BRIDGE_COPY.sub}
+                </p>
+                {copyState !== "idle" && (
+                  <div className="mx-auto mt-4 max-w-md text-left" aria-live="polite">
+                    <p className="text-[0.8125rem] text-[var(--color-ink)]/85">
+                      {copyState === "copied" ? BRIDGE_COPY.copied : BRIDGE_COPY.copyFailed}
+                    </p>
+                    <p className="mt-2 select-all whitespace-pre-line rounded-[4px] border border-[var(--color-ink)]/20 px-3 py-2 text-[0.8125rem] text-[var(--color-ink)]/90">
+                      {kakaoMessage}
+                    </p>
+                  </div>
+                )}
+                <p className="mx-auto mt-4 max-w-md text-xs leading-relaxed text-[var(--color-ink)]/60">
+                  {BRIDGE_COPY.privacy}
                 </p>
                 <div className="mt-6 flex items-start justify-center gap-1.5">
                   <svg
