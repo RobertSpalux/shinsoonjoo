@@ -131,7 +131,7 @@ def send(env, res):
     token, chat = env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID")
     if not token or not chat:
         raise kit.KitError("텔레그램 설정 없음")
-    cap = (f"[네이버 비공개 게시 요청] {res['issue']}\n제목: {res['title']}\n"
+    cap = (f"[네이버 비공개 게시 요청] {res['title']} ({res['issue']})\n"
            f"파일: Downloads\\PAMS접수\\_네이버비공개\\{os.path.basename(res['txt'])} (+.html · 사진 {len(res['images'])}장)\n"
            f"캡처는 이름에 「{res['issue']}」 넣어 Downloads\\PAMS접수\\ 로.")
     with open(res["png"], "rb") as fp:

@@ -70,6 +70,25 @@ class MainKitLines(unittest.TestCase):
         self.assertIn("광고형태: 바이럴(블로그 등)", ls)
 
 
+class TitleLabel(unittest.TestCase):
+    """알림 표기 — 글 제목이 앞, 호수는 뒤 괄호로만. 키트 파일명은 그대로."""
+
+    def test_title_first_issue_in_parens(self):
+        self.assertEqual(kit.title_label("도수치료 실비, 앞으로도 계속 나올까 — 내 실손의 구조와 특약에 따라 갈립니다", SLUG),
+                         "도수치료 실비, 앞으로도 계속 나올까 (8호)")
+
+    def test_no_issue_number_title_only(self):
+        self.assertEqual(kit.title_label("호수 없는 글 제목", "no-issue-slug-xyz"), "호수 없는 글 제목")
+
+    def test_no_title_falls_back(self):
+        self.assertEqual(kit.title_label(None, SLUG), "8호")
+        self.assertEqual(kit.title_label("", "no-issue-slug-xyz"), "no-issue-slug-xyz")
+
+    def test_kit_filename_unchanged(self):
+        from datetime import datetime
+        self.assertEqual(kit.kit_basename(SLUG, "main", datetime(2026, 9, 30, tzinfo=kit.KST)), "0930_8호_본진")
+
+
 @unittest.skipUnless(os.path.exists(ROBERT_OS_APPLY), "robert-os pams_apply.py 없음")
 class RobertOsParser(unittest.TestCase):
     """robert-os 파서(키트읽기)로 실제로 읽어 본다 — 줄 이름이 어긋나면 여기서 깨진다."""

@@ -243,8 +243,8 @@ def review_counts(env, start, end):
 
 def labels(env):
     url, h = kit._rest(env)
-    rows = requests.get(url, params={"select": "slug"}, headers=h, timeout=30).json()
-    return {r["slug"]: kit.issue_label(r["slug"]) for r in rows if kit.issue_label(r["slug"]) != r["slug"]}
+    rows = requests.get(url, params={"select": "slug,title"}, headers=h, timeout=30).json()
+    return {r["slug"]: kit.title_label(r.get("title"), r["slug"]) for r in rows}   # 글 제목 (N호) — 호수 없으면 제목만
 
 
 def measure(env, ros, start, end, log):

@@ -98,7 +98,10 @@ def gate_key(article, channel):
 
 
 def ready_message(k):
-    return f"{k['name']} 준비됨 — PAMS 게시명: {k['title']} / 자료명: {'; '.join(k['sources'])}"
+    # 글 제목이 앞, 호수는 괄호(키트 파일명은 그대로 뒤에).
+    who = kit.title_label(k.get("article_title") or k.get("title"), k["slug"]) if k.get("slug") else k["title"]
+    ch = f" {kit.CH_LABEL[k['channel']]}" if k.get("channel") else ""
+    return f"{who}{ch} 키트 준비됨 — {k['name']} · PAMS 게시명: {k['title']} / 자료명: {'; '.join(k['sources'])}"
 
 
 # ── 판정(순수 함수 — 테스트 대상) ─────────────────────────────
@@ -205,7 +208,7 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
                     log(f"  건너뜀(게이트): {e}")
                 else:
                     log(f"  실패: {e}")
-                    notify(f"[PAMS 키트] {kit.issue_label(a['slug'])} {kit.CH_LABEL[ch]} — 만들지 못했습니다: {e}")
+                    notify(f"[PAMS 키트] {kit.title_label(a.get('title'), a['slug'])} {kit.CH_LABEL[ch]} — 만들지 못했습니다: {e}")
                 continue
             state["gate_blocked"].pop(key, None)
             prev = state["kits"].get(key)
@@ -275,9 +278,10 @@ def upload_submitted_threads(env, notify, kit_dir=kit.KIT_DIR):
         if not zp:
             continue  # 키트 없이 접수된 건(7550 이전 방식) — 건드리지 않는다
         try:
-            msg = th.upload_submitted(env, kit.fetch_article(env, slug), zp)
+            art = kit.fetch_article(env, slug)
+            msg = th.upload_submitted(env, art, zp)
             log(f"스레드 접수 업로드: {msg}")
-            notify(f"[스레드 접수] {kit.issue_label(slug)} — body/reply 업로드·해시 기록 완료 ({os.path.basename(zp)})")
+            notify(f"[스레드 접수] {kit.title_label(art.get('title'), slug)} — body/reply 업로드·해시 기록 완료 ({os.path.basename(zp)})")
         except kit.KitError as e:
             log(f"스레드 접수 업로드 실패 {r['id']}: {e}")
 

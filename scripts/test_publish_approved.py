@@ -80,7 +80,10 @@ class T2(unittest.TestCase):
                            {**ROW, "id": "329a6c53-b597", "review_authority": "프라임에셋"})
         lines = m.split("\n")
         self.assertEqual(len(lines), 5, "텔레그램 1통 = 머리 + ①~④")
-        self.assertTrue(lines[0].startswith("✅ [본진 자동 게시] 6호"))
+        self.assertEqual(lines[0], "✅ [본진 자동 게시] 6호")   # 제목을 못 받으면 호수만
+        m2 = pa.publish_msg("caregiver-daily-benefit-support-vs-use", "u", {**ROW, "id": "329a6c53-b597", "review_authority": "프라임에셋"},
+                            "간병인 지원일당과 사용일당, 내 간병비보험 증권엔 어느 쪽이 들어 있나요")
+        self.assertEqual(m2.split("\n")[0],"✅ [본진 자동 게시] 간병인 지원일당과 사용일당, 내 간병비보험 증권엔 어느 쪽이 들어 있나요 (6호)")
         self.assertEqual(lines[1], "① 발행: https://goodfinance.kr/news/x")
         self.assertEqual(lines[2], "② 라이브 심의필 확인: 프라임에셋 심의필 제2026-09-7998호 (2026.09.30~2027.09.29)")
         self.assertTrue(lines[3].startswith("③ posted_url 기록: ad_reviews 329a6c53"))
