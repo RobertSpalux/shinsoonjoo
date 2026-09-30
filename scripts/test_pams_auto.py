@@ -212,5 +212,48 @@ class ThreadsKitPickTest(unittest.TestCase):
         self.assertIsNone(auto.pick_threads_kit(metas, "none", "r1"))
 
 
+class Telegram(unittest.TestCase):
+    """2026-10-01 — 보낸 기록이 없어 「제대로 들어오는지」 답할 수 없었다 · 예외 문구에 토큰 URL 이 샐 수 있었다."""
+
+    def setUp(self):
+        self.logs = []
+        self._log, self._post = auto.log, auto.requests.post
+        auto.log = lambda m: self.logs.append(m)
+
+    def tearDown(self):
+        auto.log, auto.requests.post = self._log, self._post
+
+    def test_success_and_failure_are_logged_with_first_line(self):
+        class R:
+            def __init__(self, ok, code=200):
+                self.ok, self.status_code, self._ok = ok, code, ok
+            def json(self):
+                return {"ok": self._ok}
+        env = {"TELEGRAM_BOT_TOKEN": "TOKEN123", "TELEGRAM_CHAT_ID": "1"}
+        auto.requests.post = lambda *a, **k: R(True)
+        self.assertTrue(auto.telegram(env, "첫 줄 제목\n둘째 줄"))
+        auto.requests.post = lambda *a, **k: R(False, 400)
+        self.assertFalse(auto.telegram(env, "두 번째 알림"))
+        self.assertEqual(self.logs, ["텔레그램 보냄 · 첫 줄 제목", "텔레그램 실패(HTTP 400) · 두 번째 알림"])
+
+    def test_exception_does_not_leak_token(self):
+        def boom(*a, **k):
+            raise auto.requests.ConnectionError("HTTPSConnectionPool: /botTOKEN123/sendMessage")
+        auto.requests.post = boom
+        self.assertFalse(auto.telegram({"TELEGRAM_BOT_TOKEN": "TOKEN123", "TELEGRAM_CHAT_ID": "1"}, "알림"))
+        self.assertTrue(self.logs and "TOKEN123" not in " ".join(self.logs), self.logs)
+        self.assertIn("ConnectionError", self.logs[0])
+
+    def test_alert_once_per_day(self):
+        sent, st = [], {}
+        self.assertTrue(auto.alert_once({}, st, "queue:X", "깨짐", notify=sent.append))
+        self.assertFalse(auto.alert_once({}, st, "queue:X", "깨짐", notify=sent.append))
+        self.assertEqual(sent, ["깨짐"])
+
+    def test_rebuild_is_labelled(self):
+        s = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pams_auto.py"), encoding="utf-8").read()
+        self.assertIn('"🔁 원고 변경 — 키트 다시 만듦 · " if why == "원고 변경"', s)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
