@@ -43,7 +43,8 @@ from datetime import date, datetime, timedelta, timezone
 import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import pams_kit as kit  # noqa: E402
+import pams_kit as kit
+import review_lock  # noqa: E402
 
 KST = timezone(timedelta(hours=9))
 SITE = "https://goodfinance.kr"
@@ -100,7 +101,7 @@ def fetch_rows(env):
     url, h = kit._rest(env)
     base = url.rsplit("/", 1)[0]
     r = requests.get(f"{base}/ad_reviews", headers=h, timeout=30, params={
-        "select": "id,article_id,channel,status,review_no,review_from,review_to,review_authority,posted_url,url_registered_at",
+        "select": "id,article_id,channel,status,review_no,review_from,review_to,review_authority,posted_url,url_registered_at,notes",
         "status": "eq.approved"})
     r.raise_for_status()
     rows = r.json()
@@ -369,6 +370,25 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
                 if not t["ok"]:
                     out.append(f"⛔ 건너뜀 {a['slug']} {t['channel']} — {t['why']}")
                     continue
+                # 🔴 심의본 = 게시본 대조(review_lock) — 접수 뒤 원고가 바뀌었으면 게시하지 않는다.
+                #    이미 공개된 본진(URL 기록만 남은 경우)은 대조할 게시가 남아 있지 않으므로 건너뛴다.
+                already = t["channel"] == "main" and a.get("is_main_published")
+                if not already:
+                    try:
+                        lk, noted, cur = review_lock.check(env, a["slug"], t["channel"], t["row"].get("notes"))
+                    except (kit.KitError, requests.RequestException) as e:
+                        lk, noted, cur = "missing", None, ""
+                        log(f"원고 대조 실패 {a['slug']} — {e}")
+                    if review_lock.blocks(lk, t["channel"]):
+                        msg = review_lock.message(kit.title_label(a.get("title"), a["slug"]), t["channel"], lk, noted, cur)
+                        out.append(msg.split("\n")[0])
+                        lkey = f"lock:{t['row']['id']}:{lk}:{(cur or '')[:12]}"
+                        if live and lkey not in st:
+                            notify(msg)
+                            st[lkey] = datetime.now(KST).isoformat()
+                        continue
+                    if lk == "missing":   # 네이버 — 사람이 공개 전환한다. 막지 않고 경고만 남긴다
+                        out.append(f"⚠️ {a['slug']} naver — 심의본 원고해시 기록 없음(대조 못 함)")
                 try:
                     if t["channel"] == "main":
                         res = publish_main(server, env, t, live)

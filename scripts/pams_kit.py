@@ -216,7 +216,7 @@ def main_location(slug):
     return f"{SITE_ORIGIN}/news/{slug}"
 
 
-def kit_lines(slug, channel, title, title_from, sources, files):
+def kit_lines(slug, channel, title, title_from, sources, files, content_hash_=None):
     """PAMS 접수 문자열(.txt) 줄 — robert-os pams_apply 가 「게시명:」「게시위치:」「규격:」 줄을 읽는다(형식 고정: test_pams_kit)."""
     head = [
         f"[PAMS 접수 문자열] {issue_label(slug)} · {CH_LABEL[channel]} · {slug}",
@@ -229,7 +229,10 @@ def kit_lines(slug, channel, title, title_from, sources, files):
     if channel == "naver":
         head += [f"게시위치: {NAVER_BLOG}"]
     head += [f"광고형태: {AD_FORM[channel]}", "", "증빙 자료명 (작성기관명, 자료명, 기준년도, 발표연도):"]
-    return head + [f"- {s}" for s in sources] + ["", "zip 안 파일:"] + [f"- {fn}" for fn in files]
+    tail = []
+    if content_hash_:   # 심의본 = 게시본 대조용(scripts/review_lock.py) — 접수되면 이 값이 ad_reviews.notes 로 옮겨진다
+        tail = ["", f"원고해시: sha256 {content_hash_}"]
+    return head + [f"- {s}" for s in sources] + ["", "zip 안 파일:"] + [f"- {fn}" for fn in files] + tail
 
 
 # ── 로컬 서버 ────────────────────────────────────────────────
@@ -363,7 +366,8 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
                 z.write(os.path.join(stage, fn), fn)
         os.replace(tmp_zip, zip_path)
 
-    lines = kit_lines(slug, channel, title, title_from, [source_line(s) for s, _ in evid], files)
+    lines = kit_lines(slug, channel, title, title_from, [source_line(s) for s, _ in evid], files,
+                      content_hash(article, channel))
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": title,
