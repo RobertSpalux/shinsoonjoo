@@ -77,18 +77,38 @@ def save_state(state):
     os.replace(tmp, STATE_PATH)
 
 
+def tg_line(text):
+    """발송 기록용 첫 줄 — 한 줄 70자. (2026-10-01 로버트 「제대로 들어오는 거니?」 — 보낸 기록이 없어 답할 수 없었다)"""
+    return ((text or "").strip().split("\n", 1)[0])[:70]
+
+
 def telegram(env, text):
+    """Soonjoo_PB 방으로 한 통. **보낼 때마다 결과를 로그에 한 줄 남긴다**(보냄/실패 + 첫 줄).
+    🔴 예외 문구는 찍지 않는다 — requests 예외에는 토큰이 든 URL 이 그대로 들어 있다(robert-os notify.py 지적)."""
     token, chat = env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID")
     if not token or not chat:
-        log("텔레그램 설정 없음 — 알림 생략")
+        log(f"텔레그램 설정 없음 — 알림 생략 · {tg_line(text)}")
         return False
     try:
         r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
                           data={"chat_id": chat, "text": text, "disable_web_page_preview": "true"}, timeout=30)
-        return r.ok and r.json().get("ok", False)
-    except requests.RequestException as e:
-        log(f"텔레그램 실패: {e}")
+        ok = bool(r.ok and r.json().get("ok", False))
+    except (requests.RequestException, ValueError) as e:
+        log(f"텔레그램 실패({type(e).__name__}) · {tg_line(text)}")
         return False
+    log(f"텔레그램 {'보냄' if ok else f'실패(HTTP {r.status_code})'} · {tg_line(text)}")
+    return ok
+
+
+def alert_once(env, state, key, text, notify=None):
+    """같은 문제를 하루 한 번만 알린다(설정 파일 깨짐처럼 바퀴마다 되풀이되는 실패). 알렸으면 True."""
+    day = datetime.now(kit.KST).date().isoformat()
+    seen = state.setdefault("alerted", {})
+    if seen.get(key) == day:
+        return False
+    (notify or (lambda t: telegram(env, t)))(text)
+    seen[key] = day
+    return True
 
 
 def gate_key(article, channel):
@@ -238,7 +258,8 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
                 os.makedirs(done, exist_ok=True)
                 shutil.move(cap, os.path.join(done, os.path.basename(cap)))
                 state["captures"][os.path.basename(cap)] = {"status": "done", "slug": a["slug"], "zip": k["zip"]}
-            notify(ready_message(k))
+            # 원고가 바뀌어 다시 만든 키트는 앞에 표시 — 같은 글 알림이 두 번 와도 헷갈리지 않게
+            notify(("🔁 원고 변경 — 키트 다시 만듦 · " if why == "원고 변경" else "") + ready_message(k))
             log(f"  완료: {k['zip']}")
             made.append(k)
     finally:
@@ -370,11 +391,16 @@ def main():
             pams_queue.notify_next(env, state, notify=lambda t: telegram(env, t), log=log)
         except Exception as e:  # 큐 알림 실패가 키트·게시 바퀴를 막지 않는다
             log(f"큐 알림 실패: {e}")
+            # 2026-09-30 18:49 pams_queue.json 이 깨졌을 때 로그에만 남고 아무도 몰랐다 — 하루 한 번 알린다
+            alert_once(env, state, f"queue:{type(e).__name__}",
+                       f"⚠️ 접수 순서 알림이 멈췄습니다 — {type(e).__name__}: {str(e)[:120]}\n(configs/pams_queue.json 확인)")
         # 본진이 접수되면 → 같은 글 네이버 비공개 게시 안내(한 장 png)를 자동 발송(글마다 1회, 실패는 3회까지 재시도).
         try:
             pams_queue.send_naver_guides(env, state, notify=lambda t: telegram(env, t), log=log)
         except Exception as e:
             log(f"네이버 안내 자동 발송 실패: {e}")
+            alert_once(env, state, f"naver-guide:{type(e).__name__}",
+                       f"⚠️ 네이버 비공개 게시 안내 자동 발송이 멈췄습니다 — {type(e).__name__}: {str(e)[:120]}")
         save_state(state)
         upload_submitted_threads(env, notify=lambda t: telegram(env, t))
         # 심의 승인 → 게시(본진 자동 공개·posted_url, 네이버 공개 전환 안내·RSS URL, 배포 체크, 만료 알림).
