@@ -59,6 +59,13 @@ BLANK_REVIEW = "제_____호"
 GATE_TEXT = "컴플라이언스 검사 미통과"
 AD_FORM = {"main": "홈페이지", "naver": "바이럴(블로그 등)", "threads": "스레드"}
 CH_LABEL = {"main": "본진", "naver": "네이버", "threads": "스레드"}
+# 본진 키트의 「게시위치:」「규격:」 줄 — robert-os pams_apply 가 이 두 줄을 읽어 locations·moyangs 칸에 넣는다.
+# (2026-09-30 robert-os 1112 보고: 7호 본진 재채움에서 이 두 칸만 비었다 — 키트에 줄이 없었다.)
+# 게시위치 = 발행 전이라도 확정 URL. PAMS 게시위치 등록 실물 형식과 같다(9200호 → https://goodfinance.kr/news/<slug>).
+SITE_ORIGIN = "https://goodfinance.kr"
+# 규격 [미확정 → 실물 대조 대기] 회사 매뉴얼(광고심의신청방법매뉴얼_20260706 · CLAUDE.md §6.4 입력값 표) 「온라인은 해당 없음」.
+#   승인된 본진 건(6088·6964·8289·9200)의 PAMS 상세(upview, 읽기) 값이 다르면 이 상수 하나만 고친다.
+MAIN_SPEC = "해당 없음(온라인)"
 KST = timezone(timedelta(hours=9))
 # 창 없는 실행(작업 스케줄러에서 10분마다 창이 뜨지 않게)
 NO_WINDOW = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
@@ -191,6 +198,25 @@ def source_line(s):
     return f"{s['org']}, {s['title']}, {pub.split('.')[0]}, {pub}"
 
 
+def main_location(slug):
+    """본진 게시위치 — 발행 전이라도 확정 URL(slug 는 발행 뒤 바뀌지 않는다)."""
+    return f"{SITE_ORIGIN}/news/{slug}"
+
+
+def kit_lines(slug, channel, title, title_from, sources, files):
+    """PAMS 접수 문자열(.txt) 줄 — robert-os pams_apply 가 「게시명:」「게시위치:」「규격:」 줄을 읽는다(형식 고정: test_pams_kit)."""
+    head = [
+        f"[PAMS 접수 문자열] {issue_label(slug)} · {CH_LABEL[channel]} · {slug}",
+        "",
+        f"게시명: {title}",
+        f"  (출처: {title_from} · 금지 특수문자 ' ? \" & 제거)",
+    ]
+    if channel == "main":
+        head += [f"게시위치: {main_location(slug)}", f"규격: {MAIN_SPEC}"]
+    head += [f"광고형태: {AD_FORM[channel]}", "", "증빙 자료명 (작성기관명, 자료명, 기준년도, 발표연도):"]
+    return head + [f"- {s}" for s in sources] + ["", "zip 안 파일:"] + [f"- {fn}" for fn in files]
+
+
 # ── 로컬 서버 ────────────────────────────────────────────────
 class LocalServer:
     def __init__(self, base_url=None, port=3939, log=print):
@@ -319,15 +345,7 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
                 z.write(os.path.join(stage, fn), fn)
         os.replace(tmp_zip, zip_path)
 
-    lines = [
-        f"[PAMS 접수 문자열] {issue_label(slug)} · {CH_LABEL[channel]} · {slug}",
-        "",
-        f"게시명: {title}",
-        f"  (출처: {title_from} · 금지 특수문자 ' ? \" & 제거)",
-        f"광고형태: {AD_FORM[channel]}",
-        "",
-        "증빙 자료명 (작성기관명, 자료명, 기준년도, 발표연도):",
-    ] + [f"- {source_line(s)}" for s, _ in evid] + ["", "zip 안 파일:"] + [f"- {fn}" for fn in files]
+    lines = kit_lines(slug, channel, title, title_from, [source_line(s) for s, _ in evid], files)
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": title,
