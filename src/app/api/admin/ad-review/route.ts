@@ -17,7 +17,7 @@ const AD_FORMS = ["홈페이지", "바이럴(블로그 등)", "인스타(영상�
 const REVIEW_TYPES = ["general", "jisikin", "cafe", "threads"];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-type Action = "submit" | "approve" | "reject" | "register-url";
+type Action = "submit" | "approve" | "reject" | "register-url" | "record-posted-url";
 
 export async function POST(request: Request) {
   if (!(await isAdminAuthed())) {
@@ -95,6 +95,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "게시 URL을 입력하세요" }, { status: 400 });
     }
     patch = { posted_url: postedUrl, url_registered_at: now };
+  } else if (action === "record-posted-url") {
+    // 게시 URL만 기록한다(scripts/publish_approved.py). url_registered_at 은 비워 둔다 —
+    // robert-os 감시기가 「approved + posted_url 있음 + url_registered_at 없음」을 보고 PAMS 게시위치(＋)를
+    // 등록한 뒤 채운다. register-url 처럼 여기서 채우면 감시기가 이미 등록된 줄 알고 건너뛴다.
+    const { postedUrl } = body as Record<string, string>;
+    if (!postedUrl || !/^https:\/\/\S+$/.test(postedUrl)) {
+      return NextResponse.json({ error: "게시 URL(https)을 입력하세요" }, { status: 400 });
+    }
+    patch = { posted_url: postedUrl };
   } else {
     return NextResponse.json({ error: "알 수 없는 action" }, { status: 400 });
   }
