@@ -1,0 +1,36 @@
+{
+  "slug": "overseas-stay-3month-silson-premium-refund",
+  "overline": "실손보험",
+  "title": "해외 3개월 이상,\n실손보험료\n환급",
+  "subtitle": "해지한 계약은 어려울 수 있습니다",
+  "table_title": "계약 상태에 따라 다릅니다",
+  "col_before": "조건",
+  "col_after": "환급",
+  "table_rows": [
+    [
+      "기준",
+      "연속 3개월 이상",
+      "체류 사실 입증"
+    ],
+    [
+      "만기계약",
+      "소멸시효 전",
+      "요청 가능"
+    ],
+    [
+      "해지계약",
+      "반환의무 없음",
+      "가능 여부 확인"
+    ]
+  ],
+  "table_note": "금융감독원 「주요 분쟁사례로 알아보는 소비자 유의사항\n-실손보험 관련유의사항 -」(2025.7.15.) 기준",
+  "points_title": "판단에 걸려 있는 세 가지",
+  "points": [
+    "연속 3개월 이상 체류",
+    "계약의 상태",
+    "여행보험과 겹치는 담보"
+  ],
+  "cta_line": "내 실손, 멈출까 둘까",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}
