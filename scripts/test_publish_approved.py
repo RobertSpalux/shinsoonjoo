@@ -138,5 +138,21 @@ class Overdue(unittest.TestCase):
         self.assertIn('key = f"overdue:{r[\'id\']}:{today}"', s[i:])
 
 
+class Stale(unittest.TestCase):
+    def test_stale_submitted(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime(2026, 10, 4, 12, 0, tzinfo=timezone.utc)
+        rows = [{"id": "a", "status": "submitted", "submitted_at": "2026-10-01T09:00:00Z"},      # 75시간
+                {"id": "b", "status": "under_review", "submitted_at": "2026-10-02T12:00:00Z"},   # 48시간
+                {"id": "c", "status": "approved", "submitted_at": "2026-09-01T00:00:00Z"},
+                {"id": "d", "status": "submitted", "submitted_at": None}]
+        self.assertEqual([r["id"] for r in pa.stale_submitted(rows, now)], ["a"])
+
+    def test_wired(self):
+        s = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "publish_approved.py"), encoding="utf-8").read()
+        i = s.index("def run(")
+        self.assertIn("stale_submitted(pending, datetime.now(KST))", s[i:])
+
+
 if __name__ == "__main__":
     unittest.main()

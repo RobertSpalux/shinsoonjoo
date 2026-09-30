@@ -26,6 +26,8 @@
      게시위치 미등록은 **신규·연장 심의 제한 사유**다(2025-11-13 의무화, CLAUDE.md §6.4). 등록은 robert-os 감시기가
      하는데, 감시기는 사람이 로그인한 창을 쥐고 있어야 돈다 — 창이 닫히면 조용히 멈춘다. 그래서 여기서 따로 센다.
      단계를 갈라 알린다: posted_url 없음(본진 게시 실패 · 네이버 공개 전환 대기) / posted_url 있음(감시기 등록 대기).
+  심사 지연: submitted·under_review 가 STALE_HOURS 넘게 그대로면 하루 1번 알린다(실측 최장 47시간).
+     승인 사실을 DB 로 옮기는 것도 감시기다 — 감시기가 멈추면 PAMS 에서 승인돼도 여기서는 계속 「심사중」으로 보인다.
 
 🔴 게이트(하나라도 걸리면 그 글은 건너뛴다 — 고쳐서 진행하지 않는다):
   · review_no 가 없거나 형식 불일치, 오늘이 review_from~review_to 밖 → 게시 금지
@@ -57,6 +59,7 @@ STATE_PATH = os.path.join(kit.ROOT, "out", "publish_approved_state.json")
 REVIEW_NO_RX = re.compile(r"^\d{4}-\d{2}-\d{1,5}$")
 EXPIRY_DAYS = 30
 OVERDUE_HOURS = 24
+STALE_HOURS = 72
 LIVE_WAIT_SEC = 240
 
 
@@ -120,6 +123,32 @@ def overdue(rows, now, hours=OVERDUE_HOURS):
         if now - at >= timedelta(hours=hours):
             out.append((r, "게시위치 등록 대기" if r.get("posted_url") else "게시 전"))
     return out
+
+
+def stale_submitted(rows, now, hours=STALE_HOURS):
+    """submitted·under_review 인데 접수(submitted_at) 뒤 hours 가 지난 행. submitted_at 없으면 건너뛴다."""
+    out = []
+    for r in rows:
+        if r.get("status") not in ("submitted", "under_review") or not r.get("submitted_at"):
+            continue
+        try:
+            at = datetime.fromisoformat(str(r["submitted_at"]).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if at.tzinfo is None:
+            at = at.replace(tzinfo=timezone.utc)
+        if now - at >= timedelta(hours=hours):
+            out.append(r)
+    return out
+
+
+def fetch_pending(env):
+    url, h = kit._rest(env)
+    r = requests.get(url.rsplit("/", 1)[0] + "/ad_reviews", headers=h, timeout=30, params={
+        "select": "id,article_id,channel,status,submitted_at,posting_title,premium_articles(slug,title)",
+        "status": "in.(submitted,under_review)"})
+    r.raise_for_status()
+    return r.json()
 
 
 def overdue_msg(title, r, stage, hours):
@@ -383,6 +412,23 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
         msg = overdue_msg(kit.title_label(a.get("title"), a.get("slug") or ""), r, stage, OVERDUE_HOURS)
         out.append(msg.split("\n")[0])
         key = f"overdue:{r['id']}:{today}"
+        if live and key not in st:
+            notify(msg)
+            st[key] = True
+
+    try:
+        pending = fetch_pending(env)
+    except requests.RequestException as e:
+        pending = []
+        out.append(f"⚠️ 심사중 행 읽기 실패 — {e}")
+    for r in stale_submitted(pending, datetime.now(KST)):
+        a = r.get("premium_articles") or {}
+        if slug and a.get("slug") != slug:
+            continue
+        msg = (f"⏱ 심사 {STALE_HOURS}시간+ — {kit.title_label(a.get('title'), a.get('slug') or '')} {r.get('channel')} "
+               f"(접수 {str(r.get('submitted_at'))[:16]})\n팜스 목록에서 실제 상태를 확인하세요. 이미 승인됐다면 감시기(pams_watch) 창이 멈춘 것이다.")
+        out.append(msg.split("\n")[0])
+        key = f"stale:{r['id']}:{today}"
         if live and key not in st:
             notify(msg)
             st[key] = True
