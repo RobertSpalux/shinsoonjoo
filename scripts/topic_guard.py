@@ -19,6 +19,9 @@
     「받았는데」가 글 한 편에만 있다는 이유로 주제어가 되어 12호(본인부담상한제 환급금) 제목이
     7호(장기요양 등급)와 겹친다고 막힌 오탐(2026-09-30)이 있었다.
     핵심어 집합에서 아예 빼지 않는 이유: 집합이 작아지면 겹침 비율이 올라가 일부러 나눠 쓴 글(8호↔9호)이 서로 걸린다(실측).
+  · 기간·숫자 낱말(3개월·1년·30일·7개·12회…)도 같은 대접을 한다(is_measure). 16호(해외 체류 3개월 이상 실손보험료 환급)
+    제목이 전환 철회 글(「…병원에 다녀왔다면 3개월」)과 「3개월」 하나로 주제어 겹침 판정을 받은 오탐(2026-10-01)이 있었다.
+    「5세대」처럼 숫자 뒤에 명사가 붙은 말은 기간·숫자 낱말이 아니다(주제어로 남는다).
   · 주제어: 기존 글 한 편에만 나오는 3글자 이상 핵심어가 겹치면 같은 주제(「부담보 해제」 ↔ 「부담보 5년 지났는데…」).
   · 겹침: 공통 핵심어 2개 이상이면서 작은 쪽의 40% 이상 / 또는 공통 1개라도 작은 쪽의 절반 이상(「부담보 해제」 같은 짧은 주제)
           / 또는 제목 글자 2-gram Dice ≥ 0.5 / 또는 slug 낱말 Jaccard ≥ 0.5.
@@ -79,6 +82,20 @@ def is_predicate(w):
     return w in PREDICATE_WORDS or (len(w) >= 3 and bool(PREDICATE.search(w)))
 
 
+# 기간·횟수·수량 — 숫자 + 단위 한 덩어리만(「5세대」「2호」처럼 뒤에 명사가 붙은 말은 아니다)
+MEASURE = re.compile(r"^\d+(?:[.,]\d+)?(?:개월|달|년|일|주|회|번|세|살|시간|분|개|건|명|%|만원|원|억원|억|배)?$")
+MEASURE_WORDS = {"한달", "두달", "석달", "넉달", "반년", "하루", "이틀", "사흘", "일주일", "한번", "두번"}
+
+
+def is_measure(w):
+    """기간·숫자 낱말인가 — 서술어처럼 겹친 말·주제어에서 뺀다."""
+    return w in MEASURE_WORDS or bool(MEASURE.match(w))
+
+
+def is_filler(w):
+    return is_predicate(w) or is_measure(w)
+
+
 def shared_terms(a, b):
     """부분 포함도 같은 말로 본다(단체실손 ⊃ 단체, 간병비보험 ⊃ 간병)."""
     hit = set()
@@ -105,7 +122,7 @@ def compare(cand, other):
     """cand·other: {slug?, title, naver_title?} → (겹침?, 이유). other 는 {text} 만 있어도 된다(TOPIC-BANK 줄)."""
     ct = terms(" ".join(filter(None, [cand.get("title"), cand.get("naver_title")])))
     ot = terms(" ".join(filter(None, [other.get("title"), other.get("naver_title"), other.get("text")])))
-    sh = {w for w in shared_terms(ct, ot) if not is_predicate(w)}
+    sh = {w for w in shared_terms(ct, ot) if not is_filler(w)}
     small = min(len(ct), len(ot)) or 1
     ratio = len(sh) / small
     if len(sh) >= 2 and ratio >= 0.4:
@@ -153,7 +170,7 @@ def check(cand, articles, bank_rows, allow=None):
         dup, why = compare(cand, o)
         if not dup:
             keys = sorted(w for w in (ct & ot)   # 정확히 같은 말만(「치료」 ⊂ 「도수치료」 같은 부분 포함은 주제어로 안 친다)
-                          if len(w) >= 3 and not is_predicate(w) and sum(1 for s in tsets if w in s) == 1)
+                          if len(w) >= 3 and not is_filler(w) and sum(1 for s in tsets if w in s) == 1)
             if keys:
                 dup, why = True, f"주제어 겹침({', '.join(keys)}) — 이 말은 기존 글 중 이 글에만 있다"
         if dup and (cand.get("slug"), o.get("slug")) not in ok_pairs:

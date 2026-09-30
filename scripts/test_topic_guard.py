@@ -110,6 +110,29 @@ class PredicatesAreNotTopics(unittest.TestCase):
         self.assertTrue(any("manual-therapy" in x for x in hits("도수치료 실비 청구되나요")))
 
 
+class MeasuresAreNotTopics(unittest.TestCase):
+    """2026-10-01 오탐 — 16호 제목의 「3개월」이 전환 철회 글(「…병원에 다녀왔다면 3개월」)과 주제어 겹침으로 막혔다."""
+
+    def test_issue16_title_no_longer_collides_with_conversion(self):
+        self.assertEqual(hits("해외에 3개월 이상 머물렀다면 실손보험료 환급 — 해지한 계약은 어려울 수 있습니다",
+                              "overseas-stay-3month-silson-premium-refund"), [])
+
+    def test_measures_are_recognised(self):
+        for w in ("3개월", "1년", "30일", "7개", "12회", "6개월", "5년", "2", "43,850원", "95%", "석달", "하루"):
+            self.assertTrue(g.is_measure(w), w)
+
+    def test_numbered_nouns_are_not_measures(self):
+        for w in ("5세대", "1세대", "2호", "3대질병", "4세대실손", "10호"):
+            self.assertFalse(g.is_measure(w), w)
+
+    def test_real_duplicates_with_numbers_still_blocked(self):
+        self.assertTrue(any("silson-conversion-withdrawal-6month" in x for x in hits("실손 갈아탔는데 6개월 안에 되돌릴 수 있나")))
+        self.assertTrue(any("exclusion-release-5year-treatment-record" in x for x in hits("부담보 5년 지나면 풀리나요")))
+
+    def test_measure_alone_is_not_a_duplicate(self):
+        self.assertEqual(hits("치아보험 면책기간 90일 — 언제부터 보장되나"), [])
+
+
 class Rules(unittest.TestCase):
     def test_self_excluded(self):
         own = [r for r in g.bank_done_rows(BANK_MD) if "group-personal-silson-suspend-resume" in r["slugs"]]
