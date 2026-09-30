@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { motion, useInView, AnimatePresence, useReducedMotion } from "framer-motion";
 import { BRAND, getCareer } from "@/lib/brand";
 import { CONSENT_COLLECT, CONSENT_THIRDPARTY } from "@/lib/privacy-policy";
+import { gaEvent } from "@/lib/ga";
 
 const categories = [
   "종신보험·사망보장",
@@ -62,6 +63,8 @@ export default function ConsultationForm() {
     }
 
     setFormState("success");
+    // 상담 접수 전환 — 개인정보는 싣지 않는다(분류·접수 페이지만)
+    gaEvent("lead_created", { form: "consultation", category, page: window.location.pathname });
     setName("");
     setPhone("");
     setCategory("");

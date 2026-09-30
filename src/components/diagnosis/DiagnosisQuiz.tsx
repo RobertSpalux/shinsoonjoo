@@ -383,7 +383,11 @@ export default function DiagnosisQuiz() {
                   href={BRAND.social.kakao}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={() => gaEvent("kakao_cta_click", { position: "diagnosis_result" })}
+                  onClick={() => {
+                    // 어느 글에서 왔는지(ref = 글 slug) · 어느 채널에서 왔는지(utm_source) — 글별 상담 기여 측정
+                    const q = new URLSearchParams(window.location.search);
+                    gaEvent("kakao_cta_click", { position: "diagnosis_result", ref: q.get("ref") || "", utm_source: q.get("utm_source") || "" });
+                  }}
                   className="mt-6 inline-flex items-center gap-2 rounded-[8px] bg-[#FEE500] px-7 py-3.5 text-[1.0625rem] font-semibold text-[#191600] transition-transform duration-300 hover:-translate-y-px hover:bg-[#F5DC00]"
                 >
                   <svg

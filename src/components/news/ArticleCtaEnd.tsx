@@ -23,7 +23,7 @@ export default function ArticleCtaEnd({ slug }: { slug: string }) {
         <br className="hidden md:block" /> 먼저 3분 진단으로 지금 상태를 확인해 보십시오.
       </p>
       <Link
-        href="/diagnosis"
+        href={`/diagnosis?ref=${encodeURIComponent(slug)}`}
         onClick={() => gaEvent("article_cta_end_diagnosis_click", { article_slug: slug })}
         className="mt-6 inline-flex items-center rounded-[var(--radius-sm)] bg-[var(--color-ink)] px-7 py-3.5 text-sm font-semibold text-[var(--color-forest)] transition-transform duration-300 hover:-translate-y-px"
       >
