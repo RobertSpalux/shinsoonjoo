@@ -91,5 +91,57 @@ class AutoHook(unittest.TestCase):
         self.assertLess(i, src.index("save_state(state)\n        upload_submitted_threads"))
 
 
+class NaverGuide(unittest.TestCase):
+    def test_due_after_main_submitted(self):
+        rv = [{"slug": C, "channel": "main", "status": "submitted"}]
+        self.assertEqual(q.naver_guides_due(ORDER, rv, {}), [C])
+
+    def test_not_due_before_main(self):
+        self.assertEqual(q.naver_guides_due(ORDER, [], {}), [])
+        self.assertEqual(q.naver_guides_due(ORDER, [{"slug": C, "channel": "main", "status": "rejected"}], {}), [])
+
+    def test_not_due_when_sent_or_naver_done_or_failed_out(self):
+        rv = [{"slug": C, "channel": "main", "status": "approved"}]
+        self.assertEqual(q.naver_guides_due(ORDER, rv, {"naver_guide_sent": {C: "t"}}), [])
+        self.assertEqual(q.naver_guides_due(ORDER, rv + [{"slug": C, "channel": "naver", "status": "submitted"}], {}), [])
+        self.assertEqual(q.naver_guides_due(ORDER, rv, {"naver_guide_fail": {C: q.GUIDE_MAX_TRY}}), [])
+        self.assertEqual(q.naver_guides_due(ORDER, rv, {"naver_guide_fail": {C: 1}}), [C])
+
+    def test_only_queue_naver_items(self):
+        rv = [{"slug": A, "channel": "main", "status": "submitted"}]   # 9호는 운영표에 네이버 항목이 없다
+        self.assertEqual(q.naver_guides_due(ORDER, rv, {}), [])
+
+    def test_send_records_once_and_retries_failures(self):
+        import contextlib
+        rv = [{"slug": C, "channel": "main", "status": "submitted"}]
+        orig = (q.fetch_reviews, q.load_queue, q.kit.fetch_article)
+        q.fetch_reviews = lambda env: rv
+        q.load_queue = lambda path=None: (3, ORDER)
+        q.kit.fetch_article = lambda env, slug: {"slug": slug, "id": "x"}
+        sent, notes, st = [], [], {}
+        srv = lambda: contextlib.nullcontext("srv")
+        try:
+            ok = q.send_naver_guides({}, st, notes.append, log=lambda *_: None, server_factory=srv,
+                                     build=lambda env, art, s: {"png": "p.png"}, send=lambda env, res: sent.append(res))
+            self.assertEqual(ok, [C]); self.assertIn(C, st["naver_guide_sent"]); self.assertEqual(len(sent), 1)
+            self.assertEqual(q.send_naver_guides({}, st, notes.append, log=lambda *_: None, server_factory=srv,
+                                                 build=lambda *a: {"png": "p"}, send=lambda *a: sent.append(1)), [])
+            st2 = {}
+            def boom(*a): raise RuntimeError("compose 409")
+            for _ in range(q.GUIDE_MAX_TRY):
+                q.send_naver_guides({}, st2, notes.append, log=lambda *_: None, server_factory=srv, build=boom, send=boom)
+            self.assertEqual(st2["naver_guide_fail"][C], q.GUIDE_MAX_TRY)
+            self.assertTrue(any("수동: python scripts/naver_private_guide.py" in n for n in notes))
+            self.assertEqual(q.send_naver_guides({}, st2, notes.append, log=lambda *_: None, server_factory=srv, build=boom, send=boom), [])
+        finally:
+            q.fetch_reviews, q.load_queue, q.kit.fetch_article = orig
+
+    def test_pams_auto_hook(self):
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pams_auto.py"), encoding="utf-8").read()
+        i = src.index("pams_queue.send_naver_guides(env, state")
+        self.assertIn("except Exception", src[i:i + 200])
+        self.assertLess(i, src.index("save_state(state)\n        upload_submitted_threads"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

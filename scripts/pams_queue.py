@@ -12,6 +12,7 @@ PAMS 접수 순서(운영표) — 칸이 비면 로버트에게 「다음 접수
   · 알림 = 빈 칸이 있고 (다음 항목, 빈 칸 수)가 지난번과 다를 때만 1통. 같은 상태로 10분마다 보내지 않는다.
 """
 import glob
+from datetime import datetime
 import json
 import os
 import sys
@@ -126,6 +127,55 @@ def notify_next(env, state, notify, log=print):
         log(f"큐 알림: {msg}")
         return msg
     return None
+
+
+# ── 본진 접수 → 네이버 비공개 게시 안내 자동 발송 ────────────────
+GUIDE_MAX_TRY = 3
+
+
+def naver_guides_due(order, reviews, state):
+    """순수: 안내를 보낼 글(slug) — 운영표의 네이버 항목 중, 같은 글 본진이 접수·승인됐고
+    네이버는 아직 접수·승인 전이며, 안내를 보낸 적 없고, 실패 한도 전인 것."""
+    done = {(r["slug"], r["channel"]) for r in reviews if r.get("status") in DONE}
+    sent = state.get("naver_guide_sent") or {}
+    fails = state.get("naver_guide_fail") or {}
+    out = []
+    for it in order:
+        s = it["slug"]
+        if it["channel"] != "naver" or s in out:
+            continue
+        if (s, "main") in done and (s, "naver") not in done and s not in sent and fails.get(s, 0) < GUIDE_MAX_TRY:
+            out.append(s)
+    return out
+
+
+def send_naver_guides(env, state, notify, log=print, build=None, send=None, server_factory=None):
+    """pams_auto 한 바퀴에서 부른다. 보낸 slug 목록을 돌려준다. 실패는 GUIDE_MAX_TRY 번까지 다음 바퀴에 다시."""
+    import naver_private_guide as g
+    build = build or g.build
+    send = send or g.send
+    server_factory = server_factory or (lambda: kit.LocalServer(port=3944, log=log))
+    _, order = load_queue()
+    due = naver_guides_due(order, fetch_reviews(env), state)
+    if not due:
+        return []
+    done = []
+    with server_factory() as srv:
+        for slug in due:
+            try:
+                res = build(env, kit.fetch_article(env, slug), srv)
+                send(env, res)
+                state.setdefault("naver_guide_sent", {})[slug] = datetime.now(kit.KST).isoformat(timespec="minutes")
+                log(f"네이버 비공개 게시 안내 발송: {kit.issue_label(slug)} ({os.path.basename(res['png'])})")
+                done.append(slug)
+            except Exception as e:
+                n = (state.setdefault("naver_guide_fail", {}).get(slug, 0)) + 1
+                state["naver_guide_fail"][slug] = n
+                log(f"네이버 안내 실패 {kit.issue_label(slug)} ({n}/{GUIDE_MAX_TRY}): {e}")
+                if n >= GUIDE_MAX_TRY:
+                    notify(f"[네이버 안내] {kit.issue_label(slug)} 자동 발송 {GUIDE_MAX_TRY}회 실패 — "
+                           f"수동: python scripts/naver_private_guide.py {slug} --send")
+    return done
 
 
 def main():

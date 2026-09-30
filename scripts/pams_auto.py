@@ -351,6 +351,11 @@ def main():
             pams_queue.notify_next(env, state, notify=lambda t: telegram(env, t), log=log)
         except Exception as e:  # 큐 알림 실패가 키트·게시 바퀴를 막지 않는다
             log(f"큐 알림 실패: {e}")
+        # 본진이 접수되면 → 같은 글 네이버 비공개 게시 안내(한 장 png)를 자동 발송(글마다 1회, 실패는 3회까지 재시도).
+        try:
+            pams_queue.send_naver_guides(env, state, notify=lambda t: telegram(env, t), log=log)
+        except Exception as e:
+            log(f"네이버 안내 자동 발송 실패: {e}")
         save_state(state)
         upload_submitted_threads(env, notify=lambda t: telegram(env, t))
         # 심의 승인 → 게시(본진 자동 공개·posted_url, 네이버 공개 전환 안내·RSS URL, 배포 체크, 만료 알림).
