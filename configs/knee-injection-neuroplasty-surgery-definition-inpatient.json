@@ -1,0 +1,36 @@
+{
+  "slug": "knee-injection-neuroplasty-surgery-definition-inpatient",
+  "overline": "수술비 특약",
+  "title": "무릎 주사,\n수술비 보험금\n나올까",
+  "subtitle": "시술 이름이 아니라 약관의 정의가 정합니다",
+  "table_title": "약관이 보는 것",
+  "col_before": "보는 것",
+  "col_after": "자료의 내용",
+  "table_rows": [
+    [
+      "수술의 정의",
+      "절단·절제 조작",
+      "해당해야 지급"
+    ],
+    [
+      "흡인·천자",
+      "빨아들임·주입",
+      "수술에서 제외"
+    ],
+    [
+      "수술분류표",
+      "열거된 종류",
+      "없으면 지급 대상 아님"
+    ]
+  ],
+  "table_note": "금융감독원 「주요 분쟁사례로 알아보는 소비자 유의사항\n- 수술보험금 청구 관련 -」(2024.12.13.) 기준",
+  "points_title": "판단에 걸려 있는 세 가지",
+  "points": [
+    "수술의 정의 조항",
+    "수술분류표의 유무",
+    "실손의 입원 필요성"
+  ],
+  "cta_line": "내 수술비 담보, 어디에",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}
