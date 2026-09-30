@@ -38,6 +38,11 @@
       "why": "「본인부담상한제 환급금 실비」 2,280·4,998 · 큰 병원비 → 진단 담보 점검으로 연결"
     },
     {
+      "slug": "knee-injection-neuroplasty-surgery-definition-inpatient",
+      "channel": "main",
+      "why": "14호 — 무릎주사·신경성형술(TOPIC-BANK H4). 중장년 고빈도 시술 · 수술비 담보가 여러 계약에 흩어진 분의 상담으로 연결"
+    },
+    {
       "slug": "ltc-grade-home-care-rider-check",
       "channel": "threads",
       "why": "폼 직접입력 · 통상 5분 승인 — 칸을 오래 막지 않음. 본진 승인 뒤면 첫 댓글 링크가 붙는다"
@@ -81,6 +86,16 @@
       "slug": "copay-ceiling-refund-silson-excluded",
       "channel": "naver",
       "why": "비공개 게시 캡처 필요 — 사진 3장 준비됨"
+    },
+    {
+      "slug": "knee-injection-neuroplasty-surgery-definition-inpatient",
+      "channel": "threads",
+      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+    },
+    {
+      "slug": "knee-injection-neuroplasty-surgery-definition-inpatient",
+      "channel": "naver",
+      "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
     }
   ]
 }
