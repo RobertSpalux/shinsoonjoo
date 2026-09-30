@@ -1,0 +1,36 @@
+{
+  "slug": "cataract-surgery-silson-inpatient-or-outpatient",
+  "overline": "실손보험",
+  "title": "백내장 수술 실비,\n입원일까\n통원일까",
+  "subtitle": "시간이 아니라 입원 필요성",
+  "table_title": "입원 여부, 무엇으로 보나",
+  "col_before": "보는 것",
+  "col_after": "내용",
+  "table_rows": [
+    [
+      "체류시간",
+      "입원실",
+      "6시간 이상인지"
+    ],
+    [
+      "입원 필요성",
+      "환자 증상",
+      "실질적으로 필요했는지"
+    ],
+    [
+      "의료기록",
+      "처치·관리",
+      "구체적으로 적혔는지"
+    ]
+  ],
+  "table_note": "금융감독원 「최근 판례로 알아보는 실손보험 등\n관련 소비자 유의사항」(2025.3.10.) 기준",
+  "points_title": "먼저 볼 세 가지",
+  "points": [
+    "내 약관의 입원·통원 구분",
+    "통원의료비 한도",
+    "진료기록에 적힌 내용"
+  ],
+  "cta_line": "내 수술 담보, 어디에 얼마나",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}
