@@ -1,0 +1,36 @@
+{
+  "slug": "corn-removal-surgery-benefit-skin-exclusion",
+  "overline": "수술비 특약",
+  "title": "티눈 제거,\n수술비 보험금\n나올까",
+  "subtitle": "약관의 피부질환 조항이 가릅니다",
+  "table_title": "법원이 본 것",
+  "col_before": "쟁점",
+  "col_after": "판단",
+  "table_rows": [
+    [
+      "약관 조항",
+      "지급하지 않는 사유",
+      "피부질환 나열"
+    ],
+    [
+      "티눈",
+      "목록에 없음",
+      "같은 성격의 질환"
+    ],
+    [
+      "결론",
+      "수술보험금",
+      "지급 대상 아님"
+    ]
+  ],
+  "table_note": "금융감독원 「최근 판례로 알아보는 실손보험 등\n관련 소비자 유의사항」(2025.3.10.) 기준",
+  "points_title": "내 약관에서 볼 곳",
+  "points": [
+    "특약 이름",
+    "지급하지 않는 사유",
+    "받은 시술과 대조"
+  ],
+  "cta_line": "내 수술비 담보, 어디에",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}

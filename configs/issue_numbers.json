@@ -4,5 +4,8 @@
   "ltc-grade-home-care-rider-check": 7,
   "manual-therapy-silson-by-rider-managed-benefit": 8,
   "old-silson-keep-or-switch-selective-discount": 9,
-  "cataract-surgery-silson-inpatient-or-outpatient": 10
+  "cataract-surgery-silson-inpatient-or-outpatient": 10,
+  "eswl-silson-region-count-criteria": 11,
+  "copay-ceiling-refund-silson-excluded": 12,
+  "corn-removal-surgery-benefit-skin-exclusion": 13
 }

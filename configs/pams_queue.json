@@ -23,6 +23,21 @@
       "why": "접수됨 — 2026-09-30 16:58 (ad_reviews b8f547b0). 끝난 항목은 자동으로 건너뛴다"
     },
     {
+      "slug": "eswl-silson-region-count-criteria",
+      "channel": "main",
+      "why": "「체외충격파 실비」 지식iN 13,419·블로그 36,001 · 2026.7.1 기준 시행"
+    },
+    {
+      "slug": "corn-removal-surgery-benefit-skin-exclusion",
+      "channel": "main",
+      "why": "「티눈 수술비 보험」 지식iN 14,385 · 수술비 담보 점검으로 연결"
+    },
+    {
+      "slug": "copay-ceiling-refund-silson-excluded",
+      "channel": "main",
+      "why": "「본인부담상한제 환급금 실비」 2,280·4,998 · 큰 병원비 → 진단 담보 점검으로 연결"
+    },
+    {
       "slug": "ltc-grade-home-care-rider-check",
       "channel": "threads",
       "why": "폼 직접입력 · 통상 5분 승인 — 칸을 오래 막지 않음. 본진 승인 뒤면 첫 댓글 링크가 붙는다"
@@ -36,6 +51,36 @@
       "slug": "cataract-surgery-silson-inpatient-or-outpatient",
       "channel": "naver",
       "why": "접수됨 — 2026-09-30 17:3x 로버트 수동 접수 (ad_reviews 41251239)"
+    },
+    {
+      "slug": "eswl-silson-region-count-criteria",
+      "channel": "threads",
+      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+    },
+    {
+      "slug": "eswl-silson-region-count-criteria",
+      "channel": "naver",
+      "why": "비공개 게시 캡처 필요 — 사진 3장 준비됨"
+    },
+    {
+      "slug": "corn-removal-surgery-benefit-skin-exclusion",
+      "channel": "threads",
+      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+    },
+    {
+      "slug": "corn-removal-surgery-benefit-skin-exclusion",
+      "channel": "naver",
+      "why": "비공개 게시 캡처 필요 — 사진 3장 준비됨"
+    },
+    {
+      "slug": "copay-ceiling-refund-silson-excluded",
+      "channel": "threads",
+      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+    },
+    {
+      "slug": "copay-ceiling-refund-silson-excluded",
+      "channel": "naver",
+      "why": "비공개 게시 캡처 필요 — 사진 3장 준비됨"
     }
   ]
 }
