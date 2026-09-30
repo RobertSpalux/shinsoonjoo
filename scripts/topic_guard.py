@@ -15,6 +15,10 @@
 
 판정(순수 함수 — 시험 대상):
   · 핵심어 = 제목·네이버 제목·slug 에서 조사·흔한 말(보험·실손·실비…)을 뺀 낱말.
+  · 서술어(받았는데·나오나요·줄었나요…)는 핵심어 수에는 그대로 세되 **겹친 말·주제어로는 치지 않는다**(is_predicate).
+    「받았는데」가 글 한 편에만 있다는 이유로 주제어가 되어 12호(본인부담상한제 환급금) 제목이
+    7호(장기요양 등급)와 겹친다고 막힌 오탐(2026-09-30)이 있었다.
+    핵심어 집합에서 아예 빼지 않는 이유: 집합이 작아지면 겹침 비율이 올라가 일부러 나눠 쓴 글(8호↔9호)이 서로 걸린다(실측).
   · 주제어: 기존 글 한 편에만 나오는 3글자 이상 핵심어가 겹치면 같은 주제(「부담보 해제」 ↔ 「부담보 5년 지났는데…」).
   · 겹침: 공통 핵심어 2개 이상이면서 작은 쪽의 40% 이상 / 또는 공통 1개라도 작은 쪽의 절반 이상(「부담보 해제」 같은 짧은 주제)
           / 또는 제목 글자 2-gram Dice ≥ 0.5 / 또는 slug 낱말 Jaccard ≥ 0.5.
@@ -46,6 +50,13 @@ GENERIC = {
     "왜", "언제", "얼마", "어디까지", "계속", "앞으로", "보험료가", "알려야", "하는", "것과", "아닌", "것", "수", "법", "그리고",
     "2026", "2026년", "바뀐", "되는", "안", "때", "vs", "총", "들어", "나오나요", "나올까", "어떻게", "뭐가", "다른가",
 }
+# 서술어 — 주제를 가르지 못하는 말. 어미 꼴(받았는데·지났는데·줄었나요·풀렸을까·갈립니다·다녀왔다면 …)과
+#   어미 규칙에 안 걸리는 묻는 말·이어 주는 말(PREDICATE_WORDS).
+#   명사를 잘못 잡지 않게 두 글자 이상 어미만 적는다. 끝의 「요」는 조사 처리로 이미 떨어진 꼴(줄었나)도 잡는다.
+PREDICATE = re.compile(
+    r"(는데|은데|던데|나요|가요|까요|을까|일까|할까|될까|습니다|입니다|합니다|됩니다|립니다|릅니다|니다|세요|어요|아요|에요|예요|"
+    r"지만|으면|다면|려면|더니|거나|든지|는지|은지|을지|었다|았다|였다|했다|된다|한다|었나|았나|였나|했나|리나|오나)$")
+PREDICATE_WORDS = {"받나", "받을", "받은", "받는", "나오는", "나온", "해야", "어떤", "이유", "차이", "무슨", "이런", "그런", "정말", "꼭"}
 JOSA = re.compile(r"(으로|에서|에게|까지|부터|이나|보다|처럼|은|는|이|가|을|를|도|에|의|와|과|로|만|나|요)$")
 SLUG_GENERIC = {"insurance", "guide", "check", "2026", "by", "or", "vs", "and", "the", "silson", "rider", "benefit"}
 
@@ -61,6 +72,11 @@ def terms(text):
         if len(s) >= 2 and s not in GENERIC:
             out.add(s)
     return out
+
+
+def is_predicate(w):
+    """서술어인가 — 겹친 말·주제어에서 뺀다."""
+    return w in PREDICATE_WORDS or (len(w) >= 3 and bool(PREDICATE.search(w)))
 
 
 def shared_terms(a, b):
@@ -89,7 +105,7 @@ def compare(cand, other):
     """cand·other: {slug?, title, naver_title?} → (겹침?, 이유). other 는 {text} 만 있어도 된다(TOPIC-BANK 줄)."""
     ct = terms(" ".join(filter(None, [cand.get("title"), cand.get("naver_title")])))
     ot = terms(" ".join(filter(None, [other.get("title"), other.get("naver_title"), other.get("text")])))
-    sh = shared_terms(ct, ot)
+    sh = {w for w in shared_terms(ct, ot) if not is_predicate(w)}
     small = min(len(ct), len(ot)) or 1
     ratio = len(sh) / small
     if len(sh) >= 2 and ratio >= 0.4:
@@ -137,7 +153,7 @@ def check(cand, articles, bank_rows, allow=None):
         dup, why = compare(cand, o)
         if not dup:
             keys = sorted(w for w in (ct & ot)   # 정확히 같은 말만(「치료」 ⊂ 「도수치료」 같은 부분 포함은 주제어로 안 친다)
-                          if len(w) >= 3 and sum(1 for s in tsets if w in s) == 1)
+                          if len(w) >= 3 and not is_predicate(w) and sum(1 for s in tsets if w in s) == 1)
             if keys:
                 dup, why = True, f"주제어 겹침({', '.join(keys)}) — 이 말은 기존 글 중 이 글에만 있다"
         if dup and (cand.get("slug"), o.get("slug")) not in ok_pairs:
