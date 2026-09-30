@@ -1,5 +1,5 @@
 {
-  "_주석": "PAMS 접수 순서(운영표) — pams_auto 가 매 바퀴 읽어, 심사중 칸이 비면 「다음 접수: ○」 한 줄을 텔레그램으로 보낸다(scripts/pams_queue.py). 본진 먼저(사이트 = 상담 버튼이 있는 곳). [2026-09-30 18:40 로버트 지정] 본진 순서 = 장기요양(7호) → 도수치료(8호) → 1세대 실비(9호). 끝난 항목(접수·승인)은 자동으로 건너뛴다 — 지우지 않아도 된다. 새 원고는 여기 한 줄 추가.",
+  "_주석": "PAMS 접수 순서(운영표) — pams_auto 가 매 바퀴 읽어, 심사중 칸이 비면 「다음 접수: ○」 한 줄을 텔레그램으로 보낸다(scripts/pams_queue.py). 본진 먼저(사이트 = 상담 버튼이 있는 곳). [2026-09-30 18:40 로버트 지정] 본진 순서 = 장기요양(7호) → 도수치료(8호) → 1세대 실비(9호). 끝난 항목(접수·승인)은 자동으로 건너뛴다 — 지우지 않아도 된다. 새 원고는 여기 한 줄 추가. [2026-10-01 관제탑] 스레드 11·12·14·15·16호는 소통형(assets/threads/drafts/<slug>/talk.txt)으로 접수한다 — 정보형 키트(body.txt)는 대기열에서 내리고 파일은 PAMS접수\\_정보형_보관 에 보존.",
   "limit": 3,
   "order": [
     {
@@ -70,7 +70,7 @@
     {
       "slug": "eswl-silson-region-count-criteria",
       "channel": "threads",
-      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+      "why": "소통형(talk.txt · 첫 줄 질문형) — 폼 직접입력 · 본문만(본진 승인 전). 정보형 키트는 PAMS접수\\_정보형_보관 으로 내림(2026-10-01 관제탑)"
     },
     {
       "slug": "eswl-silson-region-count-criteria",
@@ -90,7 +90,7 @@
     {
       "slug": "copay-ceiling-refund-silson-excluded",
       "channel": "threads",
-      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+      "why": "소통형(talk.txt · 첫 줄 질문형) — 폼 직접입력 · 본문만(본진 승인 전). 정보형 키트는 PAMS접수\\_정보형_보관 으로 내림(2026-10-01 관제탑)"
     },
     {
       "slug": "copay-ceiling-refund-silson-excluded",
@@ -100,7 +100,7 @@
     {
       "slug": "knee-injection-neuroplasty-surgery-definition-inpatient",
       "channel": "threads",
-      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+      "why": "소통형(talk.txt · 첫 줄 질문형) — 폼 직접입력 · 본문만(본진 승인 전). 정보형 키트는 PAMS접수\\_정보형_보관 으로 내림(2026-10-01 관제탑)"
     },
     {
       "slug": "knee-injection-neuroplasty-surgery-definition-inpatient",
@@ -110,12 +110,12 @@
     {
       "slug": "medical-malpractice-injury-accident-disclosure-causation",
       "channel": "threads",
-      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+      "why": "소통형(talk.txt · 첫 줄 질문형) — 폼 직접입력 · 본문만(본진 승인 전). 정보형 키트는 PAMS접수\\_정보형_보관 으로 내림(2026-10-01 관제탑)"
     },
     {
       "slug": "overseas-stay-3month-silson-premium-refund",
       "channel": "threads",
-      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+      "why": "소통형(talk.txt · 첫 줄 질문형) — 폼 직접입력 · 본문만(본진 승인 전). 정보형 키트는 PAMS접수\\_정보형_보관 으로 내림(2026-10-01 관제탑)"
     },
     {
       "slug": "medical-malpractice-injury-accident-disclosure-causation",
