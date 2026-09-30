@@ -1,0 +1,36 @@
+{
+  "slug": "old-silson-keep-or-switch-selective-discount",
+  "overline": "실손보험",
+  "title": "오래된 실비,\n유지할까\n바꿀까",
+  "subtitle": "기준은 앞으로의 치료 계획",
+  "table_title": "2026년 11월부터 생기는 선택지",
+  "col_before": "선택지",
+  "col_after": "방식",
+  "table_rows": [
+    [
+      "그대로 유지",
+      "기존 계약",
+      "보장 범위 그대로"
+    ],
+    [
+      "선택형 할인 특약",
+      "기존 계약 유지",
+      "고른 보장만 빼기"
+    ],
+    [
+      "계약전환 할인",
+      "5세대로 전환",
+      "일정 기간 할인"
+    ]
+  ],
+  "table_note": "금융위원회·금융감독원 「5세대 실손보험 Q&A」\n(2026.5.) 8·11·12번 문항 기준",
+  "points_title": "먼저 볼 세 가지",
+  "points": [
+    "2013년 3월 이전 가입인지",
+    "재가입 조항이 있는지",
+    "앞으로의 치료 계획"
+  ],
+  "cta_line": "내 오래된 실비, 어디에",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}
