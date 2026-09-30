@@ -57,6 +57,13 @@ class Message(unittest.TestCase):
         self.assertTrue(m.startswith("다음 접수: 9호 본진 — 0930_9호_본진.zip (빈 칸 2/3)"), m)
         self.assertIn("키트 대기: 7호 네이버", m)
 
+    def test_title_first_when_titles_given(self):
+        titles = {A: "1세대 실비 유지해야 하나 — 기준은 보험료가 아니라 앞으로의 치료 계획입니다", C: "장기요양 등급 받았는데, 내 보험 재가급여 특약은 언제 나오나요"}
+        m = q.message(q.plan(ORDER, [OTHER_THREADS], KITS), titles)
+        self.assertTrue(m.startswith("다음 접수: 1세대 실비 유지해야 하나 (9호) 본진 — 0930_9호_본진.zip (빈 칸 2/3)"), m)
+        self.assertIn("키트 대기: 장기요양 등급 받았는데, 내 보험 재가급여 특약은 언제 나오나요 (7호) 네이버", m)
+        self.assertNotIn("\n", m)
+
     def test_notify_once_per_state(self):
         p = q.plan(ORDER, [OTHER_THREADS], KITS)
         go, sig = q.should_notify(p, {})

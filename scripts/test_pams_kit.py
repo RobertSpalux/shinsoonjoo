@@ -38,7 +38,9 @@ class MainKitLines(unittest.TestCase):
     def test_main_has_location_and_spec(self):
         ls = lines("main")
         self.assertIn(f"게시위치: https://goodfinance.kr/news/{SLUG}", ls)
-        self.assertIn(f"규격: {kit.MAIN_SPEC}", ls)
+        # 규격은 비운다(로버트 2026-09-30 「규격은 중요하지 않다」) — 값이 없으면 「규격:」 줄 자체가 없다
+        self.assertEqual(kit.MAIN_SPEC, "")
+        self.assertFalse(any(l.startswith("규격") for l in ls))
 
     def test_location_is_confirmed_url_pattern(self):
         # PAMS 게시위치 등록 실물(9200호): https://goodfinance.kr/news/health-checkup-retest-disclosure-scope
@@ -46,14 +48,18 @@ class MainKitLines(unittest.TestCase):
                          "https://goodfinance.kr/news/health-checkup-retest-disclosure-scope")
 
     def test_spec_not_empty(self):
-        self.assertTrue(kit.MAIN_SPEC.strip())
+        orig = kit.MAIN_SPEC   # 값을 다시 넣으면 줄이 생긴다(상수 하나로 되돌릴 수 있게)
+        kit.MAIN_SPEC = "해당 없음"
+        try:
+            self.assertIn("규격: 해당 없음", lines("main"))
+        finally:
+            kit.MAIN_SPEC = orig
 
     def test_order_title_then_location_spec_then_form(self):
         ls = lines("main")
-        i = {k: next(n for n, l in enumerate(ls) if l.startswith(k)) for k in ("게시명:", "게시위치:", "규격:", "광고형태:")}
+        i = {k: next(n for n, l in enumerate(ls) if l.startswith(k)) for k in ("게시명:", "게시위치:", "광고형태:")}
         self.assertLess(i["게시명:"], i["게시위치:"])
-        self.assertLess(i["게시위치:"], i["규격:"])
-        self.assertLess(i["규격:"], i["광고형태:"])
+        self.assertLess(i["게시위치:"], i["광고형태:"])
 
     def test_existing_lines_unchanged(self):
         ls = lines("main")
@@ -66,8 +72,28 @@ class MainKitLines(unittest.TestCase):
     def test_naver_unchanged(self):
         # 네이버는 게시 URL 이 비공개 게시 뒤에 정해진다 — 이번 범위 밖(줄 없음 유지)
         ls = lines("naver")
-        self.assertFalse(any(l.startswith("게시위치:") or l.startswith("규격:") for l in ls))
+        self.assertIn("게시위치: https://blog.naver.com/insightlab-daily", ls)   # 사전등록 블로그 주소
+        self.assertFalse(any(l.startswith("규격") for l in ls))
         self.assertIn("광고형태: 바이럴(블로그 등)", ls)
+
+
+class TitleLabel(unittest.TestCase):
+    """알림 표기 — 글 제목이 앞, 호수는 뒤 괄호로만. 키트 파일명은 그대로."""
+
+    def test_title_first_issue_in_parens(self):
+        self.assertEqual(kit.title_label("도수치료 실비, 앞으로도 계속 나올까 — 내 실손의 구조와 특약에 따라 갈립니다", SLUG),
+                         "도수치료 실비, 앞으로도 계속 나올까 (8호)")
+
+    def test_no_issue_number_title_only(self):
+        self.assertEqual(kit.title_label("호수 없는 글 제목", "no-issue-slug-xyz"), "호수 없는 글 제목")
+
+    def test_no_title_falls_back(self):
+        self.assertEqual(kit.title_label(None, SLUG), "8호")
+        self.assertEqual(kit.title_label("", "no-issue-slug-xyz"), "no-issue-slug-xyz")
+
+    def test_kit_filename_unchanged(self):
+        from datetime import datetime
+        self.assertEqual(kit.kit_basename(SLUG, "main", datetime(2026, 9, 30, tzinfo=kit.KST)), "0930_8호_본진")
 
 
 @unittest.skipUnless(os.path.exists(ROBERT_OS_APPLY), "robert-os pams_apply.py 없음")
@@ -87,7 +113,7 @@ class RobertOsParser(unittest.TestCase):
             r = self.pa.키트읽기(p)
         self.assertEqual(r["게시명"], "도수치료 실비 제목")
         self.assertEqual(r["게시위치"], f"https://goodfinance.kr/news/{SLUG}")
-        self.assertEqual(r["규격"], kit.MAIN_SPEC)
+        self.assertEqual(r["규격"], "")   # 줄이 없으면 robert-os 파서는 빈 값으로 읽는다(칸 비움)
         self.assertEqual(r["광고형태"], "홈페이지")
         self.assertEqual(self.pa.광고형태코드(r), "homp")
         self.assertIn(SRC[0], r["증빙자료명"])

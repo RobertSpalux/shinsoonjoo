@@ -1,11 +1,11 @@
 {
-  "_주석": "PAMS 접수 순서(운영표) — pams_auto 가 매 바퀴 읽어, 심사중 칸이 비면 「다음 접수: ○」 한 줄을 텔레그램으로 보낸다(scripts/pams_queue.py). 순서 기준 = 유효 리드 기여(본진 먼저: 사이트 = 상담 버튼이 있는 곳 → 검색 수요 → 시의성). 끝난 항목(접수·승인)은 자동으로 건너뛴다 — 지우지 않아도 된다. 새 원고는 여기 한 줄 추가.",
+  "_주석": "PAMS 접수 순서(운영표) — pams_auto 가 매 바퀴 읽어, 심사중 칸이 비면 「다음 접수: ○」 한 줄을 텔레그램으로 보낸다(scripts/pams_queue.py). 본진 먼저(사이트 = 상담 버튼이 있는 곳). [2026-09-30 18:40 로버트 지정] 본진 순서 = 장기요양(7호) → 도수치료(8호) → 1세대 실비(9호). 끝난 항목(접수·승인)은 자동으로 건너뛴다 — 지우지 않아도 된다. 새 원고는 여기 한 줄 추가.",
   "limit": 3,
   "order": [
     {
-      "slug": "old-silson-keep-or-switch-selective-discount",
+      "slug": "ltc-grade-home-care-rider-check",
       "channel": "main",
-      "why": "검색 수요 최대(「실비 유지해야 하나」 지식iN 61,137·블로그 116,233) · 11월 시행 시의성 · 결론이 전 계약 펼쳐 보기(상담 직결)"
+      "why": "장기요양 등급 — 수요는 좁지만 자녀 세대 상담으로 이어짐"
     },
     {
       "slug": "manual-therapy-silson-by-rider-managed-benefit",
@@ -13,14 +13,14 @@
       "why": "「도수치료 실비」 지식iN 47,288 · 관리급여 뉴스 시의성"
     },
     {
-      "slug": "cataract-surgery-silson-inpatient-or-outpatient",
+      "slug": "old-silson-keep-or-switch-selective-discount",
       "channel": "main",
-      "why": "「백내장 실비」 지식iN 10,328·블로그 19,978 · 「백내장 수술 보험금」 9,385·29,129 — 수술을 앞둔 사람의 검색(상담 직결)"
+      "why": "검색 수요 최대(「실비 유지해야 하나」 지식iN 61,137·블로그 116,233) · 11월 시행 시의성 · 결론이 전 계약 펼쳐 보기(상담 직결)"
     },
     {
-      "slug": "ltc-grade-home-care-rider-check",
+      "slug": "cataract-surgery-silson-inpatient-or-outpatient",
       "channel": "main",
-      "why": "장기요양 등급 — 수요는 좁지만 자녀 세대 상담으로 이어짐"
+      "why": "접수됨 — 2026-09-30 16:58 (ad_reviews b8f547b0). 끝난 항목은 자동으로 건너뛴다"
     },
     {
       "slug": "ltc-grade-home-care-rider-check",
@@ -31,6 +31,11 @@
       "slug": "ltc-grade-home-care-rider-check",
       "channel": "naver",
       "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
+    },
+    {
+      "slug": "cataract-surgery-silson-inpatient-or-outpatient",
+      "channel": "naver",
+      "why": "접수됨 — 2026-09-30 17:3x 로버트 수동 접수 (ad_reviews 41251239)"
     }
   ]
 }

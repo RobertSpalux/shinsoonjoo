@@ -24,7 +24,15 @@ class Steps(unittest.TestCase):
         self.assertIn("「비공개」 표시가 화면에 보이게", j)
         self.assertIn("공란(제_____호) 그대로", j)
         self.assertIn("「7호」", j)                       # pams_auto 짝맞추기 = 파일명에 N호
-        self.assertIn("Downloads\PAMS접수\ 에 저장", j)
+        self.assertIn("저장 위치를 Downloads\\PAMS접수\\ 로", j)       # 저장만 하면 zip 자동
+        self.assertIn("압축은 하지 않는다", j)
+        self.assertIn("7호.pdf", j)
+
+    def test_keyword_example_from_title(self):
+        self.assertEqual(g.keyword_of("백내장 실비 청구했는데 통원으로만 나왔다면 — 입원 필요성이 기록에 남아야 합니다"), "백내장")
+        s = "\n".join(g.steps("10호", "백내장 실비 청구했는데 통원으로만 나왔다면", 3, "b"))
+        self.assertIn("핵심어(예: 백내장)", s)
+        self.assertIn("백내장.pdf", s)
 
     def test_title_verbatim(self):
         self.assertIn("     제목 그대로", self.s)

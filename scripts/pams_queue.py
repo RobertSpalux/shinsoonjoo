@@ -38,8 +38,11 @@ def load_queue(path=QUEUE_JSON):
     return int(q.get("limit", 3)), q["order"]
 
 
-def label(item):
-    return f"{kit.issue_label(item['slug'])} {kit.CH_LABEL[item['channel']]}"
+def label(item, titles=None):
+    """알림용 표기 — 글 제목 (N호) 채널. titles 가 없으면 호수만(운영표 한 줄처럼 짧게 볼 때)."""
+    t = (titles or {}).get(item["slug"])
+    who = kit.title_label(t, item["slug"]) if t else kit.issue_label(item["slug"])
+    return f"{who} {kit.CH_LABEL[item['channel']]}"
 
 
 def find_kit(item, kit_dir=kit.KIT_DIR):
@@ -70,14 +73,14 @@ def plan(order, reviews, kits, limit=3):
             "waiting": waiting, "done": done, "limit": limit}
 
 
-def message(p):
-    """한 줄. 다음 항목이 없으면 None."""
+def message(p, titles=None):
+    """한 줄. 다음 항목이 없으면 None. 글 제목이 앞, 호수는 괄호."""
     if not p["next"] or p["free"] <= 0:
         return None
     tail = ""
     if p["waiting"]:
-        tail = " · 키트 대기: " + ", ".join(label(w) for w in p["waiting"])
-    return f"다음 접수: {label(p['next'])} — {os.path.basename(p['zip'])} (빈 칸 {p['free']}/{p['limit']}){tail}"
+        tail = " · 키트 대기: " + ", ".join(label(w, titles) for w in p["waiting"])
+    return f"다음 접수: {label(p['next'], titles)} — {os.path.basename(p['zip'])} (빈 칸 {p['free']}/{p['limit']}){tail}"
 
 
 def should_notify(p, state):
@@ -110,6 +113,11 @@ def fetch_reviews(env):
             for r in rows]
 
 
+def fetch_titles(env):
+    url, h = kit._rest(env)
+    return {r["slug"]: r.get("title") for r in requests.get(url, params={"select": "slug,title"}, headers=h, timeout=30).json()}
+
+
 def current(env, kit_dir=kit.KIT_DIR):
     limit, order = load_queue()
     kits = {(it["slug"], it["channel"]): find_kit(it, kit_dir) for it in order}
@@ -121,7 +129,11 @@ def notify_next(env, state, notify, log=print):
     order, p = current(env)
     go, sig = should_notify(p, state)
     if go:
-        msg = message(p)
+        try:
+            titles = fetch_titles(env)
+        except Exception:   # 제목을 못 읽어도 알림은 보낸다(호수만)
+            titles = None
+        msg = message(p, titles)
         if notify(msg):
             state["queue_notified"] = sig
         log(f"큐 알림: {msg}")
@@ -162,8 +174,10 @@ def send_naver_guides(env, state, notify, log=print, build=None, send=None, serv
     done = []
     with server_factory() as srv:
         for slug in due:
+            art = None
             try:
-                res = build(env, kit.fetch_article(env, slug), srv)
+                art = kit.fetch_article(env, slug)
+                res = build(env, art, srv)
                 send(env, res)
                 state.setdefault("naver_guide_sent", {})[slug] = datetime.now(kit.KST).isoformat(timespec="minutes")
                 log(f"네이버 비공개 게시 안내 발송: {kit.issue_label(slug)} ({os.path.basename(res['png'])})")
@@ -173,7 +187,7 @@ def send_naver_guides(env, state, notify, log=print, build=None, send=None, serv
                 state["naver_guide_fail"][slug] = n
                 log(f"네이버 안내 실패 {kit.issue_label(slug)} ({n}/{GUIDE_MAX_TRY}): {e}")
                 if n >= GUIDE_MAX_TRY:
-                    notify(f"[네이버 안내] {kit.issue_label(slug)} 자동 발송 {GUIDE_MAX_TRY}회 실패 — "
+                    notify(f"[네이버 안내] {kit.title_label((art or {}).get('title'), slug)} 자동 발송 {GUIDE_MAX_TRY}회 실패 — "
                            f"수동: python scripts/naver_private_guide.py {slug} --send")
     return done
 
@@ -183,7 +197,7 @@ def main():
     order, p = current(env)
     print("운영표:", order_line(order, p))
     print(f"심사중 {p['active']}/{p['limit']} · 빈 칸 {p['free']}")
-    print(message(p) or "다음 접수: 없음(빈 칸 없음 또는 준비된 키트 없음)")
+    print(message(p, fetch_titles(env)) or "다음 접수: 없음(빈 칸 없음 또는 준비된 키트 없음)")
 
 
 if __name__ == "__main__":

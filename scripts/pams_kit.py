@@ -63,9 +63,12 @@ CH_LABEL = {"main": "본진", "naver": "네이버", "threads": "스레드"}
 # (2026-09-30 robert-os 1112 보고: 7호 본진 재채움에서 이 두 칸만 비었다 — 키트에 줄이 없었다.)
 # 게시위치 = 발행 전이라도 확정 URL. PAMS 게시위치 등록 실물 형식과 같다(9200호 → https://goodfinance.kr/news/<slug>).
 SITE_ORIGIN = "https://goodfinance.kr"
-# 규격 [미확정 → 실물 대조 대기] 회사 매뉴얼(광고심의신청방법매뉴얼_20260706 · CLAUDE.md §6.4 입력값 표) 「온라인은 해당 없음」.
-#   승인된 본진 건(6088·6964·8289·9200)의 PAMS 상세(upview, 읽기) 값이 다르면 이 상수 하나만 고친다.
-MAIN_SPEC = "해당 없음(온라인)"
+# 규격 = **빈 값(칸을 비운다)** — 로버트 판단 2026-09-30 17:22 「규격은 중요하지 않다」.
+#   회사 매뉴얼(CLAUDE.md §6.4 입력값 표)도 「규격 및 모양 | 온라인은 해당 없음」이다. 값이 비면 「규격:」 줄을 쓰지 않는다.
+#   다시 채우게 되면 이 상수 하나에만 값을 넣는다.
+MAIN_SPEC = ""
+# 네이버 게시위치 = 팜스에 사전등록된 블로그 주소(CLAUDE.md §6.4 사전등록표). 글 단위 URL 은 승인 뒤 게시위치 등록 단계에서 넣는다.
+NAVER_BLOG = "https://blog.naver.com/insightlab-daily"
 KST = timezone(timedelta(hours=9))
 # 창 없는 실행(작업 스케줄러에서 10분마다 창이 뜨지 않게)
 NO_WINDOW = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
@@ -140,6 +143,16 @@ def issue_label(slug):
     return f"{n}호" if isinstance(n, int) else slug
 
 
+def title_label(title, slug):
+    """알림 표기 — **글 제목을 앞에, 호수는 뒤 괄호로만**(로버트 2026-09-30 16:33). 제목은 「 — 」 앞 머리말만.
+    제목이 없으면 호수(또는 slug)만. 키트 파일명(MMDD_N호_채널)은 이 규칙과 무관하게 그대로다."""
+    head = re.split(r"\s+[—–-]\s+", (title or "").strip())[0].strip()
+    issue = issue_label(slug)
+    if not head:
+        return issue
+    return f"{head} ({issue})" if issue != slug else head
+
+
 def kit_basename(slug, channel, now=None):
     now = now or datetime.now(KST)
     return f"{now:%m%d}_{issue_label(slug)}_{CH_LABEL[channel]}"
@@ -212,7 +225,9 @@ def kit_lines(slug, channel, title, title_from, sources, files):
         f"  (출처: {title_from} · 금지 특수문자 ' ? \" & 제거)",
     ]
     if channel == "main":
-        head += [f"게시위치: {main_location(slug)}", f"규격: {MAIN_SPEC}"]
+        head += [f"게시위치: {main_location(slug)}"] + ([f"규격: {MAIN_SPEC}"] if MAIN_SPEC.strip() else [])
+    if channel == "naver":
+        head += [f"게시위치: {NAVER_BLOG}"]
     head += [f"광고형태: {AD_FORM[channel]}", "", "증빙 자료명 (작성기관명, 자료명, 기준년도, 발표연도):"]
     return head + [f"- {s}" for s in sources] + ["", "zip 안 파일:"] + [f"- {fn}" for fn in files]
 
@@ -352,6 +367,7 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     return {"zip": zip_path, "txt": txt_path, "name": base + ".zip", "title": title,
+            "slug": slug, "channel": channel, "article_title": article.get("title"),
             "sources": [source_line(s) for s, _ in evid], "files": files,
             "hash": content_hash(article, channel)}
 

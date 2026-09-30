@@ -135,10 +135,10 @@ def admin_post(server, env, path, payload):
     return body
 
 
-def publish_msg(slug, url, r):
+def publish_msg(slug, url, r, title=None):
     """본진 자동 게시 텔레그램 1통 — 규격 고정(시험 test_publish_msg). 이 한 통으로 게시~게시위치 등록 흐름을 따라간다."""
     return "\n".join([
-        f"✅ [본진 자동 게시] {kit.issue_label(slug)} · {slug}",
+        f"✅ [본진 자동 게시] {kit.title_label(title, slug)}",
         f"① 발행: {url}",
         f"② 라이브 심의필 확인: {review_line(r)}",
         f"③ posted_url 기록: ad_reviews {r['id'][:8]} (main)",
@@ -179,7 +179,7 @@ def publish_main(server, env, item, live):
     url = wait_live(a["slug"], r["review_no"])
     admin_post(server, env, "/api/admin/ad-review", {
         "action": "record-posted-url", "articleId": a["id"], "channel": "main", "reviewId": r["id"], "postedUrl": url})
-    return publish_msg(a["slug"], url, r)
+    return publish_msg(a["slug"], url, r, a.get("title"))
 
 
 def review_line(r):
@@ -328,7 +328,8 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
     for r in exp:
         key = f"exp:{r['id']}:{today}"
         a = arts.get(r["article_id"], {})
-        msg = f"⏳ 심의필 만료 임박 — {a.get('slug')} {r['channel']} 제{r['review_no']}호 ~{r['review_to']} (연장 신청: 바이럴 만료+90일 이내)"
+        msg = (f"⏳ 심의필 만료 임박 — {kit.title_label(a.get('title'), a.get('slug') or '')} {r['channel']} "
+               f"제{r['review_no']}호 ~{r['review_to']} (연장 신청: 바이럴 만료+90일 이내)")
         out.append(msg)
         if live and key not in st:
             notify(msg)
@@ -348,7 +349,8 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
         key = f"ask:{r['id']}"
         out.append(f"❓ 네이버 URL 짝 애매 — {arts[r['article_id']]['slug']} · {why}")
         if live and key not in st:
-            notify(f"❓ 네이버 게시 URL 을 못 정했습니다 — {arts[r['article_id']]['slug']}\n{why}\n맞는 URL 을 ad_reviews(naver).posted_url 에 넣어 주세요.")
+            _a = arts[r['article_id']]
+            notify(f"❓ 네이버 게시 URL 을 못 정했습니다 — {kit.title_label(_a.get('title'), _a['slug'])}\n{why}\n맞는 URL 을 ad_reviews(naver).posted_url 에 넣어 주세요.")
             st[key] = True
     flags = [f for f in plan_flags(rows, arts, today) if not slug or f[0]["slug"] == slug]
     # RSS 로 방금 URL 을 얻는 채널도 배포 체크 대상
@@ -377,14 +379,14 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
                         res = naver_kit(server, env, t, live)
                         if live:
                             st[key] = datetime.now(KST).isoformat()
-                            notify(f"📝 네이버 게시 대기 — {a['slug']} 제{t['row']['review_no']}호\n{res}")
+                            notify(f"📝 네이버 게시 대기 — {kit.title_label(a.get('title'), a['slug'])} 제{t['row']['review_no']}호\n{res}")
                     out.append(("✅ " if live else "") + res)
                     if live and t["channel"] == "main":
                         notify(res)
                 except kit.KitError as e:
                     out.append(f"❌ {a['slug']} {t['channel']} — {e}")
                     if live:
-                        notify(f"❌ 승인→게시 실패 {a['slug']} {t['channel']} — {e}")
+                        notify(f"❌ 승인→게시 실패 — {kit.title_label(a.get('title'), a['slug'])} {t['channel']} — {e}")
             for r, link in rss_ok:
                 a = arts[r["article_id"]]
                 if not live:
@@ -395,7 +397,7 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
                         "action": "record-posted-url", "articleId": a["id"], "channel": "naver",
                         "reviewId": r["id"], "postedUrl": link})
                     out.append(f"✅ 네이버 URL 회수 {a['slug']} ← {link}")
-                    notify(f"✅ 네이버 게시 URL 회수 — {a['slug']}\n{link}\n→ 감시기 다음 바퀴에 팜스 게시위치(＋) 등록")
+                    notify(f"✅ 네이버 게시 URL 회수 — {kit.title_label(a.get('title'), a['slug'])}\n{link}\n→ 감시기 다음 바퀴에 팜스 게시위치(＋) 등록")
                 except kit.KitError as e:
                     out.append(f"❌ 네이버 URL 기록 실패 {a['slug']} — {e}")
             for a, r, flag in flags:

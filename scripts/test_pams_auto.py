@@ -55,6 +55,7 @@ class Harness:
                 fp.write(body)
         self.built.append((a["slug"], ch, capture))
         return {"zip": z, "txt": z[:-4] + ".txt", "name": name + ".zip", "title": "게시명",
+                "slug": a["slug"], "channel": ch, "article_title": "장기요양 등급 받았는데 — 부제",
                 "sources": ["국민건강보험공단, 자료, 2026, 2026.3.17"], "files": [], "hash": kit.content_hash(a, ch)}
 
     def run(self):
@@ -81,7 +82,9 @@ class MainKitTest(unittest.TestCase):
         self.assertEqual(len(h.run()), 1)
         self.assertEqual(len(h.run()), 0, "원고가 같으면 다시 만들지 않는다")
         self.assertEqual(len(h.notes), 1)
-        self.assertIn("0929_7호_본진.zip 준비됨 — PAMS 게시명: 게시명 / 자료명: 국민건강보험공단", h.notes[0])
+        # 글 제목이 앞, 호수는 괄호(로버트 2026-09-30) — 키트 파일명은 그대로 뒤에
+        self.assertTrue(h.notes[0].startswith("장기요양 등급 받았는데 (7호) 본진 키트 준비됨 — 0929_7호_본진.zip"), h.notes[0])
+        self.assertIn("PAMS 게시명: 게시명 / 자료명: 국민건강보험공단", h.notes[0])
 
     def test_content_change_rebuilds(self):
         h = Harness(main=[art(body="v1")])
@@ -132,7 +135,7 @@ class CaptureTest(unittest.TestCase):
         made = h.run()
         self.assertEqual([(s, c) for s, c, _ in h.built], [("ltc-grade-home-care-rider-check", "naver")])
         self.assertTrue(os.path.exists(os.path.join(h.dir, auto.DONE_DIR_NAME, "스크린샷 2026-09-29.png")))
-        self.assertIn("0929_7호_네이버.zip 준비됨", h.notes[-1])
+        self.assertTrue(h.notes[-1].startswith("장기요양 등급 받았는데 (7호) 네이버 키트 준비됨 — 0929_7호_네이버.zip"), h.notes[-1])
         self.assertEqual(len(made), 1)
         self.assertEqual(h.run(), [], "처리한 캡처는 다시 쓰지 않는다")
 
@@ -141,6 +144,27 @@ class CaptureTest(unittest.TestCase):
         self.cap(h, "7호 네이버 캡처.pdf")
         h.run()
         self.assertEqual(h.built[0][0], "ltc-grade-home-care-rider-check")
+
+    def test_keyword_in_filename_matches_single_owner(self):
+        """「백내장.pdf」처럼 핵심어만 있어도, 그 말이 대기 글 한 편의 제목에만 있으면 짝이 맞는다(2026-09-30 실측 보완)."""
+        c = [art(), art(slug="cataract-x", title="백내장 수술 실비, 입원으로 받을까", naver_title="백내장 실비 청구했는데 통원으로만 나왔다면"),
+             art(slug="manual-x", title="도수치료 실비, 앞으로도 계속 나올까", naver_title="도수치료 실비 청구되나요")]
+        for fn, want in (("백내장.pdf", "cataract-x"), ("백내장 실비.pdf", "cataract-x"), ("도수치료.pdf", "manual-x"),
+                         ("네이버 비공개 백내장 0930.pdf", "cataract-x")):
+            a, why = auto.match_capture(fn, c)
+            self.assertIsNotNone(a, fn)
+            self.assertEqual(a["slug"], want, fn)
+            self.assertEqual(why, "파일명 핵심어 일치")
+
+    def test_shared_or_generic_word_does_not_match(self):
+        c = [art(slug="cataract-x", title="백내장 수술 실비", naver_title="백내장 실비 청구했는데"),
+             art(slug="manual-x", title="도수치료 실비", naver_title="도수치료 실비 청구되나요")]
+        for fn in ("실비.pdf", "0930.pdf", "스크린샷 2026-09-30.png", "청구.pdf"):
+            a, why = auto.match_capture(fn, c)
+            self.assertIsNone(a, fn)      # 두 글에 다 있거나 날짜·일반어 → 묻는다
+        a, why = auto.match_capture("백내장 도수치료.pdf", c)
+        self.assertIsNone(a)
+        self.assertIn("여러 글", why)
 
     def test_17ho_does_not_match_7ho(self):
         a, why = auto.match_capture("17호.png", [art(), art(slug="caregiver-daily-benefit-support-vs-use")])
