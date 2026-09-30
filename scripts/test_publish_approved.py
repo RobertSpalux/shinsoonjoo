@@ -90,5 +90,53 @@ class T2(unittest.TestCase):
         self.assertTrue(lines[4].startswith("④ 팜스 게시위치(＋)"))
 
 
+class Overdue(unittest.TestCase):
+    """🔴 게시위치 미등록 = 신규·연장 심의 제한 사유 — 승인 뒤 24시간이 지나도 비어 있으면 알린다."""
+
+    def setUp(self):
+        from datetime import datetime, timedelta, timezone
+        self.now = datetime(2026, 10, 2, 12, 0, tzinfo=timezone(timedelta(hours=9)))
+        self.old = "2026-10-01T02:00:00+00:00"    # 승인 25시간 전(KST 11:00 기준 → 12:00 이면 25시간)
+        self.new = "2026-10-02T01:00:00+00:00"    # 2시간 전
+
+    def row(self, **k):
+        r = {"id": "r1", "channel": "main", "status": "approved", "review_no": "2026-10-1234",
+             "reviewed_at": self.old, "posted_url": None, "url_registered_at": None}
+        r.update(k)
+        return r
+
+    def test_stages(self):
+        got = pa.overdue([self.row(), self.row(id="r2", posted_url="https://goodfinance.kr/news/x")], self.now)
+        self.assertEqual([(r["id"], s) for r, s in got], [("r1", "게시 전"), ("r2", "게시위치 등록 대기")])
+
+    def test_not_yet_or_done_or_unknown(self):
+        rows = [self.row(reviewed_at=self.new), self.row(url_registered_at="2026-10-01T05:00:00Z"),
+                self.row(status="submitted"), self.row(reviewed_at=None), self.row(reviewed_at="엉뚱한값")]
+        self.assertEqual(pa.overdue(rows, self.now), [])
+
+    def test_watcher_rows_fall_back_to_review_from(self):
+        # 감시기가 승인으로 바꾼 행은 reviewed_at 이 비어 있다(7987·7998 실측) — 심의필일자 0시(KST)부터 센다
+        self.assertEqual(len(pa.overdue([self.row(reviewed_at=None, review_from="2026-10-01")], self.now)), 1)   # 36시간
+        self.assertEqual(pa.overdue([self.row(reviewed_at=None, review_from="2026-10-02")], self.now), [])        # 12시간
+
+    def test_naive_timestamp_is_utc(self):
+        self.assertEqual(len(pa.overdue([self.row(reviewed_at="2026-10-01T02:00:00")], self.now)), 1)
+
+    def test_message_names_the_next_action(self):
+        m = pa.overdue_msg("백내장 수술 실손 (10호)", self.row(posted_url="u"), "게시위치 등록 대기", 24)
+        self.assertTrue(m.startswith("🔴 게시위치 미등록 24시간+ — 백내장 수술 실손 (10호) 본진 제2026-10-1234호"))
+        self.assertIn("감시기", m)
+        self.assertIn("심의 제한", m)
+        n = pa.overdue_msg("t", self.row(channel="naver"), "게시 전", 24)
+        self.assertIn("공개로 전환", n)
+
+    def test_wired_into_run_and_query(self):
+        s = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "publish_approved.py"), encoding="utf-8").read()
+        self.assertIn("reviewed_at\",\n        \"status\": \"eq.approved\"", s)
+        i = s.index("def run(")
+        self.assertIn("overdue(rows, datetime.now(KST))", s[i:])
+        self.assertIn('key = f"overdue:{r[\'id\']}:{today}"', s[i:])
+
+
 if __name__ == "__main__":
     unittest.main()
