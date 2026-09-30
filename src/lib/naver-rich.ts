@@ -1,4 +1,5 @@
 import { ACTUAL_LOSS_NOTICE, REQUIRED_NOTICES } from "./brand";
+import NAVER_FORMAT from "../../configs/naver-format.json";
 
 /**
  * 네이버 붙여넣기용 HTML — **서식째 복사**.
@@ -20,11 +21,12 @@ import { ACTUAL_LOSS_NOTICE, REQUIRED_NOTICES } from "./brand";
  *   사진은 <p style="text-align:center;"> 안의 <img width="800">, data URI 로 포함
  */
 
-const SIZE = { head: 24, list: 19, body: 15, advice: 16, notice: 13 } as const;
+// 규격은 configs/naver-format.json 한 곳 — robert-os 1클릭 채움도 같은 파일을 읽는다.
+const SIZE = NAVER_FORMAT.size_px;
 
 /** osmu 가 필수안내사항 앞에 넣는 구분선 */
-const NOTICE_RULE = "─────────────";
-const ADVICE_MARK = "한 줄 조언";
+const NOTICE_RULE = NAVER_FORMAT.notice_rule;
+const ADVICE_MARK = NAVER_FORMAT.advice_mark;
 
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
