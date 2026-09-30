@@ -345,6 +345,12 @@ def main():
             notify=lambda t: telegram(env, t),
             server_factory=lambda: kit.LocalServer(log=log),
         )
+        # 접수 순서(configs/pams_queue.json) — 칸이 비면 「다음 접수: ○」 한 줄(같은 상태면 다시 안 보냄).
+        try:
+            import pams_queue
+            pams_queue.notify_next(env, state, notify=lambda t: telegram(env, t), log=log)
+        except Exception as e:  # 큐 알림 실패가 키트·게시 바퀴를 막지 않는다
+            log(f"큐 알림 실패: {e}")
         save_state(state)
         upload_submitted_threads(env, notify=lambda t: telegram(env, t))
         # 심의 승인 → 게시(본진 자동 공개·posted_url, 네이버 공개 전환 안내·RSS URL, 배포 체크, 만료 알림).
