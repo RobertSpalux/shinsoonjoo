@@ -71,7 +71,20 @@ class T2(unittest.TestCase):
         self.assertEqual(pa.plan_flags([{**nv, "posted_url": None}], arts, T), [], "URL 없으면 켜지 않는다")
         self.assertEqual(pa.plan_flags([{**nv, "review_to": "2026-09-29"}], arts, T), [], "만료면 켜지 않는다")
         self.assertEqual(pa.plan_flags([nv], {"a1": {**arts["a1"], "is_naver_published": True}}, T), [])
-        self.assertEqual(pa.plan_flags([{**nv, "channel": "threads"}], arts, T), [], "스레드는 대상 아님")
+        th = {**nv, "channel": "threads", "posted_url": "https://www.threads.com/@goodfinance_sj/post/x"}
+        self.assertEqual([f[2] for f in pa.plan_flags([th], {"a1": {**arts["a1"], "is_threads_published": False}}, T)],
+                         ["is_threads_published"], "스레드도 게시 URL 이 있으면 배포 체크 ON")
+
+    def test_publish_msg(self):
+        m = pa.publish_msg("caregiver-daily-benefit-support-vs-use", "https://goodfinance.kr/news/x",
+                           {**ROW, "id": "329a6c53-b597", "review_authority": "프라임에셋"})
+        lines = m.split("\n")
+        self.assertEqual(len(lines), 5, "텔레그램 1통 = 머리 + ①~④")
+        self.assertTrue(lines[0].startswith("✅ [본진 자동 게시] 6호"))
+        self.assertEqual(lines[1], "① 발행: https://goodfinance.kr/news/x")
+        self.assertEqual(lines[2], "② 라이브 심의필 확인: 프라임에셋 심의필 제2026-09-7998호 (2026.09.30~2027.09.29)")
+        self.assertTrue(lines[3].startswith("③ posted_url 기록: ad_reviews 329a6c53"))
+        self.assertTrue(lines[4].startswith("④ 팜스 게시위치(＋)"))
 
 
 if __name__ == "__main__":

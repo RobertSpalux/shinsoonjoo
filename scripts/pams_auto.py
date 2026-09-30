@@ -347,6 +347,12 @@ def main():
         )
         save_state(state)
         upload_submitted_threads(env, notify=lambda t: telegram(env, t))
+        # 심의 승인 → 게시(본진 자동 공개·posted_url, 네이버 공개 전환 안내·RSS URL, 배포 체크, 만료 알림).
+        # 로버트 결정 2026-09-30 11:36 「머지다 했고, 본진자동공개 켜」. 팜스 ＋ 는 robert-os 감시기가 한다.
+        # 안전장치(publish_approved): review_no·유효기간 · /preview 게이트 · 라이브 번호 미노출이면 실패 알림·URL 미기록 · 본문 무변경.
+        import publish_approved
+        for line in publish_approved.run(env, notify=lambda t: telegram(env, t), live=True):
+            log(line)
         if made:
             log(f"이번 바퀴 키트 {len(made)}개")
     except Exception:

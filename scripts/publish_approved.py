@@ -14,8 +14,13 @@
   ② 라이브 확인: https://goodfinance.kr/news/<slug> 가 200 이고 **심의필 번호가 페이지에 보일 때까지** 기다린다.
   ③ 게시 URL 기록: POST /api/admin/ad-review action=record-posted-url (posted_url 만. url_registered_at 은 비움).
   ④ 팜스 ＋ 는 robert-os 감시기(pams_wheel 게시위치저장)가 「approved + posted_url + url_registered_at 없음」을 보고 한다.
-  네이버: 게시용 원고(어드민 [게시용 복사] 와 같은 /api/admin/compose mode=publish)를
-     Downloads\\PAMS접수\\_네이버게시\\MMDD_N호_네이버.txt/.html 로 쓰고 텔레그램 알림. 실제 게시·posted_url 은 robert-os 가 붙인다.
+  네이버: 심의 때 올린 **비공개 글이 승인본**이다 → 할 일은 「그 글 공개 전환 + 심의필 한 줄 확인」(로버트 09-30 11:25).
+     Downloads\\PAMS접수\\_네이버게시\\MMDD_N호_네이버.txt(안내) + .html(서식 참고본, configs/naver-format.json 규격)
+     + 사진 복사본(_이미지1~N) · 텔레그램 알림.
+     공개되면 네이버 RSS(configs/naver-format.json blog.rss)를 제목으로 짝지어 posted_url 자동 기록(애매하면 텔레그램 질문 1회).
+  배포 체크: approved + posted_url 인데 어드민 「배포」 체크가 꺼진 채널(naver·blogspot·instagram·threads)은
+     어드민 체크박스와 같은 /api/admin/update 로 켠다.
+  자동 실행: pams_auto 10분 바퀴(로버트 결정 2026-09-30 11:36 「머지다 했고, 본진자동공개 켜」).
   만료: approved 심의필이 30일 안에 끝나면 텔레그램 알림(§6.3 유효기간 관리 — 하루 1번).
 
 🔴 게이트(하나라도 걸리면 그 글은 건너뛴다 — 고쳐서 진행하지 않는다):
@@ -104,7 +109,7 @@ def fetch_rows(env):
     if ids:
         q = requests.get(url, headers=h, timeout=30, params={
             "select": "id,slug,title,naver_title,is_main_published,is_naver_published,is_blogspot_published,"
-                      "is_instagram_published,needs_human_review",
+                      "is_instagram_published,is_threads_published,needs_human_review",
             "id": "in.(" + ",".join(ids) + ")"})
         q.raise_for_status()
         arts = {a["id"]: a for a in q.json()}
@@ -128,6 +133,17 @@ def admin_post(server, env, path, payload):
     if r.status_code >= 300 or body.get("error"):
         raise kit.KitError(f"{path} {r.status_code} — {body.get('error')}")
     return body
+
+
+def publish_msg(slug, url, r):
+    """본진 자동 게시 텔레그램 1통 — 규격 고정(시험 test_publish_msg). 이 한 통으로 게시~게시위치 등록 흐름을 따라간다."""
+    return "\n".join([
+        f"✅ [본진 자동 게시] {kit.issue_label(slug)} · {slug}",
+        f"① 발행: {url}",
+        f"② 라이브 심의필 확인: {review_line(r)}",
+        f"③ posted_url 기록: ad_reviews {r['id'][:8]} (main)",
+        "④ 팜스 게시위치(＋): 감시기 다음 바퀴 — 완료 시 url_registered_at 이 채워지고 어드민 박스가 사라진다",
+    ])
 
 
 def wait_live(slug, review_no, wait=LIVE_WAIT_SEC):
@@ -163,7 +179,7 @@ def publish_main(server, env, item, live):
     url = wait_live(a["slug"], r["review_no"])
     admin_post(server, env, "/api/admin/ad-review", {
         "action": "record-posted-url", "articleId": a["id"], "channel": "main", "reviewId": r["id"], "postedUrl": url})
-    return f"본진 게시 {url} · 심의필 제{r['review_no']}호 확인 · posted_url 기록"
+    return publish_msg(a["slug"], url, r)
 
 
 def review_line(r):
@@ -239,7 +255,8 @@ def naver_kit(server, env, item, live, out_dir=NAVER_OUT, now=None):
 
 
 # ── 배포 체크 동기화 · 네이버 URL 회수 ─────────────────────────────
-FLAG = {"naver": "is_naver_published", "blogspot": "is_blogspot_published", "instagram": "is_instagram_published"}
+FLAG = {"naver": "is_naver_published", "blogspot": "is_blogspot_published", "instagram": "is_instagram_published",
+        "threads": "is_threads_published"}
 
 
 def plan_flags(rows, articles, today):
@@ -363,7 +380,7 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
                             notify(f"📝 네이버 게시 대기 — {a['slug']} 제{t['row']['review_no']}호\n{res}")
                     out.append(("✅ " if live else "") + res)
                     if live and t["channel"] == "main":
-                        notify(f"✅ {res}\n→ 감시기 다음 바퀴에 팜스 게시위치(＋) 등록")
+                        notify(res)
                 except kit.KitError as e:
                     out.append(f"❌ {a['slug']} {t['channel']} — {e}")
                     if live:
