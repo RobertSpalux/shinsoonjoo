@@ -19,7 +19,7 @@ export default function ArticleCtaInline({ slug }: { slug: string }) {
         내 담보 합계는 얼마일까요?
       </p>
       <Link
-        href="/diagnosis"
+        href={`/diagnosis?ref=${encodeURIComponent(slug)}`}
         onClick={() => gaEvent("article_cta_inline_click", { article_slug: slug })}
         className="self-start border-b border-[var(--color-gold-dim)] pb-0.5 text-sm font-medium text-[var(--color-text-strong)] transition-colors duration-300 hover:border-[var(--color-gold)] sm:self-auto"
       >

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import TrackedLink from "@/components/TrackedLink";
 import {
   BRAND,
   getCareer,
@@ -134,7 +135,9 @@ export default function Footer() {
               >
                 <InstagramIcon className="h-[22px] w-[22px]" />
               </a>
-              <a
+              <TrackedLink
+                event="kakao_cta_click"
+                position="footer"
                 href={BRAND.social.kakao}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -142,7 +145,7 @@ export default function Footer() {
                 className="flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-forest)] transition-[background-color,transform] duration-300 hover:-translate-y-px hover:bg-white"
               >
                 <KakaoIcon className="h-[22px] w-[22px]" />
-              </a>
+              </TrackedLink>
             </div>
           </div>
 
