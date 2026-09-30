@@ -63,9 +63,10 @@ CH_LABEL = {"main": "본진", "naver": "네이버", "threads": "스레드"}
 # (2026-09-30 robert-os 1112 보고: 7호 본진 재채움에서 이 두 칸만 비었다 — 키트에 줄이 없었다.)
 # 게시위치 = 발행 전이라도 확정 URL. PAMS 게시위치 등록 실물 형식과 같다(9200호 → https://goodfinance.kr/news/<slug>).
 SITE_ORIGIN = "https://goodfinance.kr"
-# 규격 [미확정 → 실물 대조 대기] 회사 매뉴얼(광고심의신청방법매뉴얼_20260706 · CLAUDE.md §6.4 입력값 표) 「온라인은 해당 없음」.
-#   승인된 본진 건(6088·6964·8289·9200)의 PAMS 상세(upview, 읽기) 값이 다르면 이 상수 하나만 고친다.
-MAIN_SPEC = "해당 없음(온라인)"
+# 규격 = **빈 값(칸을 비운다)** — 로버트 판단 2026-09-30 17:22 「규격은 중요하지 않다」.
+#   회사 매뉴얼(CLAUDE.md §6.4 입력값 표)도 「규격 및 모양 | 온라인은 해당 없음」이다. 값이 비면 「규격:」 줄을 쓰지 않는다.
+#   다시 채우게 되면 이 상수 하나에만 값을 넣는다.
+MAIN_SPEC = ""
 KST = timezone(timedelta(hours=9))
 # 창 없는 실행(작업 스케줄러에서 10분마다 창이 뜨지 않게)
 NO_WINDOW = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
@@ -222,7 +223,7 @@ def kit_lines(slug, channel, title, title_from, sources, files):
         f"  (출처: {title_from} · 금지 특수문자 ' ? \" & 제거)",
     ]
     if channel == "main":
-        head += [f"게시위치: {main_location(slug)}", f"규격: {MAIN_SPEC}"]
+        head += [f"게시위치: {main_location(slug)}"] + ([f"규격: {MAIN_SPEC}"] if MAIN_SPEC.strip() else [])
     head += [f"광고형태: {AD_FORM[channel]}", "", "증빙 자료명 (작성기관명, 자료명, 기준년도, 발표연도):"]
     return head + [f"- {s}" for s in sources] + ["", "zip 안 파일:"] + [f"- {fn}" for fn in files]
 

@@ -31,6 +31,11 @@
       "slug": "ltc-grade-home-care-rider-check",
       "channel": "naver",
       "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
+    },
+    {
+      "slug": "cataract-surgery-silson-inpatient-or-outpatient",
+      "channel": "naver",
+      "why": "본진 접수(16:58) 뒤 비공개 게시 캡처 필요 — 안내 묶음 준비됨(_네이버비공개\\0930_10호_*)"
     }
   ]
 }
