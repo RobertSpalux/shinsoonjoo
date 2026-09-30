@@ -1,0 +1,24 @@
+# gitleaks 설정 — 기본 규칙 전부 + 이 저장소에 맞춘 규칙.
+#   CI: .github/workflows/gitleaks.yml   로컬: .githooks/pre-commit (scripts/install_hooks.sh 로 켠다)
+#   배경: 2026-09-30 저장소 비밀 감사(키·토큰·고객정보 0건). 재발 방지를 기계에 맡긴다.
+title = "shinsoonjoo"
+
+[extend]
+useDefault = true
+
+# 주민등록번호 꼴 — 웹·저장소 어디에도 두지 않는다(CLAUDE.md §2·§6.1).
+[[rules]]
+id = "kr-resident-registration-number"
+description = "주민등록번호 꼴(YYMMDD-Nxxxxxx)"
+regex = '''\b\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])-[1-4]\d{6}\b'''
+tags = ["pii", "kr"]
+
+# 오탐 — 출처 대장·시드의 "key": "fss-precedent-…" 는 자료 식별자(slug)이지 API 키가 아니다.
+#   2026-10-01 gitleaks 8.30.1 로 이력 전체를 돌려 나온 7건이 전부 이것이었다.
+[[allowlists]]
+description = "출처 대장·상록수 시드의 key 필드는 자료 식별자"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^configs/sources\.json$''',
+  '''^scripts/seeds/evergreen-seeds\.mjs$''',
+]
