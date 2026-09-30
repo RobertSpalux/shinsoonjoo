@@ -39,5 +39,40 @@ class T1(unittest.TestCase):
         self.assertFalse(pa.live_has_review("<html>제_____호</html>", "2026-09-7998"))
 
 
+class T2(unittest.TestCase):
+    def test_review_line(self):
+        self.assertEqual(pa.review_line({**ROW, "review_authority": "프라임에셋"}),
+                         "프라임에셋 심의필 제2026-09-7998호 (2026.09.30~2027.09.29)")
+
+    def test_copy_images_numbered(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            names = pa.copy_images("caregiver-daily-benefit-support-vs-use", d, "0930_6호_네이버")
+            self.assertEqual(names, [f"0930_6호_네이버_이미지{i}.png" for i in (1, 2, 3)], "순서 번호 파일명")
+            self.assertTrue(all(os.path.getsize(os.path.join(d, n)) > 0 for n in names), "실물 복사")
+            self.assertEqual(pa.copy_images("no-such-slug", d, "x"), [], "사진 없으면 빈 목록 — 지어내지 않는다")
+
+    def test_match_rss(self):
+        arts = {"a1": {"naver_title": "간병인 쓰고 간병비보험 청구하려면 — 영수증 말고도 챙길 서류가 있습니다"}}
+        row = {**ROW, "channel": "naver"}
+        items = [("간병인 쓰고 간병비보험 청구하려면 —  영수증 말고도 챙길 서류가 있습니다", "https://blog.naver.com/x/1"),
+                 ("다른 글", "https://blog.naver.com/x/2")]
+        ok, ask = pa.match_rss(items, [row], arts)
+        self.assertEqual([l for _, l in ok], ["https://blog.naver.com/x/1"], "공백 차이 무시, 제목 완전 일치만")
+        ok, ask = pa.match_rss(items + [(items[0][0], "https://blog.naver.com/x/3")], [row], arts)
+        self.assertEqual((ok, len(ask)), ([], 1), "같은 제목 2개면 묻는다")
+        ok, ask = pa.match_rss([("간병인 쓰고", "https://x")], [row], arts)
+        self.assertEqual((ok, ask), ([], []), "부분 일치는 짝이 아니다")
+
+    def test_plan_flags(self):
+        arts = {"a1": {"id": "a1", "slug": "s1", "is_naver_published": False}}
+        nv = {**ROW, "channel": "naver", "posted_url": "https://blog.naver.com/x/1"}
+        self.assertEqual([f[2] for f in pa.plan_flags([nv], arts, T)], ["is_naver_published"])
+        self.assertEqual(pa.plan_flags([{**nv, "posted_url": None}], arts, T), [], "URL 없으면 켜지 않는다")
+        self.assertEqual(pa.plan_flags([{**nv, "review_to": "2026-09-29"}], arts, T), [], "만료면 켜지 않는다")
+        self.assertEqual(pa.plan_flags([nv], {"a1": {**arts["a1"], "is_naver_published": True}}, T), [])
+        self.assertEqual(pa.plan_flags([{**nv, "channel": "threads"}], arts, T), [], "스레드는 대상 아님")
+
+
 if __name__ == "__main__":
     unittest.main()

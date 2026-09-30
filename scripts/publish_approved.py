@@ -29,6 +29,8 @@ import html as htmllib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -101,7 +103,8 @@ def fetch_rows(env):
     arts = {}
     if ids:
         q = requests.get(url, headers=h, timeout=30, params={
-            "select": "id,slug,title,naver_title,is_main_published,is_naver_published,needs_human_review",
+            "select": "id,slug,title,naver_title,is_main_published,is_naver_published,is_blogspot_published,"
+                      "is_instagram_published,needs_human_review",
             "id": "in.(" + ",".join(ids) + ")"})
         q.raise_for_status()
         arts = {a["id"]: a for a in q.json()}
@@ -163,26 +166,123 @@ def publish_main(server, env, item, live):
     return f"본진 게시 {url} · 심의필 제{r['review_no']}호 확인 · posted_url 기록"
 
 
+def review_line(r):
+    """§6.3 정본 형식 심의필 한 줄 — 페이지·조립 원고와 같은 꼴(renderMandatoryNotice)."""
+    f = (r.get("review_from") or "").replace("-", ".")
+    t = (r.get("review_to") or "").replace("-", ".")
+    return f"{r.get('review_authority') or '프라임에셋'} 심의필 제{r['review_no']}호 ({f}~{t})"
+
+
+def copy_images(slug, out_dir, base):
+    """assets/naver/<slug>/ 사진 → 게시본 폴더에 순서 번호 파일명으로 복사. 복사한 파일명 목록."""
+    src_dir = os.path.join(kit.ROOT, "assets", "naver", slug)
+    names = sorted(n for n in os.listdir(src_dir) if n.lower().endswith((".png", ".jpg", ".jpeg"))) \
+        if os.path.isdir(src_dir) else []
+    out = []
+    for i, n in enumerate(names, 1):
+        dst = f"{base}_이미지{i}{os.path.splitext(n)[1].lower()}"
+        shutil.copyfile(os.path.join(src_dir, n), os.path.join(out_dir, dst))
+        out.append(dst)
+    return out
+
+
+def rich_html(text_path, images):
+    """네이버 서식 HTML(configs/naver-format.json 규격) — 어드민 [게시용 복사]와 같은 toNaverRichHtml."""
+    r = subprocess.run(["npx", "tsx", "scripts/naver_rich.mts", text_path, *images], cwd=kit.ROOT,
+                       capture_output=True, text=True, encoding="utf-8", shell=(os.name == "nt"))
+    if r.returncode != 0 or not r.stdout.strip():
+        raise kit.KitError(f"네이버 서식 HTML 실패 — {r.stderr.strip()[:200]}")
+    return r.stdout
+
+
 def naver_kit(server, env, item, live, out_dir=NAVER_OUT, now=None):
+    """네이버 승인 후 할 일 안내 — **새 게시가 아니라 심의 때 올려 둔 비공개 글을 공개로 전환**(로버트 09-30 11:25).
+
+    비공개 글이 곧 승인본이다. 할 일: 그 글을 열어 심의필 한 줄을 확인·치환 → 전체공개.
+    게시본(.txt/.html + 사진)은 **대조용 참고**다 — 비공개 글과 다르면 비공개 글이 정본이다(원안 변경 금지).
+    """
     a, r = item["article"], item["row"]
     base = kit.kit_basename(a["slug"], "naver", now)
     txt = os.path.join(out_dir, base + ".txt")
     if not live:
-        return f"(드라이런) 네이버 게시본 → {txt}"
+        return f"(드라이런) 네이버 공개 전환 안내 → {txt}"
     body = admin_post(server, env, "/api/admin/compose", {"articleId": a["id"], "channel": "naver", "mode": "publish"})
     if r["review_no"] not in body["text"]:
         raise kit.KitError("게시용 원고에 심의필 번호가 없습니다 — 조립 결과 확인 필요")
-    img_dir = os.path.join(kit.ROOT, "assets", "naver", a["slug"])
-    imgs = sorted(os.listdir(img_dir)) if os.path.isdir(img_dir) else []
     os.makedirs(out_dir, exist_ok=True)
-    head = [f"제목: {body['title']}", f"심의필: 프라임에셋 심의필 제{r['review_no']}호 ({r['review_from']} ~ {r['review_to']})",
-            "이미지(순서): " + (", ".join(os.path.join(img_dir, i) for i in imgs) or "없음"),
-            "🔴 승인본 그대로 붙인다 — 한 글자도 고치지 않는다. 게시 후 URL 을 ad_reviews(naver).posted_url 에.", "", "── 본문 ──"]
-    open(txt, "w", encoding="utf-8", newline="\n").write("\n".join(head) + "\n" + body["text"] + "\n")
-    paras = "".join(f"<p>{htmllib.escape(p) or '&nbsp;'}</p>\n" for p in body["text"].split("\n"))
+    imgs = copy_images(a["slug"], out_dir, base)
+    body_path = os.path.join(out_dir, base + "_본문.txt")
+    open(body_path, "w", encoding="utf-8", newline="\n").write(body["text"])
+    html = rich_html(body_path, imgs)
     open(txt[:-4] + ".html", "w", encoding="utf-8").write(
-        f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(body['title'])}</title>\n<h1>{htmllib.escape(body['title'])}</h1>\n{paras}")
-    return f"네이버 게시본 {txt} (+.html · 이미지 {len(imgs)}장)"
+        f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(body['title'])}</title>"
+        f"<body style='max-width:860px;margin:24px auto;padding:0 16px'>"
+        f"<p style='font-size:24px;'><b>{htmllib.escape(body['title'])}</b></p>\n{html}</body>")
+    head = [
+        f"[네이버 승인 — 공개 전환] {kit.issue_label(a['slug'])} · {a['slug']}",
+        "",
+        "할 일(새로 올리지 않는다):",
+        f"  1. 심의 때 비공개로 올려 둔 글을 연다 — 제목: {body['title']}",
+        f"  2. 필수안내사항의 심의필 줄을 아래 한 줄로 확인·치환한다(자리표시·공란이면 이 줄로):",
+        f"       {review_line(r)}",
+        "  3. 그 밖의 글자·사진·서식은 한 글자도 고치지 않는다(비공개 글 = 승인본).",
+        "  4. 공개 설정을 「전체공개」로 바꾼다.",
+        "  5. 게시 URL 은 RSS 로 자동 회수된다(10분 주기) → 감시기가 팜스 게시위치(＋) 등록.",
+        "",
+        "서식 규격: configs/naver-format.json (소제목 24 · 목록 19 · 본문 15 · 필수안내 13 · 색 지정 금지)",
+        f"대조용 참고본: {os.path.basename(txt[:-4] + '.html')} · 사진 {len(imgs)}장: " + (", ".join(imgs) or "없음"),
+        "",
+        "── 대조용 본문(조립본) ──",
+    ]
+    open(txt, "w", encoding="utf-8", newline="\n").write("\n".join(head) + "\n" + body["text"] + "\n")
+    return f"네이버 공개 전환 안내 {txt} (+.html · 사진 {len(imgs)}장 복사)"
+
+
+# ── 배포 체크 동기화 · 네이버 URL 회수 ─────────────────────────────
+FLAG = {"naver": "is_naver_published", "blogspot": "is_blogspot_published", "instagram": "is_instagram_published"}
+
+
+def plan_flags(rows, articles, today):
+    """approved · 유효 · posted_url 있음 인데 어드민 배포 체크가 꺼진 채널 → [(article, row, flag)]."""
+    out = []
+    for r in rows:
+        a = articles.get(r["article_id"])
+        flag = FLAG.get(r.get("channel"))
+        if a and flag and r.get("posted_url") and not a.get(flag) and review_ok(r, today)[0]:
+            out.append((a, r, flag))
+    return out
+
+
+def norm_title(s):
+    return re.sub(r"\s+", "", htmllib.unescape(s or ""))
+
+
+def match_rss(items, rows, articles):
+    """RSS [(title, link)] × naver 행(posted_url 없음) → ([(row, link)], [(row, 사유)]). 제목 완전 일치(공백 무시)만."""
+    ok, ask = [], []
+    for r in rows:
+        a = articles.get(r["article_id"]) or {}
+        want = norm_title(a.get("naver_title"))
+        if not want:
+            continue
+        hits = [link for t, link in items if norm_title(t) == want]
+        if len(hits) == 1:
+            ok.append((r, hits[0]))
+        elif len(hits) > 1:
+            ask.append((r, f"같은 제목 글이 {len(hits)}개 — {', '.join(hits)}"))
+    return ok, ask
+
+
+def fetch_rss(url):
+    import xml.etree.ElementTree as ET
+    x = requests.get(url, timeout=30)
+    x.raise_for_status()
+    root = ET.fromstring(x.content)
+    out = []
+    for it in root.iter("item"):
+        link = (it.findtext("link") or "").split("?")[0].strip()
+        out.append(((it.findtext("title") or "").strip(), link))
+    return out
 
 
 # ── 상태·알림 ─────────────────────────────────────────────────
@@ -217,7 +317,30 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
             notify(msg)
             st[key] = True
 
-    if todo:
+    # 네이버 URL 회수(RSS) — 공개 전환된 승인 글을 제목으로 짝지어 posted_url 로
+    naver_wait = [r for r in rows if r.get("channel") == "naver" and not r.get("posted_url")
+                  and (not slug or arts.get(r["article_id"], {}).get("slug") == slug)]
+    rss_ok, rss_ask = [], []
+    if naver_wait:
+        try:
+            fmt = json.load(open(os.path.join(kit.ROOT, "configs", "naver-format.json"), encoding="utf-8"))
+            rss_ok, rss_ask = match_rss(fetch_rss(fmt["blog"]["rss"]), naver_wait, arts)
+        except (requests.RequestException, ValueError, KeyError) as e:
+            out.append(f"⚠️ 네이버 RSS 읽기 실패 — {e}")
+    for r, why in rss_ask:
+        key = f"ask:{r['id']}"
+        out.append(f"❓ 네이버 URL 짝 애매 — {arts[r['article_id']]['slug']} · {why}")
+        if live and key not in st:
+            notify(f"❓ 네이버 게시 URL 을 못 정했습니다 — {arts[r['article_id']]['slug']}\n{why}\n맞는 URL 을 ad_reviews(naver).posted_url 에 넣어 주세요.")
+            st[key] = True
+    flags = [f for f in plan_flags(rows, arts, today) if not slug or f[0]["slug"] == slug]
+    # RSS 로 방금 URL 을 얻는 채널도 배포 체크 대상
+    for r, link in rss_ok:
+        a = arts[r["article_id"]]
+        if not a.get(FLAG["naver"]) and review_ok(r, today)[0]:
+            flags.append((a, {**r, "posted_url": link}, FLAG["naver"]))
+
+    if todo or rss_ok or flags:
         server = kit.LocalServer(base_url=base_url, log=log) if live else None
         if server:
             server.__enter__()
@@ -245,6 +368,31 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
                     out.append(f"❌ {a['slug']} {t['channel']} — {e}")
                     if live:
                         notify(f"❌ 승인→게시 실패 {a['slug']} {t['channel']} — {e}")
+            for r, link in rss_ok:
+                a = arts[r["article_id"]]
+                if not live:
+                    out.append(f"(드라이런) 네이버 URL 회수 {a['slug']} ← {link}")
+                    continue
+                try:
+                    admin_post(server, env, "/api/admin/ad-review", {
+                        "action": "record-posted-url", "articleId": a["id"], "channel": "naver",
+                        "reviewId": r["id"], "postedUrl": link})
+                    out.append(f"✅ 네이버 URL 회수 {a['slug']} ← {link}")
+                    notify(f"✅ 네이버 게시 URL 회수 — {a['slug']}\n{link}\n→ 감시기 다음 바퀴에 팜스 게시위치(＋) 등록")
+                except kit.KitError as e:
+                    out.append(f"❌ 네이버 URL 기록 실패 {a['slug']} — {e}")
+            for a, r, flag in flags:
+                if not live:
+                    out.append(f"(드라이런) 배포 체크 ON {a['slug']} {flag} (게시 URL {r['posted_url']})")
+                    continue
+                try:
+                    # 어드민 배포 체크박스와 같은 경로 — 서버가 유효 심의필을 다시 확인한다
+                    admin_post(server, env, "/api/admin/update",
+                               {"table": "premium_articles", "id": a["id"], "fields": {flag: True}})
+                    a[flag] = True
+                    out.append(f"✅ 배포 체크 ON {a['slug']} {flag}")
+                except kit.KitError as e:
+                    out.append(f"❌ 배포 체크 실패 {a['slug']} {flag} — {e}")
         finally:
             if server:
                 server.__exit__(None, None, None)
