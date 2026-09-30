@@ -67,6 +67,8 @@ SITE_ORIGIN = "https://goodfinance.kr"
 #   회사 매뉴얼(CLAUDE.md §6.4 입력값 표)도 「규격 및 모양 | 온라인은 해당 없음」이다. 값이 비면 「규격:」 줄을 쓰지 않는다.
 #   다시 채우게 되면 이 상수 하나에만 값을 넣는다.
 MAIN_SPEC = ""
+# 네이버 게시위치 = 팜스에 사전등록된 블로그 주소(CLAUDE.md §6.4 사전등록표). 글 단위 URL 은 승인 뒤 게시위치 등록 단계에서 넣는다.
+NAVER_BLOG = "https://blog.naver.com/insightlab-daily"
 KST = timezone(timedelta(hours=9))
 # 창 없는 실행(작업 스케줄러에서 10분마다 창이 뜨지 않게)
 NO_WINDOW = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
@@ -224,6 +226,8 @@ def kit_lines(slug, channel, title, title_from, sources, files):
     ]
     if channel == "main":
         head += [f"게시위치: {main_location(slug)}"] + ([f"규격: {MAIN_SPEC}"] if MAIN_SPEC.strip() else [])
+    if channel == "naver":
+        head += [f"게시위치: {NAVER_BLOG}"]
     head += [f"광고형태: {AD_FORM[channel]}", "", "증빙 자료명 (작성기관명, 자료명, 기준년도, 발표연도):"]
     return head + [f"- {s}" for s in sources] + ["", "zip 안 파일:"] + [f"- {fn}" for fn in files]
 

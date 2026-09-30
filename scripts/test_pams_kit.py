@@ -72,7 +72,8 @@ class MainKitLines(unittest.TestCase):
     def test_naver_unchanged(self):
         # 네이버는 게시 URL 이 비공개 게시 뒤에 정해진다 — 이번 범위 밖(줄 없음 유지)
         ls = lines("naver")
-        self.assertFalse(any(l.startswith("게시위치:") or l.startswith("규격:") for l in ls))
+        self.assertIn("게시위치: https://blog.naver.com/insightlab-daily", ls)   # 사전등록 블로그 주소
+        self.assertFalse(any(l.startswith("규격") for l in ls))
         self.assertIn("광고형태: 바이럴(블로그 등)", ls)
 
 

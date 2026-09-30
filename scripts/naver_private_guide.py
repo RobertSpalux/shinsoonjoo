@@ -52,8 +52,15 @@ def format_line():
     return "서식 규격: configs/naver-format.json (소제목 24 · 목록 19 · 본문 15 · 필수안내 13 · 색 지정 금지)" + ("" if s else " — ⚠ json 읽기 실패")
 
 
+def keyword_of(title):
+    """제목의 첫 낱말(조사 뺀 핵심어) — 파일 이름 예시용. 「백내장 실비 청구했는데 …」 → 백내장"""
+    m = re.search(r"[0-9A-Za-z가-힣]{2,}", title or "")
+    return m.group(0) if m else "글제목"
+
+
 def steps(issue, title, n_images, base):
     """할 일 순서 — 순수 함수(테스트 대상)."""
+    keyword = keyword_of(title)
     return [
         "1. 네이버 블로그(insightlab-daily)에서 「글쓰기」를 연다.",
         f"2. 제목 칸에 아래 제목을 그대로 붙여 넣는다(한 글자도 바꾸지 않는다):",
@@ -65,7 +72,8 @@ def steps(issue, title, n_images, base):
         "5. 필수안내사항의 심의필 줄은 공란(제_____호) 그대로 둔다 — 심의 전이다.",
         "6. 공개 설정 = 「비공개」 → 발행.",
         "7. 발행된 비공개 글 전체를 캡처한다 — 🔴 「비공개」 표시가 화면에 보이게(2025-07-14 시행 규칙).",
-        f"8. 캡처 파일 이름에 「{issue}」를 넣어 Downloads\\PAMS접수\\ 에 저장한다(예: {issue}_네이버.png · 여러 장이면 PDF 1개).",
+        f"8. 비공개 글을 PDF 로 저장할 때 저장 위치를 Downloads\\PAMS접수\\ 로, 파일 이름에 「{issue}」 또는 글의 핵심어(예: {keyword})를 넣는다"
+        f"(예: {issue}.pdf · {keyword}.pdf). 압축은 하지 않는다 — zip 은 자동으로 만들어진다.",
         "   → 10분 안에 pams_auto 가 짝을 맞춰 네이버 키트(zip)를 만든다. 캡처는 캡처_처리됨\\ 으로 옮겨진다.",
         "9. 이 비공개 글이 곧 승인본이다 — 승인 뒤에는 심의필 줄만 채워 「전체공개」로 바꾼다(새로 올리지 않는다).",
     ]
@@ -131,9 +139,10 @@ def send(env, res):
     token, chat = env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID")
     if not token or not chat:
         raise kit.KitError("텔레그램 설정 없음")
+    kw = keyword_of(res["title"])
     cap = (f"[네이버 비공개 게시 요청] {res['title']} ({res['issue']})\n"
            f"파일: Downloads\\PAMS접수\\_네이버비공개\\{os.path.basename(res['txt'])} (+.html · 사진 {len(res['images'])}장)\n"
-           f"캡처는 이름에 「{res['issue']}」 넣어 Downloads\\PAMS접수\\ 로.")
+           f"▶ 비공개 글 PDF 를 Downloads\\PAMS접수\\ 에 「{kw}.pdf」(또는 「{res['issue']}.pdf」)로 저장만 하면 zip 은 10분 안에 자동 생성 — 압축·이름 맞추기 불필요.")
     with open(res["png"], "rb") as fp:
         r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", data={"chat_id": chat, "caption": cap[:1000]},
                           files={"photo": fp}, timeout=60)

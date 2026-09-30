@@ -145,6 +145,27 @@ class CaptureTest(unittest.TestCase):
         h.run()
         self.assertEqual(h.built[0][0], "ltc-grade-home-care-rider-check")
 
+    def test_keyword_in_filename_matches_single_owner(self):
+        """「백내장.pdf」처럼 핵심어만 있어도, 그 말이 대기 글 한 편의 제목에만 있으면 짝이 맞는다(2026-09-30 실측 보완)."""
+        c = [art(), art(slug="cataract-x", title="백내장 수술 실비, 입원으로 받을까", naver_title="백내장 실비 청구했는데 통원으로만 나왔다면"),
+             art(slug="manual-x", title="도수치료 실비, 앞으로도 계속 나올까", naver_title="도수치료 실비 청구되나요")]
+        for fn, want in (("백내장.pdf", "cataract-x"), ("백내장 실비.pdf", "cataract-x"), ("도수치료.pdf", "manual-x"),
+                         ("네이버 비공개 백내장 0930.pdf", "cataract-x")):
+            a, why = auto.match_capture(fn, c)
+            self.assertIsNotNone(a, fn)
+            self.assertEqual(a["slug"], want, fn)
+            self.assertEqual(why, "파일명 핵심어 일치")
+
+    def test_shared_or_generic_word_does_not_match(self):
+        c = [art(slug="cataract-x", title="백내장 수술 실비", naver_title="백내장 실비 청구했는데"),
+             art(slug="manual-x", title="도수치료 실비", naver_title="도수치료 실비 청구되나요")]
+        for fn in ("실비.pdf", "0930.pdf", "스크린샷 2026-09-30.png", "청구.pdf"):
+            a, why = auto.match_capture(fn, c)
+            self.assertIsNone(a, fn)      # 두 글에 다 있거나 날짜·일반어 → 묻는다
+        a, why = auto.match_capture("백내장 도수치료.pdf", c)
+        self.assertIsNone(a)
+        self.assertIn("여러 글", why)
+
     def test_17ho_does_not_match_7ho(self):
         a, why = auto.match_capture("17호.png", [art(), art(slug="caregiver-daily-benefit-support-vs-use")])
         self.assertIsNone(a)

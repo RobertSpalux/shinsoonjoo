@@ -138,6 +138,21 @@ def match_capture(filename, candidates):
         return hits[0], "파일명 일치"
     if len(hits) > 1:
         return None, f"파일명이 여러 글과 맞음({', '.join(kit.issue_label(a['slug']) for a in hits)})"
+    # 핵심어 짝 — 파일명의 낱말(「백내장」「도수치료」)이 대기 글 **한 편의 제목에만** 있으면 그 글이다.
+    #   (2026-09-30 실측: 로버트가 「백내장.pdf」로 저장하면 호수·6글자 조각 규칙에 안 걸려 짝을 못 찾았다.)
+    #   「실비」「보험」처럼 여러 글에 나오는 말·날짜 숫자는 짝으로 치지 않는다. 두 글 이상에 걸리면 묻는다.
+    words = [w for w in re.findall(r"[0-9A-Za-z가-힣]+", stem) if len(w) >= 2 and not w.isdigit()
+             and not re.fullmatch(r"(스크린샷|캡처|캡쳐|screenshot|capture|네이버|블로그|비공개|pdf|png|jpg)", w.lower())]
+    by_word = []
+    for w in words:
+        owners = [a for a in candidates
+                  if w in re.sub(r"\s+", "", (a.get("naver_title") or "") + " " + (a.get("title") or ""))]
+        if len(owners) == 1 and owners[0] not in by_word:
+            by_word.append(owners[0])
+    if len(by_word) == 1:
+        return by_word[0], "파일명 핵심어 일치"
+    if len(by_word) > 1:
+        return None, f"파일명 핵심어가 여러 글과 맞음({', '.join(kit.issue_label(a['slug']) for a in by_word)})"
     if len(candidates) == 1:
         return candidates[0], "네이버 대기 글 1편"
     if not candidates:
@@ -180,7 +195,7 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
         if not art:
             if rec.get("asked") != why:
                 notify(f"[PAMS 캡처] {fn} — 짝을 못 정했습니다({why}). "
-                       f"파일명에 호수(예: 7호)를 넣어 다시 저장해 주세요. 키트는 만들지 않았습니다.")
+                       f"파일명에 글의 핵심어(예: 백내장)나 호수(예: 7호)를 넣어 다시 저장해 주세요. 키트는 만들지 않았습니다.")
                 state["captures"][fn] = {"status": "asked", "asked": why}
             continue
         if state["gate_blocked"].get(f"{art['slug']}|naver") == gate_key(art, "naver") and rec.get("slug") == art["slug"]:
