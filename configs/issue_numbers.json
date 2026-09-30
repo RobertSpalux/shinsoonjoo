@@ -8,5 +8,7 @@
   "eswl-silson-region-count-criteria": 11,
   "copay-ceiling-refund-silson-excluded": 12,
   "corn-removal-surgery-benefit-skin-exclusion": 13,
-  "knee-injection-neuroplasty-surgery-definition-inpatient": 14
+  "knee-injection-neuroplasty-surgery-definition-inpatient": 14,
+  "medical-malpractice-injury-accident-disclosure-causation": 15,
+  "overseas-stay-3month-silson-premium-refund": 16
 }

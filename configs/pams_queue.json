@@ -43,6 +43,16 @@
       "why": "14호 — 무릎주사·신경성형술(TOPIC-BANK H4). 중장년 고빈도 시술 · 수술비 담보가 여러 계약에 흩어진 분의 상담으로 연결"
     },
     {
+      "slug": "medical-malpractice-injury-accident-disclosure-causation",
+      "channel": "main",
+      "why": "15호 — 의료과실 사고와 상해 담보(M2 「상해」 수요 대체재). 상해 담보가 어느 계약에 있는지 모르는 분의 상담으로 연결"
+    },
+    {
+      "slug": "overseas-stay-3month-silson-premium-refund",
+      "channel": "main",
+      "why": "16호 — 해외 석 달 이상 체류 실손보험료 환급. 해지 전에 물어야 한다는 단서가 핵심"
+    },
+    {
       "slug": "ltc-grade-home-care-rider-check",
       "channel": "threads",
       "why": "폼 직접입력 · 통상 5분 승인 — 칸을 오래 막지 않음. 본진 승인 뒤면 첫 댓글 링크가 붙는다"
@@ -94,6 +104,26 @@
     },
     {
       "slug": "knee-injection-neuroplasty-surgery-definition-inpatient",
+      "channel": "naver",
+      "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
+    },
+    {
+      "slug": "medical-malpractice-injury-accident-disclosure-causation",
+      "channel": "threads",
+      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+    },
+    {
+      "slug": "overseas-stay-3month-silson-premium-refund",
+      "channel": "threads",
+      "why": "폼 직접입력 · 본문만(본진 승인 전)"
+    },
+    {
+      "slug": "medical-malpractice-injury-accident-disclosure-causation",
+      "channel": "naver",
+      "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
+    },
+    {
+      "slug": "overseas-stay-3month-silson-premium-refund",
       "channel": "naver",
       "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
     }

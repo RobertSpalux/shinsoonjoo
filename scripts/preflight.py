@@ -344,6 +344,26 @@ def parse_sources_full():
         return json.load(fp).get("sources", [])
 
 
+def stem_variants(flat, titles):
+    """「」 없이 쓴 축약·변형 찾기(순수 함수) — 대장 자료명의 앞 12자가 나온 **그 자리에** 정본 전체가 없으면 변형이다.
+
+    [2026-10-01] 앞 12자가 같은 자료가 대장에 여럿 생겼다(금감원 「주요 분쟁사례로 알아보는 소비자 유의사항 - ○○ -」 연작).
+    종전에는 자료마다 「앞 12자가 본문에 있는데 내 정본 전체는 없다」만 봐서, 연작 중 하나만 정확히 인용해도
+    나머지 전부가 「축약·변형」으로 잡혔다(14호는 통과했다가 15호 자료를 등록하자 같이 실패).
+    → 앞 12자가 나온 자리마다, 같은 앞머리를 가진 정본 중 **어느 하나라도** 그 자리에서 전체가 맞으면 통과.
+    flat·titles 는 공백을 뺀 글자로 비교한다(flat 은 이미 공백 제거된 본문)."""
+    norm = [(t, re.sub(r"\s+", "", t)) for t in titles if len(t) >= 14]
+    out = []
+    for stem in sorted({n[:12] for _, n in norm}):
+        family = [(t, n) for t, n in norm if n.startswith(stem)]
+        pos = flat.find(stem)
+        while pos != -1:
+            if not any(flat.startswith(n, pos) for _, n in family):
+                out.append("자료명이 정본과 다르다(축약·변형) — 정본 " + " 또는 ".join(f"「{t}」" for t, _ in family))
+            pos = flat.find(stem, pos + 1)
+    return sorted(set(out))
+
+
 def check_source_titles(article):
     """자료명이 대장 정본과 **글자 그대로** 같은지 대조한다.
 
@@ -368,13 +388,11 @@ def check_source_titles(article):
             if got not in titles:
                 fails.append(f"{label}: 대장에 없는 자료명 — 「{got}」")
         flat = re.sub(r"\s+", "", text)
+        fails += [f"{label}: {f}" for f in stem_variants(flat, [s_.get("title") or "" for s_ in srcs])]
         for s_ in srcs:
             t = s_.get("title") or ""
             if len(t) < 14:
                 continue
-            stem = re.sub(r"\s+", "", t)[:12]
-            if stem and stem in flat and re.sub(r"\s+", "", t) not in flat:
-                fails.append(f"{label}: 자료명이 정본과 다르다(축약·변형) — 정본 「{t}」")
             # 날짜와 함께 인용했다면 발표일 전체여야 한다
             pub = (s_.get("published") or "").strip()
             if pub and re.sub(r"\s+", "", t) in flat:

@@ -1,0 +1,36 @@
+{
+  "slug": "medical-malpractice-injury-accident-disclosure-causation",
+  "overline": "상해 담보",
+  "title": "의료과실 사고,\n상해보험금\n대상일까",
+  "subtitle": "수술 동의가 과실까지 동의한 것은 아닙니다",
+  "table_title": "금융감독원이 소개한 처리 결과",
+  "col_before": "다툼",
+  "col_after": "결과",
+  "table_rows": [
+    [
+      "수술 의료과실",
+      "수술 부작용인지",
+      "상해 인정"
+    ],
+    [
+      "오진으로 지연",
+      "부작위도 외래인지",
+      "외래성 인정"
+    ],
+    [
+      "고지의무 위반",
+      "사고와 인과관계",
+      "없으면 지급"
+    ]
+  ],
+  "table_note": "금융감독원 「주요 분쟁사례로 알아보는 소비자 유의사항\n-의료과실 사고 및 고지의무 관련 -」(2025.11.6.) 기준",
+  "points_title": "판단에 걸려 있는 세 가지",
+  "points": [
+    "의료과실의 객관적 입증",
+    "상해 담보의 유무",
+    "약관의 상해 정의"
+  ],
+  "cta_line": "내 상해 담보, 어디에",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}
