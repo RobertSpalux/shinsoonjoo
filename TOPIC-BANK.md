@@ -25,8 +25,8 @@
 | `group-personal-silson-suspend-resume` | 회사 단체실손 … 중지와 1개월 재개 | ✅ | 본진 7180 · 네이버 6802 (1회 반송 후 승인) | A3·A4 |
 | `silson-conversion-withdrawal-6month` | 실손보험 갈아탔는데 후회된다 — 6개월 | ✅ | 본진 6710 · 네이버 6803 (1회 반송 후 승인) | A2 |
 | `exclusion-release-5year-treatment-record` | 부담보 5년 지났는데 왜 안 풀렸을까 | ✅ | 본진 7095 · 네이버 7168 | **B — 부담보 해제 단독(완료)** |
-| `caregiver-daily-benefit-support-vs-use` | 간병인 지원일당과 사용일당 (6호) | ⬜ 심의 중 | 본진·네이버 심사중(PAMS 652340·652331) · 스레드 7550 승인 + 653375 심사중 | D1 |
-| `ltc-grade-home-care-rider-check` | 장기요양 등급 … 재가급여 특약 (7호) | ⬜ 초안 | 미접수(B등급 배지 6건 대기) · 스레드 본문 `assets/threads/drafts/` | D3 |
+| `caregiver-daily-benefit-support-vs-use` | 간병인 지원일당과 사용일당 (6호) | ✅ | 본진 7998 · 네이버 7987 (09-30 승인·공개) · 스레드 7550 승인 + 1건 심사중 | D1 |
+| `ltc-grade-home-care-rider-check` | 장기요양 등급 … 재가급여 특약 (7호) | ⬜ 초안 | 미접수 — 컴플라이언스 확인 완료 · 본진·스레드 키트 있음(09-30) · 네이버는 비공개 게시 캡처 대기 | D3 |
 
 - 조회식(그대로 다시 돌린다): `select a.slug, a.is_main_published, string_agg(r.channel||':'||r.status||coalesce(':'||r.review_no,''), ', ') from premium_articles a left join ad_reviews r on r.article_id=a.id group by 1,2;`
 - 호수(1호~7호)는 DB 필드가 없다. PAMS 키트 호수는 `configs/issue_numbers.json`(6·7호만 등록)이 기준이다.
@@ -190,7 +190,7 @@
 
 | # | 주제 | 검색 각도 | 상태 |
 |---|---|---|---|
-| H1 | 백내장 수술 실손, 단초점 vs 다초점렌즈 얼마 받나 | 5년 수술 1위, 렌즈별 보상 | ⬜ **미작성** — [정정 07-29] 3호는 백내장이 아니라 **일상생활배상책임(누수)**로 발행됐다(8289·8290). H1은 미작성으로 되돌린다. |
+| H1 | 백내장 수술 실손 — 입원으로 받을까 통원으로 받을까 | 백내장 실비 · 백내장 수술 보험금 | 📝 10호 초안 `cataract-surgery-silson-inpatient-or-outpatient` (09-30) — 근거 금감원 「최근 판례로 알아보는 실손보험 등 관련 소비자 유의사항」 2025.3.10. 각도는 렌즈별 금액이 아니라 입원·통원(금액 미노출) |
 | H2 | 도수치료 실비, 2026년 7월 횟수 제한(주2·연15) 정리 | 2026 개편, 검색 급증 | ⬜ **미작성** — [정정 07-27] 과거 발행(07-18)됐으나 회수됐고, WRITING-SPEC(07-24) 규격 미충족으로 원고 삭제. **주제 자체는 유효** → 규격 맞춰 신규 심의로 재작성. slug `manual-therapy-2026-july-insurance-guide` |
 | H3 | 체외충격파 실손, 2026 바뀐 기준 | 복지부 2026 기준 | ⬜ |
 | H4 | 무릎 연골·디스크 수술 실비 얼마 | 중장년 고빈도 | ⬜ |
