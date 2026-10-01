@@ -313,6 +313,58 @@ def capture_to_pdf(src, dst):
     Image.open(src).convert("RGB").save(dst, "PDF", resolution=150.0)
 
 
+_ALNUM = re.compile(r"[^0-9A-Za-z가-힣]")
+_IMG_MARKER = re.compile(r"^\[이미지\s*[①②③④⑤⑥⑦⑧⑨⑩0-9]*\]$")
+
+
+def first_body_line(body):
+    """원고(naver_blog_content)의 첫 본문 줄 — 사진 자리표시·빈 줄은 건너뛴다."""
+    for ln in (body or "").splitlines():
+        s = ln.strip()
+        if s and not _IMG_MARKER.match(s):
+            return s
+    return ""
+
+
+def capture_problems(page1, full, title, body):
+    """네이버 비공개 글 PDF(크롬 인쇄본) 대조 — 순수 함수. 문제 문장 목록(없으면 []).
+
+    🔴 2026-10-01 7호: 제목 끝에 마침표가 붙고 본문 첫 줄(따옴표 문장)이 빠진 채 PDF 가 들어왔는데
+    zip 은 그대로 만들어졌다. 사람이 보고서로 잡았다 — 이제 기계가 막는다.
+    ① 첫 장 맨 앞 = 제목 그대로(공백만 무시). 제목 뒤에 문장부호가 더 붙어 있으면 불일치.
+    ② 원고 첫 본문 줄이 PDF 어딘가에 있어야 한다(글자·숫자만 비교 — 인쇄본은 띄어쓰기가 깨진다).
+    """
+    out = []
+    want = re.sub(r"\s+", "", title or "")
+    head = re.sub(r"\s+", "", page1 or "")
+    shown = re.sub(r"\s+", " ", (page1 or "").strip())[:len(title or "") + 12]
+    if not want:
+        out.append("원고 제목(naver_title)이 비어 있어 대조할 수 없습니다")
+    elif not head.startswith(want):
+        out.append(f"제목 불일치: 기대 「{title}」 / 실제 「{shown}」")
+    elif re.match(r"[.。!?…,·:;~\-—–]", head[len(want):len(want) + 1] or "x"):
+        out.append(f"제목 불일치: 기대 「{title}」 / 실제 「{title}{head[len(want)]}」(끝 문장부호)")
+    first = first_body_line(body)
+    if first and _ALNUM.sub("", first) not in _ALNUM.sub("", full or ""):
+        out.append(f"본문 첫 줄 누락: 「{first}」")
+    return out
+
+
+def check_capture(pdf_path, title, body, log=print):
+    """네이버 캡처 PDF 를 원고와 대조한다. 문제면 KitError(zip 을 만들지 않는다). 그림 캡처는 글자가 없어 건너뛴다."""
+    if os.path.splitext(pdf_path)[1].lower() != ".pdf":
+        log("  · 그림 캡처라 제목·첫 줄 대조를 건너뜀(PDF 로 저장하면 자동 대조)")
+        return
+    from pypdf import PdfReader
+    pages = PdfReader(pdf_path).pages
+    texts = [(p.extract_text() or "") for p in pages]
+    if not "".join(texts).strip():
+        raise KitError("PDF 에서 글자를 읽지 못했습니다 — 네이버 글을 크롬 [인쇄 → PDF 로 저장] 으로 다시 저장하세요")
+    bad = capture_problems(texts[0] if texts else "", "".join(texts), title, body)
+    if bad:
+        raise KitError(" · ".join(bad) + " — 비공개 글을 고친 뒤 다른 이름(예: N호_수정.pdf)으로 다시 저장하세요")
+
+
 # ── 키트 ────────────────────────────────────────────────────
 PROPOSAL_EXT = (".pdf", ".png", ".jpg", ".jpeg", ".hwp", ".hwpx")
 
@@ -350,6 +402,8 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
         raise KitError("네이버 키트는 캡처 파일이 필요합니다")
     if capture and not os.path.exists(capture):
         raise KitError(f"캡처 파일이 없습니다 — {capture}")
+    if channel == "naver":   # 🔴 제목·첫 줄이 원고와 다르면 서버를 띄우기 전에 멈춘다
+        check_capture(capture, article.get("naver_title") or "", article.get("naver_blog_content") or "", log)
     title, title_from = posting_title(article, channel)
     evid = evidence_for(article, channel)
     base = kit_basename(slug, channel, now)

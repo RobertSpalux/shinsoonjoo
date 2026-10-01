@@ -188,10 +188,20 @@ def list_captures(kit_dir, state):
         p = os.path.join(kit_dir, fn)
         if not os.path.isfile(p) or not fn.lower().endswith(CAPTURE_EXT):
             continue
-        if fn.endswith(".part") or state["captures"].get(fn, {}).get("status") == "done":
+        rec = state["captures"].get(fn, {})
+        if fn.endswith(".part") or rec.get("status") == "done":
             continue
+        if rec.get("status") == "bad" and rec.get("sig") == file_sig(p):
+            continue  # 원고와 안 맞아 이미 알린 캡처 — 같은 파일이면 다시 알리지 않는다(덮어쓰면 다시 본다)
         out.append(p)
     return out
+
+
+def file_sig(path):
+    try:
+        return f"{os.path.getmtime(path):.0f}:{os.path.getsize(path)}"
+    except OSError:
+        return ""
 
 
 # ── 한 바퀴 ─────────────────────────────────────────────────
@@ -274,6 +284,9 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
                 else:
                     log(f"  실패: {e}")
                     notify(f"[PAMS 키트] {kit.title_label(a.get('title'), a['slug'])} {kit.CH_LABEL[ch]} — 만들지 못했습니다: {e}")
+                    if cap:   # 같은 캡처로 바퀴마다 같은 알림이 오지 않게(고쳐서 새로 저장하면 다시 본다)
+                        state["captures"][os.path.basename(cap)] = {"status": "bad", "slug": a["slug"],
+                                                                    "sig": file_sig(cap), "why": str(e)[:300]}
                 continue
             state["gate_blocked"].pop(key, None)
             prev = state["kits"].get(key)

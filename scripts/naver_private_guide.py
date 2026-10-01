@@ -58,23 +58,47 @@ def keyword_of(title):
     return m.group(0) if m else "글제목"
 
 
+TITLE_BOX = "■ 제목 칸에 붙여 넣을 제목 — 이것 하나뿐"
+
+
+def title_box(title):
+    """붙여 넣을 제목은 **딱 하나**, 맨 위 별도 상자(2026-10-01 7호: 안내문에 제목처럼 보이는 줄이 둘이라
+    로버트가 헷갈렸고, 끝에 마침표가 붙은 제목으로 올라갔다). DB naver_title 그대로 · 끝 문장부호 없음."""
+    bar = "━" * 40
+    return [TITLE_BOX, bar, f"  {title}", bar,
+            "  (본문·html 안에는 제목이 없다. 본문 맨 끝 「📄 …」 줄은 본진 글 링크이고 제목이 아니다.)"]
+
+
+def check_title(title):
+    """끝 문장부호가 붙은 제목은 안내문을 만들지 않는다 — 원고(naver_title)부터 고친다."""
+    t = (title or "").strip()
+    if not t:
+        raise kit.KitError("네이버 제목(naver_title)이 비어 있습니다")
+    if re.search(r"[.。!?…,]$", t):
+        raise kit.KitError(f"네이버 제목 끝에 문장부호가 있습니다 — 「{t}」. 원고의 naver_title 부터 고치세요")
+    return t
+
+
 def steps(issue, title, n_images, base):
     """할 일 순서 — 순수 함수(테스트 대상)."""
     keyword = keyword_of(title)
     return [
         "1. 네이버 블로그(insightlab-daily)에서 「글쓰기」를 연다.",
-        f"2. 제목 칸에 아래 제목을 그대로 붙여 넣는다(한 글자도 바꾸지 않는다):",
-        f"     {title}",
-        f"3. 본문: {base}.html 을 크롬으로 열어 전체 선택(Ctrl+A) → 복사 → 네이버 본문에 붙여 넣는다.",
+        "2. 제목 칸에 맨 위 상자의 제목을 그대로 붙여 넣는다(한 글자도 바꾸지 않는다 · 끝에 마침표를 붙이지 않는다).",
+        f"3. 본문: {base}.html 을 크롬으로 열어 전체 선택(Ctrl+A) → 복사 → 네이버 본문에 붙여 넣는다. "
+        "html 안에는 제목이 없다 — 첫 사진 아래 따옴표 문장은 본문 첫 줄이니 지우지 않는다.",
         "   · 서식(글자 크기·굵기)이 같이 들어온다. 색은 지정하지 않는다.",
-        f"4. 사진 {n_images}장: 본문의 [이미지①][이미지②][이미지③] 자리에 {base}_이미지1·2·3 을 순서대로 넣고 자리표시 글자는 지운다."
-        if n_images else "4. 사진 없음 — [이미지] 자리표시가 있으면 지운다.",
+        f"4. 사진 {n_images}장: 본문의 [이미지①][이미지②][이미지③] 자리에 {base}_이미지1·2·3 을 순서대로 넣고 "
+        "자리표시 줄([이미지…])만 지운다 — 앞뒤 문장은 건드리지 않는다."
+        if n_images else "4. 사진 없음 — [이미지] 자리표시 줄만 지운다.",
         "5. 필수안내사항의 심의필 줄은 공란(제_____호) 그대로 둔다 — 심의 전이다.",
         "6. 공개 설정 = 「비공개」 → 발행.",
         "7. 발행된 비공개 글 전체를 캡처한다 — 🔴 「비공개」 표시가 화면에 보이게(2025-07-14 시행 규칙).",
         f"8. 비공개 글을 PDF 로 저장할 때 저장 위치를 Downloads\\PAMS접수\\ 로, 파일 이름에 「{issue}」 또는 글의 핵심어(예: {keyword})를 넣는다"
         f"(예: {issue}.pdf · {keyword}.pdf). 압축은 하지 않는다 — zip 은 자동으로 만들어진다.",
         "   → 10분 안에 pams_auto 가 짝을 맞춰 네이버 키트(zip)를 만든다. 캡처는 캡처_처리됨\\ 으로 옮겨진다.",
+        "   → PDF 첫 장 제목이 상자 제목과 다르거나 본문 첫 줄이 빠졌으면 zip 을 만들지 않고 텔레그램으로 알린다"
+        f" — 글을 고친 뒤 다른 이름(예: {issue}_수정.pdf)으로 다시 저장한다.",
         "9. 이 비공개 글이 곧 승인본이다 — 승인 뒤에는 심의필 줄만 채워 「전체공개」로 바꾼다(새로 올리지 않는다).",
     ]
 
@@ -88,8 +112,9 @@ def one_page_html(issue, slug, title, step_lines, n_images):
         "font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif\">"
         "<div style='width:880px;padding:36px 40px'>"
         f"<div style='font-size:15px;color:#6b6457'>네이버 심의용 비공개 게시 · {htmllib.escape(issue)} · {htmllib.escape(slug)}</div>"
-        f"<div style='font-size:26px;font-weight:700;margin:10px 0 18px;line-height:1.4'>{htmllib.escape(title)}</div>"
-        "<div style='border-top:1px solid #a8842c;margin-bottom:16px'></div>"
+        "<div style='border:2px solid #1b3a30;border-radius:6px;padding:12px 16px;margin:12px 0 18px'>"
+        f"<div style='font-size:14px;color:#1b3a30;font-weight:700'>{htmllib.escape(TITLE_BOX[2:])}</div>"
+        f"<div style='font-size:26px;font-weight:700;margin-top:6px;line-height:1.4'>{htmllib.escape(title)}</div></div>"
         f"<ol style='font-size:18px;line-height:1.75;padding-left:24px;margin:0'>{li}</ol>"
         f"<div style='margin-top:18px;font-size:15px;color:#48423a'>사진 {n_images}장 · {htmllib.escape(format_line())}</div>"
         "</div></body>")
@@ -119,20 +144,23 @@ def build(env, article, server, out_dir=OUT_DIR, now=None):
     open(body_path, "w", encoding="utf-8", newline="\n").write(body["text"])
     rich = pa.rich_html(body_path, imgs)
     html_path = os.path.join(out_dir, base + ".html")
+    title = check_title(body["title"])
+    # 탭 이름에도 제목을 쓰지 않는다 — 붙여 넣을 제목은 txt·png 맨 위 상자 하나뿐
     open(html_path, "w", encoding="utf-8").write(
-        f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(body['title'])}</title>"
+        f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(issue)} 네이버 본문 (제목 아님)</title>"
         f"<body style='max-width:860px;margin:24px auto;padding:0 16px'>\n{rich}</body>")
-    st = steps(issue, body["title"], len(imgs), base)
-    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", "", "할 일:"] + ["  " + s for s in st] + [
+    st = steps(issue, title, len(imgs), base)
+    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", ""] + title_box(title) + ["", "할 일:"] + ["  " + s for s in st] + [
         "", format_line(), f"사진 {len(imgs)}장: " + (", ".join(imgs) or "없음"), "", "── 본문(조립본 · 심의 제출용) ──"]
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(head) + "\n" + body["text"] + "\n")
     page_html = os.path.join(out_dir, base + "_안내.html")
-    open(page_html, "w", encoding="utf-8").write(one_page_html(issue, slug, body["title"], st, len(imgs)))
+    open(page_html, "w", encoding="utf-8").write(one_page_html(issue, slug, title, st, len(imgs)))
     png_path = os.path.join(out_dir, base + "_안내.png")
     render_png(page_html, png_path)
     os.remove(page_html)
-    return {"txt": txt_path, "html": html_path, "png": png_path, "images": imgs, "title": body["title"], "issue": issue}
+    return {"txt": txt_path, "html": html_path, "png": png_path, "images": imgs, "title": title, "issue": issue,
+            "slug": slug}
 
 
 def send(env, res):
@@ -140,7 +168,9 @@ def send(env, res):
     if not token or not chat:
         raise kit.KitError("텔레그램 설정 없음")
     kw = keyword_of(res["title"])
-    cap = (f"[네이버 비공개 게시 요청] {res['title']} ({res['issue']})\n"
+    # 캡션엔 머리말 표기만(제목 전체를 쓰면 「제목 (7호)」를 통째로 복사할 수 있다) — 제목은 사진 속 상자 하나뿐
+    cap = (f"[네이버 비공개 게시 요청] {kit.title_label(res['title'], res.get('slug', ''))}\n"
+           "제목은 사진 맨 위 「제목 칸에 붙여 넣을 제목」 상자의 것 하나만 쓴다.\n"
            f"파일: Downloads\\PAMS접수\\_네이버비공개\\{os.path.basename(res['txt'])} (+.html · 사진 {len(res['images'])}장)\n"
            f"▶ 비공개 글 PDF 를 Downloads\\PAMS접수\\ 에 「{kw}.pdf」(또는 「{res['issue']}.pdf」)로 저장만 하면 zip 은 10분 안에 자동 생성 — 압축·이름 맞추기 불필요.")
     with open(res["png"], "rb") as fp:
