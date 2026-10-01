@@ -193,6 +193,26 @@ class CaptureTest(unittest.TestCase):
         h.run()
         self.assertEqual(h.built, [])
 
+    def test_mismatched_capture_notified_once_then_new_file_retried(self):
+        """제목·첫 줄이 원고와 다른 캡처(2026-10-01 7호) — zip 을 만들지 않고 한 번만 알린다. 다른 이름으로 다시 저장하면 다시 본다."""
+        h = Harness(main=[], naver=[art()])
+        real_build = h.build
+
+        def build(env, a, ch, capture=None, server=None, out_dir=None):
+            if capture and os.path.basename(capture) == "7호.pdf":
+                raise kit.KitError("제목 불일치: 기대 「A」 / 실제 「A.」(끝 문장부호)")
+            return real_build(env, a, ch, capture=capture, server=server, out_dir=out_dir)
+        h.build = build
+        p = self.cap(h, "7호.pdf")
+        self.assertEqual(h.run(), [])
+        self.assertEqual(len(h.notes), 1)
+        self.assertIn("제목 불일치", h.notes[0])
+        self.assertTrue(os.path.exists(p), "틀린 캡처는 처리됨으로 옮기지 않는다")
+        self.assertEqual(h.run(), [])
+        self.assertEqual(len(h.notes), 1, "같은 캡처로 바퀴마다 다시 알리지 않는다")
+        self.cap(h, "7호_수정.pdf")
+        self.assertEqual(len(h.run()), 1, "고쳐서 새 이름으로 저장하면 키트를 만든다")
+
     def test_gate_blocked_capture_waits(self):
         h = Harness(main=[], naver=[art()], gate_blocked={"ltc-grade-home-care-rider-check"})
         p = self.cap(h, "7호.png")

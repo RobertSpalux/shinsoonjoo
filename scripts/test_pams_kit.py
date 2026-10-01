@@ -153,5 +153,42 @@ class OneProposal(unittest.TestCase):
         self.assertLess(s.index("check_zip_members(files)", i), s.index("zipfile.ZipFile(tmp_zip", i))
 
 
+class CaptureCheck(unittest.TestCase):
+    """2026-10-01 7호 네이버 — 제목 끝 마침표 + 본문 첫 줄 누락 PDF 가 zip 으로 묶였다. 글자는 그날 실제 PDF 에서 뽑은 그대로."""
+    TITLE = "부모님 장기요양등급 나왔다면 — 방문요양·주야간보호는 인정서에 적힌 만큼만 쓸 수 있습니다"
+    BODY = ('[이미지①]\n\n"등급 나왔으니까 보험에서도 뭐가 나오겠지."\n\n'
+            "부모님 장기요양등급을 받으신 분들이 흔히 하시는 생각입니다.")
+    BAD = ("부모님 장기요양등급 나왔다면 — 방문요양·주야간보호는 인정서에 적힌 만큼만 쓸 수 있습니다. 실손·보장성 가이드 방금  전\n"
+           "https://blog.naver.com/insightlab-daily/224428466482\n\n\n"
+           "부모님장기요양등급을받으신분들이흔히하시는생각입니다.")
+    GOOD = ("부모님 장기요양등급 나왔다면 — 방문요양·주야간보호는 인정서에 적힌 만큼만 쓸 수 있습니다 실손·보장성 가이드 1 시간 전\n"
+            "https://blog.naver.com/insightlab-daily/224428466482\n\n"
+            '"등급나왔으니까보험에서도뭐가나오겠지."\n부모님장기요양등급을받으신분들이흔히하시는생각입니다.')
+
+    def test_good_pdf_passes(self):
+        self.assertEqual(kit.capture_problems(self.GOOD, self.GOOD, self.TITLE, self.BODY), [])
+
+    def test_bad_pdf_catches_period_and_missing_first_line(self):
+        bad = kit.capture_problems(self.BAD, self.BAD, self.TITLE, self.BODY)
+        self.assertEqual(len(bad), 2, bad)
+        self.assertTrue(bad[0].startswith(f"제목 불일치: 기대 「{self.TITLE}」"), bad[0])
+        self.assertIn("(끝 문장부호)", bad[0])
+        self.assertEqual(bad[1], '본문 첫 줄 누락: 「"등급 나왔으니까 보험에서도 뭐가 나오겠지."」')
+
+    def test_other_title_mismatch(self):
+        bad = kit.capture_problems("백내장 실비 청구했는데 실손·보장성 가이드", self.GOOD, self.TITLE, self.BODY)
+        self.assertTrue(bad and bad[0].startswith("제목 불일치"), bad)
+        self.assertIn("실제 「백내장 실비", bad[0])
+
+    def test_first_body_line_skips_image_marker(self):
+        self.assertEqual(kit.first_body_line(self.BODY), '"등급 나왔으니까 보험에서도 뭐가 나오겠지."')
+        self.assertEqual(kit.first_body_line("[이미지]\n\n첫 문장"), "첫 문장")
+
+    def test_build_kit_checks_capture_before_server(self):
+        s = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pams_kit.py"), encoding="utf-8").read()
+        i = s.index("def build_kit(")
+        self.assertLess(s.index("check_capture(capture", i), s.index("srv = LocalServer", i))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

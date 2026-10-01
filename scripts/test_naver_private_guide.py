@@ -34,8 +34,32 @@ class Steps(unittest.TestCase):
         self.assertIn("핵심어(예: 백내장)", s)
         self.assertIn("백내장.pdf", s)
 
-    def test_title_verbatim(self):
-        self.assertIn("     제목 그대로", self.s)
+    def test_title_only_once_in_a_box(self):
+        """2026-10-01 7호: 제목처럼 보이는 줄이 둘이라 헷갈렸다 — 제목은 맨 위 상자 하나뿐, 할 일 목록에는 다시 쓰지 않는다."""
+        self.assertFalse(any("제목 그대로" in l for l in self.s), "할 일 목록에 제목을 다시 쓰지 않는다")
+        box = g.title_box("제목 그대로")
+        self.assertEqual(box[0], g.TITLE_BOX)
+        self.assertEqual(sum(1 for l in box if l.strip() == "제목 그대로"), 1)
+        self.assertIn("📄", box[-1])                     # 본문 끝 본진 링크 줄은 제목이 아님
+        j = "\n".join(self.s)
+        self.assertIn("맨 위 상자의 제목", j)
+        self.assertIn("따옴표 문장은 본문 첫 줄이니 지우지 않는다", j)
+        self.assertIn("자리표시 줄([이미지…])만 지운다", j)
+        self.assertNotIn("**", j, "png·txt 에 마크다운 별표가 그대로 찍힌다")
+        # 한 장 png 는 들여쓴 보조 줄을 싣지 않는다 — 첫 줄 경고는 번호 줄 안에 있어야 png 에도 나온다
+        h = g.one_page_html("7호", "slug", "제목", self.s, 3)
+        self.assertIn("본문 첫 줄이니 지우지 않는다", h)
+
+    def test_title_trailing_punct_refused(self):
+        self.assertEqual(g.check_title(" 제목 "), "제목")
+        for t in ("제목.", "제목?", "제목…", ""):
+            with self.assertRaises(kit.KitError):
+                g.check_title(t)
+
+    def test_one_page_title_box(self):
+        h = g.one_page_html("7호", "slug", "부모님 제목", self.s, 3)
+        self.assertEqual(h.count("부모님 제목"), 1)
+        self.assertIn("제목 칸에 붙여 넣을 제목", h)
 
     def test_images(self):
         self.assertTrue(any("사진 3장" in l for l in self.s))

@@ -38,9 +38,17 @@ const img = (src: string) =>
   `<p style="text-align:center;"><img src="${src}" width="800" ` +
   `style="width:100%;max-width:800px;height:auto;"></p>`;
 
+/** `[이미지①]` 사진 자리표시 — 사람이 사진을 넣고 지우는 줄 */
+const IMG_MARKER_LINE = /^\[이미지\s*[①②③④⑤⑥⑦⑧⑨⑩0-9]*\]$/;
+
 function isHeading(ln: string): boolean {
   if (!ln || ln.length > 40) return false;
   if (/^[-•·▶>|📄#]/.test(ln)) return false;
+  // 🔴 사진 자리표시·따옴표 첫 문장은 소제목이 아니다(2026-10-01 7호 네이버).
+  //    둘 다 24px 로 나가 「[이미지①]」 바로 밑 따옴표 문장이 제목처럼 보였고,
+  //    자리표시를 지우면서 본문 첫 줄이 같이 지워졌다(10호 승인본도 같은 줄이 빠져 있다).
+  if (IMG_MARKER_LINE.test(ln)) return false;
+  if (/^["“'‘「]/.test(ln)) return false;
   if (/^\d+\.\s/.test(ln)) return false;
   if (/[.?!]$/.test(ln)) return false;
   if (/^https?:\/\//.test(ln)) return false;
@@ -108,6 +116,12 @@ export function toNaverRichHtml(text: string, opts: NaverRichOptions = {}): stri
     if (slot !== undefined && images[slot]) out.push(img(images[slot]), gap(), gap());
 
     const first = b[0].trim();
+
+    // 사진 자리표시 — 본문과 구분되게 작게(지울 줄). 제목·소제목 크기로 내지 않는다.
+    if (b.length === 1 && IMG_MARKER_LINE.test(first)) {
+      out.push(p(SIZE.notice, esc(first)), gap());
+      return;
+    }
 
     // 필수 유의문구 2종 — 본문 어디에 있든 13px
     if (b.every((l) => isNoticeLine(l.trim()))) {
