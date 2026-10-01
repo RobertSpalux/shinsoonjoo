@@ -314,6 +314,31 @@ def capture_to_pdf(src, dst):
 
 
 # ── 키트 ────────────────────────────────────────────────────
+PROPOSAL_EXT = (".pdf", ".png", ".jpg", ".jpeg", ".hwp", ".hwpx")
+
+
+def proposal_files(names):
+    """zip 안 파일 이름 → 광고시안(증빙 대장 configs/sources.json 의 evidence_file 이 아닌 문서·그림)."""
+    evid = {s.get("evidence_file") for s in json.load(open(SOURCES_JSON, encoding="utf-8"))["sources"] if s.get("evidence_file")}
+    return [n for n in names if os.path.basename(n) not in evid and os.path.splitext(n)[1].lower() in PROPOSAL_EXT]
+
+
+def check_zip_members(names):
+    """🔴 광고시안은 zip 안에 하나만. 2026-10-01 10호 네이버 반송 원문 「광고시안 2개이므로 하나만 올려주세요」
+    (손으로 묶은 0930.zip 에 시안이 둘 들어갔다). 증빙은 몇 개든 된다."""
+    p = proposal_files(names)
+    if len(p) != 1:
+        raise KitError(f"광고시안은 zip 안에 하나만 — 지금 {len(p)}개: {', '.join(p) or '없음'} "
+                       "(10호 네이버 반송 「광고시안 2개이므로 하나만 올려주세요」)")
+    return p[0]
+
+
+def check_zip(path):
+    """이미 만들어진 zip(손으로 묶은 것 포함)을 검사한다 → 시안 파일 이름. 문제면 KitError."""
+    with zipfile.ZipFile(path) as z:
+        return check_zip_members([i.filename for i in z.infolist() if not i.is_dir()])
+
+
 def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR, now=None, log=print):
     """키트를 만든다. 게이트·증빙·캡처 문제면 KitError (파일은 하나도 남기지 않는다).
     server 를 주면 그 서버를 쓰고, 없으면 로컬 next dev 를 띄웠다 끈다."""
@@ -359,6 +384,7 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
             shutil.copyfile(p, os.path.join(stage, os.path.basename(p)))
 
         files = sorted(os.listdir(stage))
+        check_zip_members(files)   # 🔴 광고시안 하나 + 증빙 — 둘이 되면 반송이다
         zip_path = os.path.join(out_dir, base + ".zip")
         tmp_zip = zip_path + ".part"
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as z:
@@ -392,6 +418,13 @@ def main():
     ap.add_argument("--tag", help="threads: 주제 태그 1개(# 없이). 접수 원고 끝에 넣어 함께 심의받는다 — 예: 간병")
     ap.add_argument("--submitted", metavar="ZIP",
                     help="threads: PAMS 접수 뒤 — 그 키트의 body/reply 를 Storage 에 올리고 notes 에 해시 기록")
+    if len(sys.argv) == 3 and sys.argv[1] == "--check-zip":   # 손으로 묶은 zip 검사: python scripts/pams_kit.py --check-zip <zip>
+        try:
+            print(f"통과 — 광고시안 1개: {check_zip(sys.argv[2])}")
+        except KitError as e:
+            print(f"❌ {e}")
+            sys.exit(1)
+        return
     a = ap.parse_args()
     env = load_env()
     try:
