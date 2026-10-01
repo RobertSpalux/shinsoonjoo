@@ -39,8 +39,26 @@ class Plan(unittest.TestCase):
         self.assertEqual(p["free"], 3)
 
     def test_no_kit_goes_to_waiting(self):
-        p = q.plan(ORDER, [], KITS)
+        p = q.plan(ORDER, [{"slug": C, "channel": "main", "status": "approved"}], KITS)
         self.assertIn({"slug": C, "channel": "naver"}, p["waiting"])
+
+    def test_naver_held_until_main_approved(self):
+        """본진 먼저 — 네이버는 같은 글 본진이 승인된 뒤에만 다음 접수(2026-10-01 로버트 원칙)."""
+        kits = {**KITS, (C, "naver"): "1001_7호_네이버.zip"}
+        only_naver = [{"slug": C, "channel": "naver"}]
+        for st in ([], [{"slug": C, "channel": "main", "status": "submitted"}]):
+            p = q.plan(only_naver, st, kits)
+            self.assertIsNone(p["next"], st)
+            self.assertEqual(p["held"], only_naver)
+        p = q.plan(only_naver, [{"slug": C, "channel": "main", "status": "approved"}], kits)
+        self.assertEqual(p["next"], only_naver[0])
+        self.assertEqual(p["held"], [])
+
+    def test_before_main_ok_exception(self):
+        kits = {(C, "naver"): "1001_7호_네이버.zip"}
+        it = {"slug": C, "channel": "naver", "before_main_ok": True}
+        p = q.plan([it], [{"slug": C, "channel": "main", "status": "submitted"}], kits)
+        self.assertEqual(p["next"], it)
 
     def test_full_queue(self):
         full = [{"slug": s, "channel": "x", "status": "submitted"} for s in ("a", "b", "c")]
@@ -55,13 +73,13 @@ class Message(unittest.TestCase):
         m = q.message(q.plan(ORDER, [OTHER_THREADS], KITS))
         self.assertNotIn("\n", m)
         self.assertTrue(m.startswith("다음 접수: 9호 본진 — 0930_9호_본진.zip (빈 칸 2/3)"), m)
-        self.assertIn("키트 대기: 7호 네이버", m)
+        self.assertNotIn("7호 네이버", m)      # 본진 승인 전 네이버는 키트 대기 목록에도 올리지 않는다
 
     def test_title_first_when_titles_given(self):
         titles = {A: "1세대 실비 유지해야 하나 — 기준은 보험료가 아니라 앞으로의 치료 계획입니다", C: "장기요양 등급 받았는데, 내 보험 재가급여 특약은 언제 나오나요"}
         m = q.message(q.plan(ORDER, [OTHER_THREADS], KITS), titles)
         self.assertTrue(m.startswith("다음 접수: 1세대 실비 유지해야 하나 (9호) 본진 — 0930_9호_본진.zip (빈 칸 2/3)"), m)
-        self.assertIn("키트 대기: 장기요양 등급 받았는데, 내 보험 재가급여 특약은 언제 나오나요 (7호) 네이버", m)
+        self.assertNotIn("(7호) 네이버", m)
         self.assertNotIn("\n", m)
 
     def test_notify_once_per_state(self):
@@ -75,7 +93,7 @@ class Message(unittest.TestCase):
     def test_order_line(self):
         p = q.plan(ORDER, [{"slug": A, "channel": "main", "status": "approved"}], KITS)
         line = q.order_line(ORDER, p)
-        self.assertTrue(line.startswith("9호 본진 ✓ → 8호 본진 → 7호 본진 → 7호 스레드 → 7호 네이버 (키트 대기)"), line)
+        self.assertTrue(line.startswith("9호 본진 ✓ → 8호 본진 → 7호 본진 → 7호 스레드 → 7호 네이버 (본진 승인 대기)"), line)
 
 
 class Config(unittest.TestCase):
@@ -83,8 +101,21 @@ class Config(unittest.TestCase):
         limit, order = q.load_queue()
         self.assertEqual(limit, 3)
         chans = [o["channel"] for o in order]
+        # 본진 먼저 — 본진이 다른 채널 뒤에 오면 안 된다(예외: before_main_ok 로 적은 항목만 본진 사이에 낄 수 있다)
+        rest = [o for o in order if not o.get("before_main_ok")]
+        chans = [o["channel"] for o in rest]
         first_non_main = next((i for i, c in enumerate(chans) if c != "main"), len(chans))
         self.assertTrue(all(c != "main" for c in chans[first_non_main:]), "본진 먼저 — 본진이 다른 채널 뒤에 오면 안 된다")
+
+    def test_config_main_order_and_exception(self):
+        """2026-10-01 23:00 관제탑 — 본진 7→8→9→10→11→13→12→14→15→16 · 예외는 7호 네이버 하나."""
+        import pams_kit as kit
+        _, order = q.load_queue()
+        mains = [kit.issue_label(o["slug"]) for o in order if o["channel"] == "main"]
+        self.assertEqual(mains, ["7호", "8호", "9호", "10호", "11호", "13호", "12호", "14호", "15호", "16호"])
+        ex = [(kit.issue_label(o["slug"]), o["channel"]) for o in order if o.get("before_main_ok")]
+        self.assertEqual(ex, [("7호", "naver")])
+        self.assertEqual(len({(o["slug"], o["channel"]) for o in order}), len(order), "중복 항목 없음")
         for o in order:
             self.assertIn(o["channel"], ("main", "naver", "threads"))
 

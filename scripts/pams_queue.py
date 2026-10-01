@@ -9,6 +9,7 @@ PAMS 접수 순서(운영표) — 칸이 비면 로버트에게 「다음 접수
   · 심사중 = ad_reviews.status ∈ {submitted, under_review} 전체 건수(팜스 한도 = [심사중] 3건, CLAUDE.md §6.4).
   · 끝난 항목 = 그 글·채널에 submitted/under_review/approved 행이 있음 → 건너뜀.
   · 다음 접수 = 끝나지 않았고 키트(zip)가 준비된 첫 항목. 키트 없는 항목(네이버 캡처 전 등)은 건너뛰고 한 줄 끝에 적는다.
+  · 네이버 = 같은 글 본진이 **승인된 뒤**에만 다음 접수가 된다(본진 먼저 원칙). 예외는 운영표 항목의 before_main_ok: true.
   · 알림 = 빈 칸이 있고 (다음 항목, 빈 칸 수)가 지난번과 다를 때만 1통. 같은 상태로 10분마다 보내지 않는다.
 """
 import glob
@@ -58,11 +59,16 @@ def plan(order, reviews, kits, limit=3):
     → {active, free, next(item|None), zip, waiting([item] 키트 없음), done([item])}"""
     active = sum(1 for r in reviews if r.get("status") in ACTIVE)
     done_keys = {(r["slug"], r["channel"]) for r in reviews if r.get("status") in DONE}
-    done, waiting, nxt, zp = [], [], None, None
+    approved = {(r["slug"], r["channel"]) for r in reviews if r.get("status") == "approved"}
+    done, waiting, held, nxt, zp = [], [], [], None, None
     for it in order:
         k = (it["slug"], it["channel"])
         if k in done_keys:
             done.append(it)
+            continue
+        # 🔴 네이버는 같은 글 본진이 승인된 뒤에만(2026-10-01 로버트 원칙) — 예외는 운영표에 before_main_ok
+        if it["channel"] == "naver" and not it.get("before_main_ok") and (it["slug"], "main") not in approved:
+            held.append(it)
             continue
         if not kits.get(k):
             waiting.append(it)
@@ -70,7 +76,7 @@ def plan(order, reviews, kits, limit=3):
         if nxt is None:
             nxt, zp = it, kits[k]
     return {"active": active, "free": max(0, limit - active), "next": nxt, "zip": zp,
-            "waiting": waiting, "done": done, "limit": limit}
+            "waiting": waiting, "held": held, "done": done, "limit": limit}
 
 
 def message(p, titles=None):
@@ -95,10 +101,12 @@ def order_line(order, p=None):
     """운영표 한 줄 — 끝난 항목은 ✓, 키트 없는 항목은 (키트 대기)."""
     done = {(i["slug"], i["channel"]) for i in (p["done"] if p else [])}
     wait = {(i["slug"], i["channel"]) for i in (p["waiting"] if p else [])}
+    held = {(i["slug"], i["channel"]) for i in (p.get("held", []) if p else [])}
     out = []
     for it in order:
         k = (it["slug"], it["channel"])
-        s = label(it) + (" ✓" if k in done else " (키트 대기)" if k in wait else "")
+        s = label(it) + (" ✓" if k in done else " (본진 승인 대기)" if k in held
+                         else " (키트 대기)" if k in wait else "")
         out.append(s)
     return " → ".join(out)
 

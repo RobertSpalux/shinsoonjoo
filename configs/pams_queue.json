@@ -1,5 +1,5 @@
 {
-  "_주석": "PAMS 접수 순서(운영표) — pams_auto 가 매 바퀴 읽어, 심사중 칸이 비면 「다음 접수: ○」 한 줄을 텔레그램으로 보낸다(scripts/pams_queue.py). 본진 먼저(사이트 = 상담 버튼이 있는 곳). [2026-09-30 18:40 로버트 지정] 본진 순서 = 장기요양(7호) → 도수치료(8호) → 1세대 실비(9호). 끝난 항목(접수·승인)은 자동으로 건너뛴다 — 지우지 않아도 된다. 새 원고는 여기 한 줄 추가. [2026-10-01 관제탑] 스레드 11·12·14·15·16호는 소통형(assets/threads/drafts/<slug>/talk.txt)으로 접수한다 — 정보형 키트(body.txt)는 대기열에서 내리고 파일은 PAMS접수\\_정보형_보관 에 보존.",
+  "_주석": "PAMS 접수 순서(운영표) — pams_auto 가 매 바퀴 읽어, 심사중 칸이 비면 「다음 접수: ○」 한 줄을 텔레그램으로 보낸다(scripts/pams_queue.py). 본진 먼저(사이트 = 상담 버튼이 있는 곳). [2026-09-30 18:40 로버트 지정] 본진 순서 = 장기요양(7호) → 도수치료(8호) → 1세대 실비(9호). 끝난 항목(접수·승인)은 자동으로 건너뛴다 — 지우지 않아도 된다. 새 원고는 여기 한 줄 추가. [2026-10-01 관제탑] 스레드 11·12·14·15·16호는 소통형(assets/threads/drafts/<slug>/talk.txt)으로 접수한다 — 정보형 키트(body.txt)는 대기열에서 내리고 파일은 PAMS접수\\_정보형_보관 에 보존. [2026-10-01 23:00 관제탑] 이 파일이 큐 순서의 단일 정본이다(robert-os 도 이것만 읽는다). 원칙: 본진 먼저(7→8→9→10→11→13→12→14→15→16) · 네이버는 같은 글 본진이 **승인된 뒤**에만 「다음 접수」가 된다(pams_queue.plan) — 예외는 항목에 before_main_ok: true 로 적는다(7호 네이버). 스레드는 폼 직접입력(통상 5분)이라 본진 뒤에 두되 승인 조건은 없다.",
   "limit": 3,
   "order": [
     {
@@ -11,6 +11,12 @@
       "slug": "manual-therapy-silson-by-rider-managed-benefit",
       "channel": "main",
       "why": "「도수치료 실비」 지식iN 47,288 · 관리급여 뉴스 시의성"
+    },
+    {
+      "slug": "ltc-grade-home-care-rider-check",
+      "channel": "naver",
+      "why": "[2026-10-01 23:00 관제탑] 예외 — 비공개 글·키트(1001_7호_네이버.zip, #51 검사 통과) 준비 끝 · 제출 대기. 본진 승인 전이라도 이 건만 먼저 넣는다",
+      "before_main_ok": true
     },
     {
       "slug": "old-silson-keep-or-switch-selective-discount",
@@ -56,11 +62,6 @@
       "slug": "ltc-grade-home-care-rider-check",
       "channel": "threads",
       "why": "폼 직접입력 · 통상 5분 승인 — 칸을 오래 막지 않음. 본진 승인 뒤면 첫 댓글 링크가 붙는다"
-    },
-    {
-      "slug": "ltc-grade-home-care-rider-check",
-      "channel": "naver",
-      "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
     },
     {
       "slug": "cataract-surgery-silson-inpatient-or-outpatient",
@@ -113,14 +114,14 @@
       "why": "소통형(talk.txt · 첫 줄 질문형) — 폼 직접입력 · 본문만(본진 승인 전). 정보형 키트는 PAMS접수\\_정보형_보관 으로 내림(2026-10-01 관제탑)"
     },
     {
-      "slug": "overseas-stay-3month-silson-premium-refund",
-      "channel": "threads",
-      "why": "소통형(talk.txt · 첫 줄 질문형) — 폼 직접입력 · 본문만(본진 승인 전). 정보형 키트는 PAMS접수\\_정보형_보관 으로 내림(2026-10-01 관제탑)"
-    },
-    {
       "slug": "medical-malpractice-injury-accident-disclosure-causation",
       "channel": "naver",
       "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
+    },
+    {
+      "slug": "overseas-stay-3month-silson-premium-refund",
+      "channel": "threads",
+      "why": "소통형(talk.txt · 첫 줄 질문형) — 폼 직접입력 · 본문만(본진 승인 전). 정보형 키트는 PAMS접수\\_정보형_보관 으로 내림(2026-10-01 관제탑)"
     },
     {
       "slug": "overseas-stay-3month-silson-premium-refund",
