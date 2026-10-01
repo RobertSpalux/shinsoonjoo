@@ -119,5 +119,39 @@ class RobertOsParser(unittest.TestCase):
         self.assertIn(SRC[0], r["증빙자료명"])
 
 
+class OneProposal(unittest.TestCase):
+    """2026-10-01 10호 네이버 반송 「광고시안 2개이므로 하나만 올려주세요」"""
+    EVID = "금융감독원, 최근 판례로 알아보는 실손보험 등 관련 소비자 유의사항, 2025, 2025.3.10.pdf"
+
+    def test_one_proposal_plus_evidence_passes(self):
+        self.assertEqual(kit.check_zip_members(["백내장 실비 시안.pdf", self.EVID]), "백내장 실비 시안.pdf")
+
+    def test_two_proposals_fail(self):
+        with self.assertRaises(kit.KitError) as cm:
+            kit.check_zip_members(["시안_A.pdf", "시안_B.pdf", self.EVID])
+        self.assertIn("2개", str(cm.exception))
+
+    def test_no_proposal_fails(self):
+        with self.assertRaises(kit.KitError):
+            kit.check_zip_members([self.EVID])
+
+    def test_txt_is_not_a_proposal(self):
+        self.assertEqual(kit.proposal_files(["메모.txt", "시안.pdf", self.EVID]), ["시안.pdf"])
+
+    def test_check_zip_reads_a_real_zip(self):
+        import zipfile
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "0930.zip")
+            with zipfile.ZipFile(p, "w") as z:
+                z.writestr("시안1.pdf", "x"); z.writestr("시안2.png", "y"); z.writestr(self.EVID, "z")
+            with self.assertRaises(kit.KitError):
+                kit.check_zip(p)
+
+    def test_build_kit_checks_before_zipping(self):
+        s = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pams_kit.py"), encoding="utf-8").read()
+        i = s.index("def build_kit(")
+        self.assertLess(s.index("check_zip_members(files)", i), s.index("zipfile.ZipFile(tmp_zip", i))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

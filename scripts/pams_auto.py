@@ -195,6 +195,36 @@ def list_captures(kit_dir, state):
 
 
 # ── 한 바퀴 ─────────────────────────────────────────────────
+def scan_zips(kit_dir, state, notify, now=None, days=3):
+    """PAMS접수 폴더 맨 위의 최근 zip(손으로 묶은 것 포함)을 검사해 광고시안이 하나가 아니면 알린다(zip 마다 1번).
+    스레드 키트(_스레드)는 본문·사진 구성이라 뺀다. 반환: 알린 zip 이름 목록."""
+    import time
+    now = now or time.time()
+    seen = state.setdefault("zip_checked", {})
+    out = []
+    if not os.path.isdir(kit_dir):
+        return out
+    for fn in sorted(os.listdir(kit_dir)):
+        p = os.path.join(kit_dir, fn)
+        if not fn.lower().endswith(".zip") or "_스레드" in fn or not os.path.isfile(p):
+            continue
+        if now - os.path.getmtime(p) > days * 86400:
+            continue
+        sig = f"{os.path.getmtime(p):.0f}:{os.path.getsize(p)}"
+        if seen.get(fn) == sig:
+            continue
+        seen[fn] = sig
+        try:
+            kit.check_zip(p)
+        except kit.KitError as e:
+            notify(f"🔴 [PAMS zip] {fn} — {e}\n이 zip 은 올리지 마세요(반송 사유).")
+            out.append(fn)
+        except Exception as e:  # 깨진 zip 등
+            notify(f"🔴 [PAMS zip] {fn} — 열 수 없습니다({type(e).__name__})")
+            out.append(fn)
+    return out
+
+
 def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, server_factory=None,
              file_exists=os.path.exists):
     """테스트를 위해 DB·빌드·알림·서버를 주입받는다. 만든 키트 목록을 돌려준다."""
@@ -401,6 +431,10 @@ def main():
             log(f"네이버 안내 자동 발송 실패: {e}")
             alert_once(env, state, f"naver-guide:{type(e).__name__}",
                        f"⚠️ 네이버 비공개 게시 안내 자동 발송이 멈췄습니다 — {type(e).__name__}: {str(e)[:120]}")
+        try:
+            scan_zips(kit.KIT_DIR, state, notify=lambda t: telegram(env, t))
+        except Exception as e:
+            log(f"zip 검사 실패: {e}")
         save_state(state)
         upload_submitted_threads(env, notify=lambda t: telegram(env, t))
         # 심의 승인 → 게시(본진 자동 공개·posted_url, 네이버 공개 전환 안내·RSS URL, 배포 체크, 만료 알림).

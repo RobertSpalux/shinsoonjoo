@@ -255,5 +255,23 @@ class Telegram(unittest.TestCase):
         self.assertIn('"🔁 원고 변경 — 키트 다시 만듦 · " if why == "원고 변경"', s)
 
 
+class ScanZips(unittest.TestCase):
+    def test_bad_handmade_zip_is_reported_once(self):
+        import zipfile
+        ev = "금융감독원, 최근 판례로 알아보는 실손보험 등 관련 소비자 유의사항, 2025, 2025.3.10.pdf"
+        with tempfile.TemporaryDirectory() as d:
+            with zipfile.ZipFile(os.path.join(d, "0930.zip"), "w") as z:
+                z.writestr("a.pdf", "x"); z.writestr("b.pdf", "y"); z.writestr(ev, "z")
+            with zipfile.ZipFile(os.path.join(d, "1001_10호_네이버.zip"), "w") as z:
+                z.writestr("a.pdf", "x"); z.writestr(ev, "z")
+            with zipfile.ZipFile(os.path.join(d, "1001_11호_스레드.zip"), "w") as z:
+                z.writestr("notice.png", "x"); z.writestr("photo.png", "y")
+            sent, st = [], {}
+            self.assertEqual(auto.scan_zips(d, st, sent.append), ["0930.zip"])
+            self.assertEqual(len(sent), 1)
+            self.assertIn("2개", sent[0])
+            self.assertEqual(auto.scan_zips(d, st, sent.append), [])   # 같은 zip 은 다시 안 알린다
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
