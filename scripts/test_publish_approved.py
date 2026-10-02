@@ -39,6 +39,38 @@ class T1(unittest.TestCase):
         self.assertFalse(pa.live_has_review("<html>제_____호</html>", "2026-09-7998"))
 
 
+class Conditional(unittest.TestCase):
+    """2026-10-02 8호 본진 — 조건 붙은 승인(비고 GA명장)이 자동 공개됐다가 반송됐다."""
+    REMARK8 = "[GA명장]: 2026년 GA명장 증빙자료를 첨부하세요. 혹은 [22~25년 GA명장] 등의 표현으로 수정해주시기 바랍니다."
+
+    def test_condition_remark(self):
+        self.assertIsNone(pa.condition_remark(ROW))
+        self.assertIsNone(pa.condition_remark({**ROW, "notes": f"접수 메모\n{pa.REMARK_PREFIX} {pa.STANDARD_REMARK}"}),
+                          "표준 승인 문구는 조건이 아니다")
+        self.assertEqual(pa.condition_remark({**ROW, "notes": f"x\n{pa.REMARK_PREFIX} {self.REMARK8}"}), self.REMARK8)
+        self.assertEqual(pa.condition_remark({**ROW, "notes": "진행사항 조건부 승인"}), "조건부 승인")
+
+    def test_plan_holds_conditional(self):
+        cond = {**ROW, "notes": f"{pa.REMARK_PREFIX} {self.REMARK8}"}
+        p = pa.plan([cond], ART, T)
+        self.assertFalse(p[0]["ok"])
+        self.assertIn("조건 붙은 승인", p[0]["why"])
+        self.assertEqual(p[0]["cond"], self.REMARK8)
+        self.assertTrue(pa.plan([ROW], ART, T)[0]["ok"], "조건 없는 승인은 그대로 자동 공개")
+
+    def test_rejected_live(self):
+        arts = {"a1": {"id": "a1", "slug": "s1", "is_main_published": True},
+                "a2": {"id": "a2", "slug": "s2", "is_main_published": True},
+                "a3": {"id": "a3", "slug": "s3", "is_main_published": False}}
+        rows = [{"id": "x1", "article_id": "a1", "channel": "main", "status": "rejected", "created_at": "2026-10-01T09:00"},
+                {"id": "x2", "article_id": "a2", "channel": "main", "status": "rejected", "created_at": "2026-09-01T09:00"},
+                {"id": "x3", "article_id": "a2", "channel": "main", "status": "approved", "created_at": "2026-09-05T09:00"},
+                {"id": "x4", "article_id": "a3", "channel": "main", "status": "rejected", "created_at": "2026-10-01T09:00"},
+                {"id": "x5", "article_id": "a1", "channel": "naver", "status": "approved", "created_at": "2026-10-02T09:00"}]
+        got = [(a["slug"], r["id"]) for a, r in pa.rejected_live(rows, arts)]
+        self.assertEqual(got, [("s1", "x1")], "최근 본진 행이 반송이고 공개 중인 글만 — 재승인 글·이미 비공개 글 제외")
+
+
 class T2(unittest.TestCase):
     def test_review_line(self):
         self.assertEqual(pa.review_line({**ROW, "review_authority": "프라임에셋"}),
