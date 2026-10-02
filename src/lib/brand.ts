@@ -71,6 +71,23 @@ export function careerLabel(now?: Date) {
  */
 export const GA_MASTER_LABEL = "22년·25년 GA 명장";
 
+/**
+ * 기사 바이라인의 GA 명장 표기 — **글 단위**(로버트 2026-10-02: 이미 승인된 글은 바꾸지 않는다).
+ * - 본진(main) 심의필 승인일(review.from)이 GA_MASTER_CUTOFF 이전 → 승인본 그대로 「GA명장」.
+ * - 그 밖(승인 전·반송·신규 심의 · 승인일이 기준일 이후) → GA_MASTER_LABEL.
+ * 7호·8호 본진(10-02 반송)부터 새 표기. 승인본 원안 변경 = 별건 심의이므로 절대 일괄 교체하지 않는다.
+ */
+export const GA_MASTER_CUTOFF = "2026.10.02";
+export const GA_MASTER_LEGACY = "GA명장";
+
+export function bylineGaMaster(review?: ReviewInfo | null): string {
+  const from = (review?.from ?? "").replace(/[-/]/g, ".").trim();
+  if (review?.no && /^\d{4}\.\d{2}\.\d{2}$/.test(from) && from < GA_MASTER_CUTOFF) {
+    return GA_MASTER_LEGACY;
+  }
+  return GA_MASTER_LABEL;
+}
+
 /* ────────────────────────────────────────────────────────────────────────
  * 금소법 광고 컴플라이언스 (CLAUDE.md §6)
  * ──────────────────────────────────────────────────────────────────────── */
