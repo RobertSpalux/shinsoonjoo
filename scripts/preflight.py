@@ -478,7 +478,7 @@ TITLE_CHANNEL = {"title": "main", "naver_title": "naver", "blogspot_title": "blo
 
 
 def check_ga_master(slug, article, renderers=None):
-    """「GA명장」 단독 표기 금지 — 새 원고는 GA_MASTER_LABEL(「22년~25년 GA 명장」)만 쓴다.
+    """「GA명장」 단독 표기 금지 — 새 원고는 GA_MASTER_LABEL(「22년·25년 GA 명장」 · 확정 2026-10-02)만 쓴다.
 
     근거: PAMS 7168 승인 조건(2026-09-28) 「[GA명장] → [22년~25년 GA 명장] 등 기간 명시」.
     범위: 아직 접수 전인 채널의 제목·본문 + 인스타 캡션 + 이미지 config + 이미지 렌더러 브랜드 줄.

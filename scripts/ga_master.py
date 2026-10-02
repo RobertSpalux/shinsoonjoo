@@ -5,6 +5,7 @@ GA 명장 표기 — 정본 자구 로더 + 「GA명장」 단독 표기 검출�
 
 정본은 src/lib/brand.ts 의 GA_MASTER_LABEL 한 줄이다(여기 자구를 하드코딩하지 않는다).
 근거: PAMS 7168 승인 조건(2026-09-28) 「[GA명장] → [22년~25년 GA 명장] 등 기간 명시하시어 기재」.
+      정본 자구 확정 2026-10-02(로버트·준법 통화): 「22년·25년 GA 명장」 — 22년과 25년 두 해.
 
 쓰는 곳: scripts/preflight.py(「GA 명장 기간」 검사) · naver_images.py · scripts/patch_thumb_brand_line.py
 테스트: python scripts/test_ga_master.py

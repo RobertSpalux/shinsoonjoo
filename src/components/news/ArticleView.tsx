@@ -8,7 +8,7 @@ import GithubSlugger from "github-slugger";
 import type { Article } from "@/lib/articles";
 import type { ReviewInfo } from "@/lib/brand";
 import { articleSchema, faqSchema, personSchema, jsonLdString } from "@/lib/jsonld";
-import { BRAND, getCareer } from "@/lib/brand";
+import { BRAND, GA_MASTER_LABEL, getCareer } from "@/lib/brand";
 import { CTA_MARKER } from "@/lib/osmu-format";
 import ReadingProgress from "@/components/news/ReadingProgress";
 import ArticleCard from "@/components/news/ArticleCard";
@@ -155,7 +155,7 @@ export default function ArticleView({
                 {BRAND.personName} <span className="font-normal text-[var(--color-text-muted)]">{BRAND.title}</span>
               </p>
               <p className="text-xs text-[var(--color-text-muted)]">
-                {years}년 차 · 우수인증설계사 8년 연속 · GA명장
+                {years}년 차 · 우수인증설계사 8년 연속 · {GA_MASTER_LABEL}
               </p>
             </div>
             <div className="text-right text-xs text-[var(--color-text-muted)]">
