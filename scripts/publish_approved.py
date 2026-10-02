@@ -109,7 +109,7 @@ def plan(rows, articles, today):
     todo = []
     for r in rows:
         a = articles.get(r["article_id"])
-        if not a or r.get("channel") not in ("main", "naver") or r.get("posted_url"):
+        if not a or r.get("channel") not in ("main", "naver") or (r.get("posted_url") and not needs_republish(r, a)):
             continue
         ok, why = review_ok(r, today)
         cond = condition_remark(r) if ok else None
@@ -117,6 +117,13 @@ def plan(rows, articles, today):
             ok, why = False, f"조건 붙은 승인 — 자동 공개 안 함(사람 확인): {cond}"
         todo.append({"row": r, "article": a, "channel": r["channel"], "ok": ok, "why": why, "cond": cond})
     return todo
+
+
+def needs_republish(r, a):
+    """게시 URL 은 남아 있는데 본진이 내려가 있는 승인 행 — 반송 → 보완 재승인 글(2026-10-02 8호).
+    반송 때 비공개로 돌리고 게시위치 URL 은 지우지 않으므로(보완으로 덮는다) posted_url 만 보고 건너뛰면
+    보완 승인 뒤 다시 공개되지 않는다."""
+    return r.get("channel") == "main" and bool(r.get("posted_url")) and not a.get("is_main_published")
 
 
 def rejected_live(rows, articles):
@@ -446,7 +453,8 @@ def save_state(st):
 def run(env, notify, live=False, slug=None, base_url=None, today=None):
     today = today or datetime.now(KST).date().isoformat()
     rows, arts = fetch_rows(env)
-    todo = [t for t in plan([r for r in rows if not r.get("posted_url")], arts, today)
+    todo = [t for t in plan([r for r in rows if not r.get("posted_url")
+                             or needs_republish(r, arts.get(r["article_id"], {}))], arts, today)
             if not slug or t["article"]["slug"] == slug]
     st = load_state() if live else {}
     out = []
