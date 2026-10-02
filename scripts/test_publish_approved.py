@@ -25,8 +25,9 @@ class T1(unittest.TestCase):
     def test_plan(self):
         rows = [ROW, {**ROW, "id": "r2", "channel": "naver"}, {**ROW, "id": "r3", "channel": "threads"},
                 {**ROW, "id": "r4", "posted_url": "https://x"}, {**ROW, "id": "r5", "article_id": "zz"}]
-        p = pa.plan(rows, ART, T)
-        self.assertEqual([t["row"]["id"] for t in p], ["r1", "r2"], "main·naver 만, 게시 URL 있는 건 제외")
+        live = {"a1": {**ART["a1"], "is_main_published": True}}
+        p = pa.plan(rows, live, T)
+        self.assertEqual([t["row"]["id"] for t in p], ["r1", "r2"], "main·naver 만, 게시 URL 있고 공개 중인 건 제외")
         self.assertTrue(all(t["ok"] for t in p))
 
     def test_expiring(self):
@@ -57,6 +58,15 @@ class Conditional(unittest.TestCase):
         self.assertIn("조건 붙은 승인", p[0]["why"])
         self.assertEqual(p[0]["cond"], self.REMARK8)
         self.assertTrue(pa.plan([ROW], ART, T)[0]["ok"], "조건 없는 승인은 그대로 자동 공개")
+
+    def test_republish_after_rejection(self):
+        """반송 → 보완 재승인: posted_url 은 남아 있고 본진은 내려가 있다 → 다시 공개 대상(2026-10-02 8호)."""
+        r = {**ROW, "posted_url": "https://goodfinance.kr/news/s1"}
+        down = {"a1": {"id": "a1", "slug": "s1", "is_main_published": False}}
+        up = {"a1": {"id": "a1", "slug": "s1", "is_main_published": True}}
+        self.assertEqual([t["row"]["id"] for t in pa.plan([r], down, T)], ["r1"])
+        self.assertEqual(pa.plan([r], up, T), [], "이미 공개된 글은 그대로 건너뛴다")
+        self.assertEqual(pa.plan([{**r, "channel": "naver"}], down, T), [], "네이버는 사람이 공개 — 대상 아님")
 
     def test_rejected_live(self):
         arts = {"a1": {"id": "a1", "slug": "s1", "is_main_published": True},
