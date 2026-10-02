@@ -43,13 +43,13 @@ def check(a, slug="__no_such_slug__"):
 
 class LabelTest(unittest.TestCase):
     def test_label_is_period_form(self):
-        self.assertEqual(LABEL, "22년~25년 GA 명장")
+        self.assertEqual(LABEL, "22년·25년 GA 명장")   # 확정 2026-10-02(22년과 25년 — 연속 기간 아님)
 
 
 class FindBareTest(unittest.TestCase):
     def test_bare_forms_are_caught(self):
         for s in ["23년 차 GA명장 · 보험 리모델링", "GA 명장", "GA  명장 신순주",
-                  "22년~25년 GA명장", "22~25년 GA 명장"]:
+                  "22년~25년 GA명장", "22~25년 GA 명장", "22년~25년 GA 명장", "22년·25년 GA명장"]:
             self.assertTrue(ga_master.find_bare(s, LABEL), s)
 
     def test_label_passes(self):
