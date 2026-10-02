@@ -81,6 +81,29 @@ def review_ok(r, today):
     return True, ""
 
 
+# 🔴 2026-10-02 8호 본진: PAMS 가 심의번호(0451)를 붙여 승인으로 보였던 건이 1시간 뒤 「반송」으로 바뀌었다.
+#    비고는 「[GA명장]: 2026년 GA명장 증빙자료를 첨부하세요. 혹은 [22~25년 GA명장] 등의 표현으로 수정…」 —
+#    조건이 붙은 승인이었는데 자동 공개 + 게시위치 등록까지 나갔다(반송 건에 심의필 표시 = 허위 심의필 위험).
+#    그래서 비고가 표준 승인 문구가 아니면(= 조건) 자동 공개하지 않고 사람에게 넘긴다.
+STANDARD_REMARK = "[본사승인] 심의받은 내용, 심의필번호 및 유효기간 그대로 게시"
+REMARK_PREFIX = "PAMS 비고:"
+
+
+def condition_remark(r):
+    """승인 행의 조건 — notes 의 「PAMS 비고:」 줄 중 표준 승인 문구가 아닌 것, 또는 「조건부 승인」 표시. 없으면 None.
+    (비고 줄은 robert-os 감시기가 적는다 — relay/pams_watch_condition_patch.md)"""
+    notes = r.get("notes") or ""
+    for ln in notes.splitlines():
+        s = ln.strip()
+        if s.startswith(REMARK_PREFIX):
+            remark = s[len(REMARK_PREFIX):].strip()
+            if remark and re.sub(r"\s+", "", remark) != re.sub(r"\s+", "", STANDARD_REMARK):
+                return remark
+    if "조건부 승인" in notes:
+        return "조건부 승인"
+    return None
+
+
 def plan(rows, articles, today):
     """ad_reviews 행 → 할 일 목록. rows: approved 이고 posted_url 비어 있는 main/naver 행."""
     todo = []
@@ -89,8 +112,29 @@ def plan(rows, articles, today):
         if not a or r.get("channel") not in ("main", "naver") or r.get("posted_url"):
             continue
         ok, why = review_ok(r, today)
-        todo.append({"row": r, "article": a, "channel": r["channel"], "ok": ok, "why": why})
+        cond = condition_remark(r) if ok else None
+        if cond:
+            ok, why = False, f"조건 붙은 승인 — 자동 공개 안 함(사람 확인): {cond}"
+        todo.append({"row": r, "article": a, "channel": r["channel"], "ok": ok, "why": why, "cond": cond})
     return todo
+
+
+def rejected_live(rows, articles):
+    """반송인데 본진이 공개돼 있는 글 → [(article, row)]. rows: 본진(main) ad_reviews 전부(created_at 포함).
+    같은 글에 행이 여럿이면 **가장 최근 행**으로 본다(반송 뒤 재접수·승인된 글은 건드리지 않는다)."""
+    latest = {}
+    for r in rows:
+        if r.get("channel") != "main":
+            continue
+        k = r["article_id"]
+        if k not in latest or (r.get("created_at") or "") > (latest[k].get("created_at") or ""):
+            latest[k] = r
+    out = []
+    for k, r in latest.items():
+        a = articles.get(k)
+        if a and r.get("status") == "rejected" and a.get("is_main_published"):
+            out.append((a, r))
+    return out
 
 
 def expiring(rows, today, days=EXPIRY_DAYS):
@@ -140,6 +184,19 @@ def stale_submitted(rows, now, hours=STALE_HOURS):
         if now - at >= timedelta(hours=hours):
             out.append(r)
     return out
+
+
+def fetch_main_rows(env):
+    """본진 ad_reviews 전부 + 공개 중인 글 — rejected_live 판정용."""
+    url, h = kit._rest(env)
+    base = url.rsplit("/", 1)[0]
+    r = requests.get(f"{base}/ad_reviews", headers=h, timeout=30, params={
+        "select": "id,article_id,channel,status,created_at,rejected_reason", "channel": "eq.main"})
+    r.raise_for_status()
+    q = requests.get(url, headers=h, timeout=30, params={
+        "select": "id,slug,title,is_main_published", "is_main_published": "eq.true"})
+    q.raise_for_status()
+    return r.json(), {a["id"]: a for a in q.json()}
 
 
 def fetch_pending(env):
@@ -450,6 +507,26 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
             _a = arts[r['article_id']]
             notify(f"❓ 네이버 게시 URL 을 못 정했습니다 — {kit.title_label(_a.get('title'), _a['slug'])}\n{why}\n맞는 URL 을 ad_reviews(naver).posted_url 에 넣어 주세요.")
             st[key] = True
+    # 조건 붙은 승인 — 자동 공개하지 않고 한 번 알린다
+    for t in todo:
+        if t.get("cond"):
+            a = t["article"]
+            key = f"cond:{t['row']['id']}"
+            msg = (f"🟡 조건 붙은 승인 — 자동 공개 안 함 · {kit.title_label(a.get('title'), a['slug'])} {t['channel']} "
+                   f"제{t['row'].get('review_no')}호\n비고: {t['cond']}\n조건을 해소(보완·증빙)한 뒤 사람이 공개한다. 반송으로 바뀌면 그대로 둔다.")
+            out.append(msg.split("\n")[0])
+            if live and key not in st:
+                notify(msg)
+                st[key] = datetime.now(KST).isoformat()
+
+    # 반송인데 본진이 공개돼 있다 → 즉시 비공개(심의필 줄이 남아 있으면 허위 심의필이 된다)
+    try:
+        main_rows, live_arts = fetch_main_rows(env)
+        down = [x for x in rejected_live(main_rows, live_arts) if not slug or x[0]["slug"] == slug]
+    except requests.RequestException as e:
+        down = []
+        out.append(f"⚠️ 반송·공개 대조 읽기 실패 — {e}")
+
     flags = [f for f in plan_flags(rows, arts, today) if not slug or f[0]["slug"] == slug]
     # RSS 로 방금 URL 을 얻는 채널도 배포 체크 대상
     for r, link in rss_ok:
@@ -457,11 +534,25 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
         if not a.get(FLAG["naver"]) and review_ok(r, today)[0]:
             flags.append((a, {**r, "posted_url": link}, FLAG["naver"]))
 
-    if todo or rss_ok or flags:
+    if todo or rss_ok or flags or down:
         server = kit.LocalServer(base_url=base_url, log=log) if live else None
         if server:
             server.__enter__()
         try:
+            for a, r in down:
+                title = kit.title_label(a.get("title"), a["slug"])
+                if not live:
+                    out.append(f"(드라이런) 반송 → 본진 비공개 {a['slug']}")
+                    continue
+                try:
+                    admin_post(server, env, "/api/admin/update",
+                               {"table": "premium_articles", "id": a["id"], "fields": {"is_main_published": False}})
+                    out.append(f"✅ 반송 → 본진 비공개 {a['slug']}")
+                    notify(f"🔴 반송 감지 → 본진 비공개 처리 — {title}\n사유: {r.get('rejected_reason') or '(감시기 기록 확인)'}\n"
+                           f"게시위치 URL 은 지우지 않는다 — 보완 재접수로 덮는다. 라이브 페이지가 내려갔는지 확인하세요(ISR 갱신 최대 5분).")
+                except kit.KitError as e:
+                    out.append(f"❌ 반송 비공개 실패 {a['slug']} — {e}")
+                    notify(f"❌ 반송 비공개 실패 — {title} — {e}\n어드민에서 본진 발행을 끄세요.")
             for t in todo:
                 a = t["article"]
                 if not t["ok"]:
