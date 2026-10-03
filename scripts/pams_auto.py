@@ -448,6 +448,14 @@ def main():
             scan_zips(kit.KIT_DIR, state, notify=lambda t: telegram(env, t))
         except Exception as e:
             log(f"zip 검사 실패: {e}")
+        # PAMS 에 접수된 본진·네이버인데 ad_reviews 행이 없으면 만든다(감시기 접수 기록 기준 — 10-02 13호 등 재발 방지).
+        try:
+            import pams_submissions
+            pams_submissions.sync(env, state, notify=lambda t: telegram(env, t), log=log)
+        except Exception as e:
+            log(f"접수 행 생성 실패: {e}")
+            alert_once(env, state, f"submissions:{type(e).__name__}",
+                       f"⚠️ PAMS 접수 → ad_reviews 행 자동 생성이 멈췄습니다 — {type(e).__name__}: {str(e)[:120]}")
         save_state(state)
         upload_submitted_threads(env, notify=lambda t: telegram(env, t))
         # 심의 승인 → 게시(본진 자동 공개·posted_url, 네이버 공개 전환 안내·RSS URL, 배포 체크, 만료 알림).
