@@ -93,6 +93,8 @@ def sync(env, state, notify, log=print, apply_path=APPLY_JSON, server_factory=No
         return []
     apply_map = json.load(open(apply_path, encoding="utf-8"))
     todo = pending(apply_map, fetch_reviews(env), issue_slugs(), datetime.now(kit.KST))
+    # 관측 장치는 조용하면 작동 여부를 알 수 없다(CLAUDE.md §8) — 할 일이 없어도 한 줄 남긴다
+    log(f"접수 행 점검: 접수 기록 {len(apply_map)}건 · 만들 행 {len(todo)}건")
     if not todo:
         return []
     import publish_approved as pa
