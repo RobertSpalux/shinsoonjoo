@@ -171,6 +171,7 @@ export default function Footer() {
                 <li>
                   <a
                     href={`tel:${BRAND.phone}`}
+                    data-profile-phone
                     className="inline-flex items-center gap-2 text-[var(--color-ink)]/75 transition-colors hover:text-[var(--color-gold-light)]"
                   >
                     <PhoneIcon className="h-3.5 w-3.5 shrink-0" />
@@ -182,7 +183,7 @@ export default function Footer() {
                   {BRAND.address}
                 </li>
                 <li>{BRAND.personName} {BRAND.title} · {years}년 차</li>
-                <li>우수인증설계사 8년 연속</li>
+                <li data-profile-cert>우수인증설계사 8년 연속</li>
                 <li>
                   <a
                     href={BRAND.pressUrl}
