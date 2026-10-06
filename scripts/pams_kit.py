@@ -158,6 +158,23 @@ def kit_basename(slug, channel, now=None):
     return f"{now:%m%d}_{issue_label(slug)}_{CH_LABEL[channel]}"
 
 
+KIT_INPUTS = (
+    os.path.join("src", "lib", "brand.ts"),
+    os.path.join("configs", "sources.json"),
+    os.path.join("scripts", "pams_kit.py"),
+)
+
+
+def kit_is_stale(zip_path, root=ROOT, inputs=KIT_INPUTS):
+    """키트 zip 이 brand.ts · sources.json · pams_kit.py 최종 변경보다 오래됐는가.
+    원고가 같아도 이 셋이 바뀌면 키트 내용(연락처·인증 기간·출처)이 낡는다 — 낡은 키트로 신청서를 채우지 않는다."""
+    try:
+        z = os.path.getmtime(zip_path)
+    except OSError:
+        return True
+    return any(os.path.exists(p) and os.path.getmtime(p) > z for p in (os.path.join(root, i) for i in inputs))
+
+
 def content_hash(article, channel):
     """원고 해시 — 키트 내용을 바꾸는 필드만. 바뀌면 키트를 다시 만든다."""
     if channel == "main":
@@ -209,8 +226,8 @@ def evidence_for(article, channel):
 def source_line(s):
     if s.get("review_source_line"):
         return s["review_source_line"]
-    pub = s.get("published", "")
-    return f"{s['org']}, {s['title']}, {pub.split('.')[0]}, {pub}"
+    # 수동 값이 없으면 기본 {org}_{title}_{published}. — title 은 sources.json 정본(원문 제목) 그대로. src/lib/source-line.ts 와 같은 형식.
+    return f"{s['org']}_{s['title']}_{s.get('published', '')}."
 
 
 def main_location(slug):
