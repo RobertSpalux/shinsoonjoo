@@ -9,6 +9,7 @@ import type { Article } from "@/lib/articles";
 import type { ReviewInfo } from "@/lib/brand";
 import { articleSchema, faqSchema, personSchema, jsonLdString } from "@/lib/jsonld";
 import { BRAND, bylineGaMaster, getCareer, profileForReview } from "@/lib/brand";
+import { reviewSourceLine } from "@/lib/source-line";
 import ProfileSwap from "@/components/news/ProfileSwap";
 import { CTA_MARKER } from "@/lib/osmu-format";
 import ReadingProgress from "@/components/news/ReadingProgress";
@@ -100,6 +101,7 @@ export default function ArticleView({
 }) {
   const { years } = getCareer();
   const profile = profileForReview(review);
+  const reviewLine = reviewSourceLine(article.raw_source_url, review);
   const markdown = article.main_website_markdown ?? "";
   const date = article.published_at
     ? new Date(article.published_at).toLocaleDateString("ko-KR", {
@@ -225,13 +227,22 @@ export default function ArticleView({
             데이터를 비워 이 줄만 감춘다). 비권유 고지는 출처 유무와 무관하게 상시 노출(§6 업무광고 입장). */}
         <div className="mt-10 rounded-lg border border-[var(--color-line)] bg-white px-5 py-4 text-xs leading-relaxed text-[var(--color-text-muted)]">
           {article.raw_source_url && (
-            <p>
-              원문 출처: {article.raw_source_name ?? "외부 자료"} —{" "}
-              <a href={article.raw_source_url} target="_blank" rel="noopener noreferrer"
-                 className="text-[var(--color-text-strong)] underline decoration-[var(--color-gold-dim)] underline-offset-2 transition-colors hover:decoration-[var(--color-gold)]">
-                원문 보기 ↗
-              </a>
-            </p>
+            reviewLine ? (
+              <p>
+                <a href={article.raw_source_url} target="_blank" rel="noopener noreferrer"
+                   className="text-[var(--color-text-strong)] underline decoration-[var(--color-gold-dim)] underline-offset-2 transition-colors hover:decoration-[var(--color-gold)]">
+                  {reviewLine}
+                </a>
+              </p>
+            ) : (
+              <p>
+                원문 출처: {article.raw_source_name ?? "외부 자료"} —{" "}
+                <a href={article.raw_source_url} target="_blank" rel="noopener noreferrer"
+                   className="text-[var(--color-text-strong)] underline decoration-[var(--color-gold-dim)] underline-offset-2 transition-colors hover:decoration-[var(--color-gold)]">
+                  원문 보기 ↗
+                </a>
+              </p>
+            )
           )}
           <p className={article.raw_source_url ? "mt-1" : ""}>
             본 글은 공개 자료를 기반으로 한 전문가 해설이며, 특정 상품의 권유가 아닙니다.
