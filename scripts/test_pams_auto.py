@@ -98,6 +98,15 @@ class MainKitTest(unittest.TestCase):
         os.remove(k["zip"])
         self.assertEqual(len(h.run()), 1, "키트 파일이 없어졌으면 다시 만든다")
 
+    def test_stale_kit_rebuilds_even_if_content_same(self):
+        h = Harness(main=[art()])
+        h.run()
+        need, why = auto.needs_main_kit(h.drafts["main"][0], h.state, is_stale=lambda z: True)
+        self.assertTrue(need, "brand.ts 등이 키트보다 새로우면 원고가 같아도 다시 만든다")
+        self.assertIn("오래됨", why)
+        need, _ = auto.needs_main_kit(h.drafts["main"][0], h.state, is_stale=lambda z: False)
+        self.assertFalse(need)
+
     def test_gate_blocked_is_skipped_and_not_retried_until_acks_change(self):
         h = Harness(main=[art()], gate_blocked={"ltc-grade-home-care-rider-check"})
         self.assertEqual(h.run(), [])

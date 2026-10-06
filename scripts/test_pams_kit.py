@@ -193,7 +193,42 @@ class CaptureCheck(unittest.TestCase):
         s = {"org": "금융감독원", "title": "T", "published": "2026.6.24", "review_source_line": "금융감독원_T._2026.6.24."}
         self.assertEqual(kit.source_line(s), "금융감독원_T._2026.6.24.")
         del s["review_source_line"]
-        self.assertEqual(kit.source_line(s), "금융감독원, T, 2026, 2026.6.24")
+        self.assertEqual(kit.source_line(s), "금융감독원_T_2026.6.24.")
+
+
+class KitFreshness(unittest.TestCase):
+    def _setup(self):
+        root = tempfile.mkdtemp()
+        for rel in kit.KIT_INPUTS:
+            p = os.path.join(root, rel)
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            open(p, "w").close()
+            os.utime(p, (1000, 1000))
+        z = os.path.join(root, "k.zip")
+        open(z, "w").close()
+        return root, z
+
+    def test_fresh_zip_is_not_stale(self):
+        root, z = self._setup()
+        os.utime(z, (2000, 2000))
+        self.assertFalse(kit.kit_is_stale(z, root))
+
+    def test_older_than_brand_ts_is_stale(self):
+        root, z = self._setup()
+        os.utime(z, (2000, 2000))
+        os.utime(os.path.join(root, kit.KIT_INPUTS[0]), (3000, 3000))
+        self.assertTrue(kit.kit_is_stale(z, root))
+
+    def test_older_than_sources_or_kit_script_is_stale(self):
+        for i in (1, 2):
+            root, z = self._setup()
+            os.utime(z, (2000, 2000))
+            os.utime(os.path.join(root, kit.KIT_INPUTS[i]), (3000, 3000))
+            self.assertTrue(kit.kit_is_stale(z, root))
+
+    def test_missing_zip_is_stale(self):
+        root, z = self._setup()
+        self.assertTrue(kit.kit_is_stale(os.path.join(root, "none.zip"), root))
 
 
 if __name__ == "__main__":

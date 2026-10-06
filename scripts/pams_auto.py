@@ -125,7 +125,7 @@ def ready_message(k):
 
 
 # ── 판정(순수 함수 — 테스트 대상) ─────────────────────────────
-def needs_main_kit(article, state, file_exists=os.path.exists):
+def needs_main_kit(article, state, file_exists=os.path.exists, is_stale=kit.kit_is_stale):
     """본진 키트를 (다시) 만들어야 하는가 → (bool, 사유)."""
     if article.get("is_main_published"):
         return False, "발행됨"
@@ -135,6 +135,8 @@ def needs_main_kit(article, state, file_exists=os.path.exists):
     prev = state["kits"].get(key)
     h = kit.content_hash(article, "main")
     if prev and prev.get("hash") == h and file_exists(prev.get("zip", "")):
+        if is_stale(prev["zip"]):
+            return True, "키트가 brand.ts·sources.json·pams_kit.py 보다 오래됨"
         return False, "키트 있음(원고 같음)"
     if state["gate_blocked"].get(key) == gate_key(article, "main"):
         return False, "게이트 막힘(원고·확인 이력 그대로)"
