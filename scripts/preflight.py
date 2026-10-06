@@ -112,7 +112,7 @@ def fetch_article(slug):
     cols = ("id,slug,title,naver_title,blogspot_title,category,tags,is_main_published,"
             "naver_composed_at,naver_composed_hash,"
             "main_website_markdown,naver_blog_content,blogspot_content,verify_claims,"
-            "instagram_caption,"
+            "instagram_caption,raw_source_name,raw_source_url,"
             "ad_reviews(channel,status)")
     r = requests.get(
         f"{url}/rest/v1/premium_articles",
@@ -404,6 +404,28 @@ def check_source_titles(article):
     ok = not fails
     return ok, ("통과 — 자료명 정본·발표일 대조 완료" if ok else
                 " / ".join(fails) + "  → 원문 제목 확인 후 configs/sources.json에 등록하거나 본문을 원문 제목으로 고칠 것")
+
+
+def source_url_problem(raw_url, ledger_urls):
+    """raw_source_url 이 대장(sources.json source_url) 중 하나와 완전 일치하는지(순수 함수).
+    일치하면 None, 아니면 사유. 값이 없는 글(출처 없는 글)은 대상이 아니다.
+    도메인만 적힌 값(예: https://www.fss.or.kr)은 원문을 가리키지 못하므로 불일치다."""
+    u = (raw_url or "").strip()
+    if not u:
+        return None
+    if u in ledger_urls:
+        return None
+    return f"raw_source_url 이 대장 source_url 과 완전 일치하지 않음 — 「{u}」"
+
+
+def check_source_url(article):
+    """raw_source_url ↔ configs/sources.json source_url 완전 일치. 아니면 ⛔.
+    승인 게시분은 원안이라 경고로 낮춘다(soften_if_published)."""
+    ledger = {(s_.get("source_url") or "").strip() for s_ in parse_sources_full()} - {""}
+    prob = source_url_problem(article.get("raw_source_url"), ledger)
+    if prob is None:
+        return True, "통과 — 출처 URL 대장 일치(또는 출처 URL 없음)"
+    return soften_if_published(article, False, prob + "  → 원문 게시글 URL로 고치거나 sources.json 에 등록할 것")
 
 
 def check_writing_spec(article):
@@ -888,6 +910,7 @@ def main():
         ("실손 자기부담금", *check_actual_loss_notice(article)),
         ("출처 4요소", *check_sources(article)),
         ("출처 자료명", *check_source_titles(article)),
+        ("출처 URL", *check_source_url(article)),
         ("제목 각도", *check_title_variation(article)),
         ("네이버 형식", *check_naver_format(article)),
         ("네이버 osmu", *check_naver_osmu_parity(article)),
