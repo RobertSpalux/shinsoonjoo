@@ -189,6 +189,12 @@ class CaptureCheck(unittest.TestCase):
         i = s.index("def build_kit(")
         self.assertLess(s.index("check_capture(capture", i), s.index("srv = LocalServer", i))
 
+    def test_source_line_prefers_review_source_line(self):
+        s = {"org": "금융감독원", "title": "T", "published": "2026.6.24", "review_source_line": "금융감독원_T._2026.6.24."}
+        self.assertEqual(kit.source_line(s), "금융감독원_T._2026.6.24.")
+        del s["review_source_line"]
+        self.assertEqual(kit.source_line(s), "금융감독원, T, 2026, 2026.6.24")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

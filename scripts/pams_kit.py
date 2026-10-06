@@ -207,6 +207,8 @@ def evidence_for(article, channel):
 
 
 def source_line(s):
+    if s.get("review_source_line"):
+        return s["review_source_line"]
     pub = s.get("published", "")
     return f"{s['org']}, {s['title']}, {pub.split('.')[0]}, {pub}"
 
