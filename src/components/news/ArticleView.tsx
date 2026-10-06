@@ -8,7 +8,8 @@ import GithubSlugger from "github-slugger";
 import type { Article } from "@/lib/articles";
 import type { ReviewInfo } from "@/lib/brand";
 import { articleSchema, faqSchema, personSchema, jsonLdString } from "@/lib/jsonld";
-import { BRAND, bylineGaMaster, getCareer } from "@/lib/brand";
+import { BRAND, bylineGaMaster, getCareer, profileForReview } from "@/lib/brand";
+import ProfileSwap from "@/components/news/ProfileSwap";
 import { CTA_MARKER } from "@/lib/osmu-format";
 import ReadingProgress from "@/components/news/ReadingProgress";
 import ArticleCard from "@/components/news/ArticleCard";
@@ -98,6 +99,7 @@ export default function ArticleView({
   mode: "submission" | "publish";
 }) {
   const { years } = getCareer();
+  const profile = profileForReview(review);
   const markdown = article.main_website_markdown ?? "";
   const date = article.published_at
     ? new Date(article.published_at).toLocaleDateString("ko-KR", {
@@ -119,6 +121,7 @@ export default function ArticleView({
   return (
     <main className="min-h-screen bg-[var(--color-ink)] pt-16 print:pt-0">
       <ReadingProgress />
+      {profile.phone !== BRAND.phone && <ProfileSwap phone={profile.phone} cert={profile.cert} />}
 
       {/* JSON-LD: Article + Person (+ FAQPage) — YMYL E-E-A-T 핵심 신호 */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdString(articleSchema(article)) }} />
@@ -155,7 +158,7 @@ export default function ArticleView({
                 {BRAND.personName} <span className="font-normal text-[var(--color-text-muted)]">{BRAND.title}</span>
               </p>
               <p className="text-xs text-[var(--color-text-muted)]">
-                {years}년 차 · 우수인증설계사 8년 연속 · {bylineGaMaster(review)}
+                {years}년 차 · {profile.cert} · {bylineGaMaster(review)}
               </p>
             </div>
             <div className="text-right text-xs text-[var(--color-text-muted)]">

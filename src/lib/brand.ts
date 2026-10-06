@@ -88,6 +88,27 @@ export function bylineGaMaster(review?: ReviewInfo | null): string {
   return GA_MASTER_LABEL;
 }
 
+/**
+ * 하단 프로필 연락처·우수인증 표기 — **글 단위**(로버트 2026-10-06 직접 지시).
+ * - 연락처: 041-572-0372 는 본인 명의 증빙 요구로 반송됨 → 새로 심의받는 글은 PROFILE_PHONE.
+ * - 우수인증: 「8년 연속」 단독은 현재 유지로 오인 → 「우수인증설계사 8년 연속 [2018~2025]」.
+ * - 본진 승인일(review.from)이 PROFILE_CUTOFF 이전인 글 · 사이트 골격(6977)은 원안이라 기존 표기 그대로(BRAND.phone).
+ *   (13호는 10-06 승인 — 기준일을 10-07 로 둬 승인본이 바뀌지 않는다.)
+ * - naver_images.py · scripts/cert_years.py · preflight.py 가 CERT_8Y_LABEL 을 파싱해 쓴다(자구 하드코딩 금지).
+ */
+export const PROFILE_PHONE = "010-9822-0379";
+export const CERT_8Y_LABEL = "우수인증설계사 8년 연속 [2018~2025]";
+export const CERT_8Y_LEGACY = "우수인증설계사 8년 연속";
+export const PROFILE_CUTOFF = "2026.10.07";
+
+export function profileForReview(review?: ReviewInfo | null): { phone: string; cert: string } {
+  const from = (review?.from ?? "").replace(/[-/]/g, ".").trim();
+  if (review?.no && /^\d{4}\.\d{2}\.\d{2}$/.test(from) && from < PROFILE_CUTOFF) {
+    return { phone: BRAND.phone, cert: CERT_8Y_LEGACY };
+  }
+  return { phone: PROFILE_PHONE, cert: CERT_8Y_LABEL };
+}
+
 /* ────────────────────────────────────────────────────────────────────────
  * 금소법 광고 컴플라이언스 (CLAUDE.md §6)
  * ──────────────────────────────────────────────────────────────────────── */

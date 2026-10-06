@@ -34,6 +34,7 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ga_master  # noqa: E402  — GA 명장 정본 자구(brand.ts GA_MASTER_LABEL)
+import cert_years  # noqa: E402  — 우수인증 8년 연속 정본 자구(brand.ts CERT_8Y_LABEL)
 
 # Windows 콘솔(CP949)에서도 한글·기호 출력이 깨지지 않게 UTF-8 강제.
 try:
@@ -509,6 +510,36 @@ def check_ga_master(slug, article, renderers=None):
     return True, f"단독 표기 0건(정본 「{label}」)"
 
 
+def check_cert_years(slug, article, renderers=None):
+    """우수인증설계사 「8년 연속」 단독 표기 금지 — 새 원고는 CERT_8Y_LABEL(「… 8년 연속 [2018~2025]」)만 쓴다.
+
+    근거: 9·11·12호 반송(2026-10-06). 범위·완화 규칙은 check_ga_master 와 같다.
+    """
+    label = cert_years.load_label()
+    skip = frozen_channels(article) | DORMANT_CHANNELS
+    hits = []
+    for field, ch in TITLE_CHANNEL.items():
+        if ch not in skip:
+            hits += [f"{field}: {h}" for h in cert_years.find_bare(article.get(field), label)]
+    for lbl, text in pending_bodies(article):
+        hits += [f"{lbl}: {h}" for h in cert_years.find_bare(text, label)]
+    if "instagram" not in skip:
+        hits += [f"인스타 캡션: {h}" for h in cert_years.find_bare(article.get("instagram_caption"), label)]
+    cfg = os.path.join(CONFIGS_DIR, f"{slug}.json")
+    if os.path.exists(cfg):
+        hits += [f"configs/{slug}.json: {h}" for h in
+                 cert_years.find_bare(open(cfg, encoding="utf-8").read(), label)]
+    for path in (IMAGE_RENDERERS if renderers is None else renderers):
+        if os.path.exists(path):
+            src = open(path, encoding="utf-8").read()
+            hits += [f"{os.path.basename(path)}: {h}" for h in cert_years.find_bare(src, label)]
+    if hits:
+        detail = (f"「8년 연속」 단독 {len(hits)}건 → 「{label}」로 — "
+                  + " / ".join(hits[:3]) + ("" if len(hits) <= 3 else f" 외 {len(hits)-3}건"))
+        return soften_if_published(article, False, detail)
+    return True, f"단독 표기 0건(정본 「{label}」)"
+
+
 def frozen_channels(article):
     """심의 접수·승인된 채널 = 원안 수정 불가 → 제출 전 게이트의 검사 대상이 아니다.
     이 스코프가 없으면 승인분(6088·6964·8289·8290)이 영구 실패로 남아 노이즈가 된다."""
@@ -864,6 +895,7 @@ def main():
         ("분량", *check_length(article)),
         ("이미지 config", *check_image_config(slug, article)),
         ("GA 명장 기간", *check_ga_master(slug, article)),
+        ("우수인증 기간", *check_cert_years(slug, article)),
     ]
 
     print(f"\n── preflight: {slug} ──")
