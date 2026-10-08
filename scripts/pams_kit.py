@@ -518,6 +518,16 @@ def main():
         sys.exit(3 if e.gate else 1)
     print(open(kit["txt"], encoding="utf-8").read())
     print(f"✅ {kit['zip']}\n✅ {kit['txt']}")
+    tidy(env)
+
+
+def tidy(env, log=print):
+    """키트를 만든 뒤 승인 끝난 키트를 _접수완료\\ 로 옮긴다(scripts/pams_folder_tidy.py). 실패해도 키트는 그대로."""
+    try:
+        import pams_folder_tidy
+        pams_folder_tidy.run(env, do_apply=True, log=log)
+    except Exception as e:
+        log(f"PAMS 폴더 정리 실패(키트는 정상): {type(e).__name__}: {str(e)[:120]}")
 
 
 if __name__ == "__main__":
