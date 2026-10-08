@@ -73,7 +73,22 @@ GOLD = "#a8842c"
 
 W = 800  # 네이버 본문 가로
 
-FONT_DIR = "/usr/share/fonts/opentype/noto"
+FONT_DIR = os.environ.get("NAVER_FONT_DIR") or "/usr/share/fonts/opentype/noto"
+
+_FONT_FILES = (
+    "NotoSansCJK-Black.ttc", "NotoSansCJK-Bold.ttc", "NotoSansCJK-Medium.ttc",
+    "NotoSansCJK-Regular.ttc", "NotoSerifCJK-Bold.ttc", "NotoSerifCJK-SemiBold.ttc",
+)
+
+
+def check_fonts():
+    """렌더 직전에만 폰트 존재를 검사한다(import 시점 검사 금지)."""
+    missing = [n for n in _FONT_FILES if not os.path.exists(os.path.join(FONT_DIR, n))]
+    if missing:
+        sys.exit(
+            f"Noto CJK 6종 필요 — 관제탑 렌더 사용 (FONT_DIR={FONT_DIR}, 없음: {', '.join(missing)}; "
+            "다른 경로면 NAVER_FONT_DIR 지정)"
+        )
 
 
 def kr_index(path):
@@ -100,17 +115,23 @@ SERIF_PATHS = {
     "semibold": f"{FONT_DIR}/NotoSerifCJK-SemiBold.ttc",
 }
 
-_IDX = {p: kr_index(p) for p in list(SANS_PATHS.values()) + list(SERIF_PATHS.values())}
+_IDX = {}
+
+
+def _idx(p):
+    if p not in _IDX:
+        _IDX[p] = kr_index(p)
+    return _IDX[p]
 
 
 def sans(weight, size):
     p = SANS_PATHS[weight]
-    return ImageFont.truetype(p, size, index=_IDX[p])
+    return ImageFont.truetype(p, size, index=_idx(p))
 
 
 def serif(weight, size):
     p = SERIF_PATHS[weight]
-    return ImageFont.truetype(p, size, index=_IDX[p])
+    return ImageFont.truetype(p, size, index=_idx(p))
 
 
 def text_w(d, s, f):
@@ -225,7 +246,9 @@ def render_table(cfg):
         d.line([(pad, y - 12), (W - pad, y - 12)], fill=LINE, width=1)
 
     f_note = sans("regular", 21)
-    d.text((pad, H - 78), cfg["table_note"], font=f_note, fill=TEXT_MUTED)
+    # 출처는 줄 수와 무관하게 하단 여백 안에 전부 보여야 한다(출처 4요소 잘림 = 반려 사유).
+    nb = d.multiline_textbbox((0, 0), cfg["table_note"], font=f_note, spacing=6)
+    d.multiline_text((pad, H - 28 - (nb[3] - nb[1])), cfg["table_note"], font=f_note, fill=TEXT_MUTED, spacing=6)
 
     return img
 
@@ -273,6 +296,7 @@ def main():
         raise SystemExit("사용법: python naver_images.py <slug>   (예: disclosure-exclusion-2026)")
     slug = sys.argv[1]
     cfg = load_config(slug)
+    check_fonts()
     os.makedirs(OUT_DIR, exist_ok=True)
     jobs = [
         ("1-thumb", render_thumbnail),
