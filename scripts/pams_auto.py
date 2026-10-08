@@ -472,6 +472,8 @@ def main():
         import publish_approved
         for line in publish_approved.run(env, notify=lambda t: telegram(env, t), live=True):
             log(line)
+        # 승인 끝난 키트 → _접수완료\<채널>\ (삭제 없음). 심사중·반송·미접수는 그대로(scripts/pams_folder_tidy.py).
+        kit.tidy(env, log=log)
         if made:
             log(f"이번 바퀴 키트 {len(made)}개")
     except Exception:

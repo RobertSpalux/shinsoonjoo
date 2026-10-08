@@ -194,6 +194,7 @@ def main():
     if a.send:
         send(env, res)
         print("텔레그램 발송 완료")
+    kit.tidy(env)
 
 
 if __name__ == "__main__":
