@@ -79,12 +79,16 @@ _FONT_FILES = (
     "NotoSansCJK-Black.ttc", "NotoSansCJK-Bold.ttc", "NotoSansCJK-Medium.ttc",
     "NotoSansCJK-Regular.ttc", "NotoSerifCJK-Bold.ttc", "NotoSerifCJK-SemiBold.ttc",
 )
-_missing = [n for n in _FONT_FILES if not os.path.exists(os.path.join(FONT_DIR, n))]
-if _missing:
-    sys.exit(
-        f"Noto CJK 6종 필요 — 관제탑 렌더 사용 (FONT_DIR={FONT_DIR}, 없음: {', '.join(_missing)}; "
-        "다른 경로면 NAVER_FONT_DIR 지정)"
-    )
+
+
+def check_fonts():
+    """렌더 직전에만 폰트 존재를 검사한다(import 시점 검사 금지)."""
+    missing = [n for n in _FONT_FILES if not os.path.exists(os.path.join(FONT_DIR, n))]
+    if missing:
+        sys.exit(
+            f"Noto CJK 6종 필요 — 관제탑 렌더 사용 (FONT_DIR={FONT_DIR}, 없음: {', '.join(missing)}; "
+            "다른 경로면 NAVER_FONT_DIR 지정)"
+        )
 
 
 def kr_index(path):
@@ -111,17 +115,23 @@ SERIF_PATHS = {
     "semibold": f"{FONT_DIR}/NotoSerifCJK-SemiBold.ttc",
 }
 
-_IDX = {p: kr_index(p) for p in list(SANS_PATHS.values()) + list(SERIF_PATHS.values())}
+_IDX = {}
+
+
+def _idx(p):
+    if p not in _IDX:
+        _IDX[p] = kr_index(p)
+    return _IDX[p]
 
 
 def sans(weight, size):
     p = SANS_PATHS[weight]
-    return ImageFont.truetype(p, size, index=_IDX[p])
+    return ImageFont.truetype(p, size, index=_idx(p))
 
 
 def serif(weight, size):
     p = SERIF_PATHS[weight]
-    return ImageFont.truetype(p, size, index=_IDX[p])
+    return ImageFont.truetype(p, size, index=_idx(p))
 
 
 def text_w(d, s, f):
@@ -286,6 +296,7 @@ def main():
         raise SystemExit("사용법: python naver_images.py <slug>   (예: disclosure-exclusion-2026)")
     slug = sys.argv[1]
     cfg = load_config(slug)
+    check_fonts()
     os.makedirs(OUT_DIR, exist_ok=True)
     jobs = [
         ("1-thumb", render_thumbnail),
