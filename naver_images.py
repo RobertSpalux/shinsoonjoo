@@ -225,7 +225,9 @@ def render_table(cfg):
         d.line([(pad, y - 12), (W - pad, y - 12)], fill=LINE, width=1)
 
     f_note = sans("regular", 21)
-    d.text((pad, H - 78), cfg["table_note"], font=f_note, fill=TEXT_MUTED)
+    # 출처는 줄 수와 무관하게 하단 여백 안에 전부 보여야 한다(출처 4요소 잘림 = 반려 사유).
+    nb = d.multiline_textbbox((0, 0), cfg["table_note"], font=f_note, spacing=6)
+    d.multiline_text((pad, H - 28 - (nb[3] - nb[1])), cfg["table_note"], font=f_note, fill=TEXT_MUTED, spacing=6)
 
     return img
 
