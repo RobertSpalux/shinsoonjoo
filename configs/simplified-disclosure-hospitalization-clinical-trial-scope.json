@@ -1,0 +1,36 @@
+{
+  "slug": "simplified-disclosure-hospitalization-clinical-trial-scope",
+  "overline": "계약 전 알릴의무",
+  "title": "청약서의\n입원 문항,\n무엇을 묻나",
+  "subtitle": "날수가 아니라 입원의 이유입니다",
+  "table_title": "입원은 세 가지를 봅니다",
+  "col_before": "질병 입원",
+  "col_after": "그 밖",
+  "table_rows": [
+    [
+      "입원 경위",
+      "증상 때문에",
+      "임상시험 목적"
+    ],
+    [
+      "입원 당시 병증",
+      "통원 관리 어려움",
+      "통원 관리 가능"
+    ],
+    [
+      "처치 내역",
+      "개별 치료행위",
+      "동일한 투약·채혈"
+    ]
+  ],
+  "table_note": "금융감독원 「금융분쟁조정위원회, 금융소비자 권익보호를\n위해 간편심사보험의 계약전 알릴의무 범위를 명확화」\n(2026.7.27.) 기준",
+  "points_title": "청약서 입원 이력을 볼 때",
+  "points": [
+    "입원 경위부터 구분하기",
+    "입원기록·진단서로 확인",
+    "개별 사안은 따로 판단"
+  ],
+  "cta_line": "내 입원 이력, 어떻게 적나",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}
