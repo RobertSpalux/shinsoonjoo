@@ -73,7 +73,18 @@ GOLD = "#a8842c"
 
 W = 800  # 네이버 본문 가로
 
-FONT_DIR = "/usr/share/fonts/opentype/noto"
+FONT_DIR = os.environ.get("NAVER_FONT_DIR") or "/usr/share/fonts/opentype/noto"
+
+_FONT_FILES = (
+    "NotoSansCJK-Black.ttc", "NotoSansCJK-Bold.ttc", "NotoSansCJK-Medium.ttc",
+    "NotoSansCJK-Regular.ttc", "NotoSerifCJK-Bold.ttc", "NotoSerifCJK-SemiBold.ttc",
+)
+_missing = [n for n in _FONT_FILES if not os.path.exists(os.path.join(FONT_DIR, n))]
+if _missing:
+    sys.exit(
+        f"Noto CJK 6종 필요 — 관제탑 렌더 사용 (FONT_DIR={FONT_DIR}, 없음: {', '.join(_missing)}; "
+        "다른 경로면 NAVER_FONT_DIR 지정)"
+    )
 
 
 def kr_index(path):
