@@ -5,7 +5,7 @@
 
     python scripts/preflight.py <slug>
 
-Supabase에서 기사를 읽어 15개 항목을 검사한다. 하나라도 실패하면 exit code 1.
+Supabase에서 기사를 읽어 18개 항목을 검사한다. 하나라도 실패하면 exit code 1.
 
 ⚠️ 단일 출처 원칙: 금지어·필수문구 목록을 이 파일에 하드코딩하지 않는다.
    - 금지어: src/lib/compliance/banned-terms.ts 의 term/정규식을 파싱해 사용.
@@ -35,6 +35,7 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ga_master  # noqa: E402  — GA 명장 정본 자구(brand.ts GA_MASTER_LABEL)
 import cert_years  # noqa: E402  — 우수인증 8년 연속 정본 자구(brand.ts CERT_8Y_LABEL)
+import naver_rules  # noqa: E402  — 네이버 규칙 10(WRITING-SPEC §4-4)
 
 # Windows 콘솔(CP949)에서도 한글·기호 출력이 깨지지 않게 UTF-8 강제.
 try:
@@ -109,7 +110,7 @@ def fetch_article(slug):
     key = env.get("SUPABASE_SERVICE_ROLE_KEY", "")
     if not url or not key:
         sys.exit("[env 오류] NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 를 찾을 수 없습니다.")
-    cols = ("id,slug,title,naver_title,blogspot_title,category,tags,is_main_published,"
+    cols = ("id,slug,title,naver_title,blogspot_title,category,tags,is_main_published,created_at,"
             "naver_composed_at,naver_composed_hash,"
             "main_website_markdown,naver_blog_content,blogspot_content,verify_claims,"
             "instagram_caption,raw_source_name,raw_source_url,"
@@ -590,6 +591,8 @@ def approved_published(article):
 
 
 SOFT_MARK = "⚠️ 경고(승인 게시분 — 원안 수정 불가)"
+PRE_RULE_MARK = "⚠️ 경고(규칙 이전 초안 — 고쳐서 접수 권장)"   # 네이버 규칙10 시행 전 초안
+WARN_PREFIX = "⚠️ 경고"
 
 
 def soften_if_published(article, ok, detail):
@@ -859,6 +862,23 @@ def check_naver_format(article):
                 else " / ".join(fails) + "  → WRITING-SPEC 「네이버 원고에서 표를 푸는 두 형태」 참고")
 
 
+def check_naver_rules(article):
+    """네이버 규칙 10(WRITING-SPEC §4-4, TR2 2026-10-09) — 제목 30~40자·키워드 맨 앞·게시명 특수문자 ·
+    본문 공백 제외 2,500~3,500자 · FAQ 3 + 핵심 요약 · 내부링크 2~3. 판정은 naver_rules.py 단일 소스.
+
+    네이버가 접수·승인된 글은 원안 수정 불가라 검사하지 않는다(frozen_channels). 2026-10-09 이전 글은
+    전부 여기 해당한다 — 새 규칙은 소급하지 않고, 같은 주제의 30~60일 갱신 글에서 반영한다(규칙 1).
+    """
+    if "naver" in frozen_channels(article):
+        return True, "네이버 접수·승인분 — 원안 수정 불가라 검사 생략(갱신 글에서 반영)"
+    ok, detail = naver_rules.check_article(article)
+    # 규칙 이전에 쓴 미접수 초안은 경고로 — 접수 대기 버퍼(preflight_passed_at)가 한꺼번에 무너지지 않게.
+    #   고칠 수 있는 초안이니 고쳐서 접수하는 게 맞다. 막지 않을 뿐 사유는 그대로 띄운다.
+    if not ok and str(article.get("created_at") or "9999")[:10] < naver_rules.RULES_FROM:
+        return True, (PRE_RULE_MARK + " — " + detail)
+    return ok, detail
+
+
 def _title_tail(t):
     """제목의 뒷절 — 마지막 구분자(— – : |) 뒤. 구분자가 없으면 제목 전체."""
     parts = re.split(r"\s*[—–:|]\s*", str(t or "").strip())
@@ -914,6 +934,7 @@ def main():
         ("제목 각도", *check_title_variation(article)),
         ("네이버 형식", *check_naver_format(article)),
         ("네이버 osmu", *check_naver_osmu_parity(article)),
+        ("네이버 규칙10", *check_naver_rules(article)),
         ("WRITING-SPEC", *check_writing_spec(article)),
         ("분량", *check_length(article)),
         ("이미지 config", *check_image_config(slug, article)),
@@ -925,7 +946,7 @@ def main():
     all_ok, softened = True, []
     for name, ok, detail in results:
         mark = "통과" if ok else "실패"
-        if ok and detail.startswith(SOFT_MARK):
+        if ok and detail.startswith(WARN_PREFIX):
             mark = "경고"
             softened.append(name)
         print(f"  [{name:<12}] {mark} — {detail}")
@@ -939,7 +960,7 @@ def main():
         sys.exit(1)
     if softened:
         print("결과: 통과(경고 " + str(len(softened)) + "건 — " + ", ".join(softened) + ")")
-        print("  승인·게시분이라 원안을 고치지 않는다. 다음 갱신·재심의 때 반영한다.")
+        print("  승인·게시분이면 원안을 고치지 않는다(다음 갱신·재심의 때 반영). 규칙 이전 초안이면 고쳐서 접수한다.")
     else:
         print("결과: 통과 — 팜스 제출 가능.")
 
