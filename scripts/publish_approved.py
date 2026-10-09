@@ -210,7 +210,7 @@ def fetch_pending(env):
     url, h = kit._rest(env)
     r = requests.get(url.rsplit("/", 1)[0] + "/ad_reviews", headers=h, timeout=30, params={
         "select": "id,article_id,channel,status,submitted_at,posting_title,premium_articles(slug,title)",
-        "status": "in.(submitted,under_review)"})
+        "status": "in.(submitted,under_review)", "channel": kit.NOT_KIN})
     r.raise_for_status()
     return r.json()
 
@@ -235,7 +235,7 @@ def fetch_rows(env):
     base = url.rsplit("/", 1)[0]
     r = requests.get(f"{base}/ad_reviews", headers=h, timeout=30, params={
         "select": "id,article_id,channel,status,review_no,review_from,review_to,review_authority,posted_url,url_registered_at,notes,reviewed_at",
-        "status": "eq.approved"})
+        "status": "eq.approved", "channel": kit.NOT_KIN})
     r.raise_for_status()
     rows = r.json()
     ids = sorted({x["article_id"] for x in rows})

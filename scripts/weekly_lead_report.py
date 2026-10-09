@@ -235,7 +235,9 @@ def gsc_clicks(ros, start, end):
 def review_counts(env, start, end):
     url, h = kit._rest(env)
     rv = url.rsplit("/", 1)[0] + "/ad_reviews"
-    rows = requests.get(rv, params={"select": "status,reviewed_at,review_from,url_registered_at"}, headers=h, timeout=30).json()
+    # 글 심의만 센다 — 지식iN 답변(channel=kin)은 하루 3~5건이라 섞이면 글 승인 추이가 묻힌다(kin_pipeline.py weekly 가 따로 센다)
+    rows = requests.get(rv, params={"select": "status,reviewed_at,review_from,url_registered_at", "channel": kit.NOT_KIN},
+                        headers=h, timeout=30).json()
     ok = sum(1 for r in rows if r.get("status") == "approved" and in_range(r.get("reviewed_at") or r.get("review_from"), start, end))
     posted = sum(1 for r in rows if in_range(r.get("url_registered_at"), start, end))
     return {"승인": ok, "게시": posted}

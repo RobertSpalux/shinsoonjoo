@@ -58,6 +58,14 @@ class Harvest(unittest.TestCase):
                          ("통풍부담보관련 범위 질문드립니다", "7010108"),
                          ("간병인가입시 상해고지", "1060101")]:
             self.assertIsNone(kh.exclusion({**base, "title": title, "dirId": d}), title)
+        # SH5 — 법률 질문이 보험 분류로 들어와도 뺀다(조각의 「실비」 = 실제 비용)
+        dementia = {**base, "title": "치매 어머니가 상속인인 경우 상속재산분할협의와 성년후견....",
+                    "snippets": ["법원 송달료와 인지대, 감정비용 등 기본 실비가 수십만 원에서 100만 원 안팎으로 발생하며"]}
+        for d in ("401030201", "60220"):
+            self.assertIsNotNone(kh.exclusion({**dementia, "dirId": d}), d)
+        self.assertIn("법률 질문(상속)", kh.exclusion({**dementia, "dirId": "401030201"}))
+        self.assertIn("보험 신호어 없음", kh.exclusion({**base, "title": "이거 어떻게 하나요", "snippets": ["기본 실비만 들어요"]}))
+        self.assertIsNone(kh.exclusion({**base, "title": "사망보험금 상속 문의"}))   # 제목에 보험 낱말이 있으면 남긴다
         self.assertIn("답변 다수", kh.exclusion({**base, "answers_seen": 3}))
         self.assertIn("비교", kh.exclusion({**base, "title": "실비 어디가 좋나요 비교"}))
         self.assertIn("특정 회사", kh.exclusion({**base, "snippets": ["삼성화재 가입"]}, ["삼성화재"]))
@@ -196,6 +204,18 @@ class Flow(unittest.TestCase):
         self.assertIn("카테고리: 그외 기타(건강,화재,펫 보험 등)", txt)
         self.assertIn("── PAMS 에 붙여 넣을 원고 ──\n" + BODY + "\n── 끝 ──", txt)
         self.assertIn("저장」 금지", txt)
+        # 형식 계약(robert-os pams_apply 가 읽는다) — 1줄 머리 + 필드 블록(순서 고정, 값 뒤 설명 없음)
+        lines = txt.split("\n")
+        self.assertTrue(lines[0].startswith("[PAMS 접수 문자열] 지식인 · "))
+        block = lines[1:1 + len(kp.KIT_FIELDS)]
+        self.assertEqual([ln.split(": ", 1)[0] for ln in block], list(kp.KIT_FIELDS))
+        self.assertEqual(lines[1 + len(kp.KIT_FIELDS)], "")
+        for ln in block:
+            self.assertNotIn("←", ln)
+        fields = dict(ln.split(": ", 1) for ln in block)
+        self.assertEqual(fields["카테고리"], "그외 기타(건강,화재,펫 보험 등)")
+        self.assertTrue(fields["원고해시"].startswith("sha256 "))
+        self.assertLessEqual(len(fields["특이사항"].encode("utf-8")), 100)
         self.assertEqual(len(self.sent), 1)
         self.assertIn("「제출」은 로버트", self.sent[0])
 
@@ -232,6 +252,41 @@ class Flow(unittest.TestCase):
         self.assertEqual(line.count("\n"), 0)
         self.assertIn("질문 1 → 심의승인 1 → 답변 게시 1 → 프로필 조회 12", line)
         self.assertIn("카톡 미입력", line)
+
+    def test_run_summary_has_expiry_line(self):
+        """§6.3 — 일일 요약에 「심의필 만료 30일 이내 N건」 한 줄. 조회 실패는 숨기지 않고 수집도 막지 않는다."""
+        make = lambda cs: []  # noqa: E731
+        asked = []
+        lines, _ = kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=make, notify=self.sent.append,
+                              state_path=self.state, kit_dir=self.kits, now=datetime(2026, 10, 9, 9, tzinfo=KST),
+                              expiring_fn=lambda d: asked.append(d) or 2)
+        self.assertEqual(asked, ["2026-10-09"])
+        self.assertIn("지식iN 심의필 만료 30일 이내 2건 — PAMS 연장 신청 필요", lines)
+        self.assertEqual(kp.expiry_line("2026-10-09", lambda d: 0), "지식iN 심의필 만료 30일 이내 0건")
+        self.assertIn("조회 실패", kp.expiry_line("2026-10-09", lambda d: kp.count_expiring({}, d)))
+
+    def test_count_expiring_queries_kin_only(self):
+        seen = {}
+
+        class R:
+            status_code = 200
+
+            def json(self):
+                return [{"id": 1}, {"id": 2}]
+
+        def fake_get(url, params, headers, timeout):
+            seen.update(url=url, params=params)
+            return R()
+        env = {"NEXT_PUBLIC_SUPABASE_URL": "https://x.supabase.co", "SUPABASE_SERVICE_ROLE_KEY": "k"}
+        orig, kp.requests.get = kp.requests.get, fake_get
+        try:
+            self.assertEqual(kp.count_expiring(env, "2026-10-09"), 2)
+        finally:
+            kp.requests.get = orig
+        self.assertTrue(seen["url"].endswith("/rest/v1/ad_reviews"))
+        self.assertIn(("channel", "eq.kin"), seen["params"])
+        self.assertIn(("review_to", "lte.2026-11-08"), seen["params"])
+        self.assertIn(("review_to", "gte.2026-10-09"), seen["params"])
 
     def test_dry_run_writes_nothing(self):
         make = lambda cs: [(c, BODY, "") for c in cs]  # noqa: E731

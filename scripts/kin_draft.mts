@@ -6,7 +6,7 @@
  *   출력(stdout 마지막 줄): [{id, text} | {id, error}]
  *
  * 본문만 만든다. 유의문구 블록·게이트는 kin_pipeline.py(→ check_kin.mts)가 붙이고 본다.
- * 모델: FACTORY_CLAUDE_MODEL(없으면 claude-sonnet-5-5). ANTHROPIC_API_KEY 는 .env.local.
+ * 모델: FACTORY_CLAUDE_MODEL(없으면 claude-sonnet-5). ANTHROPIC_API_KEY 는 .env.local.
  */
 import { readFileSync } from "node:fs";
 import Anthropic from "@anthropic-ai/sdk";
@@ -36,7 +36,8 @@ const items = JSON.parse(readFileSync(file, "utf-8")) as {
   body: string;
   feedback?: string;
 }[];
-const model = process.env.FACTORY_CLAUDE_MODEL ?? "claude-sonnet-5-5";
+// 기본값은 factory/generate·admin/kin 과 같은 모델. claude-sonnet-5-5 는 thinking:{type:"disabled"} 를 400 으로 거절한다(2026-10-09 실측).
+const model = process.env.FACTORY_CLAUDE_MODEL ?? "claude-sonnet-5";
 const anthropic = new Anthropic();
 const system = [{ type: "text" as const, text: kinPipelineSystemPrompt(), cache_control: { type: "ephemeral" as const } }];
 

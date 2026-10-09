@@ -77,7 +77,7 @@ def note_for(p, kit_rec=None):
 def fetch_reviews(env):
     url, h = kit._rest(env)
     rows = requests.get(url.rsplit("/", 1)[0] + "/ad_reviews", headers=h, timeout=30,
-                        params={"select": "channel,status,notes,premium_articles(slug)"}).json()
+                        params={"select": "channel,status,notes,premium_articles(slug)", "channel": kit.NOT_KIN}).json()
     return [{"slug": (r.get("premium_articles") or {}).get("slug"), "channel": r["channel"],
              "status": r["status"], "notes": r.get("notes")} for r in rows]
 

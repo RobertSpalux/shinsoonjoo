@@ -86,7 +86,15 @@ const DISEASES = [
   "뇌출혈", "심근경색", "협심증", "부정맥", "당뇨", "고혈압", "고지혈증", "봉와직염", "폐렴", "골절", "디스크",
   "우울증", "공황장애", "치주염", "관절염", "통풍", "신부전", "간경화", "결핵", "대상포진", "녹내장", "백내장",
 ];
-const DISEASE_SUFFIX = /[가-힣]{1,6}(?:암|병|염|증|증후군|장애|경색|출혈)(?![가-힣])/g;
+/**
+ * 약 상품명(브랜드) — 질문에 자주 나오는 것. 상품명이라 답변에 나오면 ①(상품 유추), 질문에서 되받으면 ⑤(질병 추정 민감정보)도 걸린다.
+ * 성분명이나 「비만 치료 주사」처럼 일반명으로 쓴다(2026-10-09 SH5 견본 「제2형당뇨병 마운자로 실비청구」).
+ */
+const DRUG_BRANDS = [
+  "마운자로", "젭바운드", "위고비", "오젬픽", "삭센다", "큐시미아", "트루리시티", "자디앙", "포시가",
+  "프롤리아", "이베니티", "휴미라", "키트루다", "옵디보", "타그리소", "엔허투", "레켐비", "보톡스", "리피토", "크레스토",
+];
+const DISEASE_SUFFIX =/[가-힣]{1,6}(?:암|병|염|증|증후군|장애|경색|출혈)(?![가-힣])/g;
 /** 답글 단독으로도 병명을 조건으로 판단하면(○○병이면) 막는다. */
 const DISEASE_CONDITION = /(?:[가-힣○◯]{1,6})(?:암|병|염|증)\s*이?면\s/g;
 
@@ -128,11 +136,17 @@ export function checkReplyTerms(reply: string, comment = ""): ReplyCheckResult {
   findings.push(...hits(text, SLANDER, "slander", "§6.10 댓글심의 ④ 업계 비방·비교"));
   findings.push(...hits(text, ASSERTIVE, "assertive", "§6.10 댓글심의 ② 단정·지급 확약·해지 권유(승환 리스크)"));
   findings.push(...hits(text, RECOMMEND, "recommend", "§6.10 댓글심의 ① 회사·상품 유추 / 추천·최상급"));
+  for (const d of DRUG_BRANDS)
+    if (text.includes(d)) findings.push({ rule: "recommend", term: `약 상품명: ${d}`, reason: "§6.10 댓글심의 ① 상품명 노출 — 성분·일반명으로" });
 
   // 되받기 — 댓글의 병명·연락처가 답글에 다시 나오면 민감정보 확산(§6.10 댓글심의 ⑤)
   if (comment) {
     for (const d of diseasesIn(comment)) {
       if (text.includes(d)) findings.push({ rule: "echo", term: `병명 되받기: ${d}`, reason: "§6.10 댓글심의 ⑤ 질문자 민감정보 기재" });
+    }
+    for (const d of DRUG_BRANDS) {
+      if (comment.includes(d) && text.includes(d))
+        findings.push({ rule: "echo", term: `약 되받기: ${d}`, reason: "§6.10 댓글심의 ⑤ 질문자 민감정보 기재(처방약 = 질병 추정)" });
     }
     const phone = comment.match(/0\d{1,2}[-\s.]?[\dxX*]{3,4}[-\s.]?[\dxX*]{4}/);
     if (phone && /(?:전화|문자|연락)\s*(?:드릴|해\s*드릴|할게|하겠|줄게)/.test(text))

@@ -44,17 +44,20 @@ export default async function AdminPage() {
       .order("created_at", { ascending: false })
       .limit(100),
     // 광고심의(§6.9) — 채널별 심의 상태. 최신순으로 받아 (article,channel)당 첫 행을 활성으로 본다.
+    // 지식iN 답변(channel=kin, article_id 없음 — sql/006)은 글 심의가 아니라 뺀다. 하루 3~5건이라 섞이면 500행 안에서 글 행이 밀려난다.
     supabase
       .from("ad_reviews")
       .select(
         "id, article_id, channel, review_type, posting_title, ad_form, status, review_authority, review_no, review_from, review_to, posted_url, url_registered_at, submitted_at, reviewed_at, rejected_reason, notes"
       )
+      .neq("channel", "kin")
       .order("created_at", { ascending: false })
       .limit(500),
     // 만료 임박 대시보드 — 유효기간 60일 이내 승인 심의필(뷰가 days_left 계산).
     supabase
       .from("ad_reviews_expiring")
-      .select("id, article_id, title, slug, channel, review_no, review_from, review_to, days_left, posted_url, url_registered_at"),
+      .select("id, article_id, title, slug, channel, review_no, review_from, review_to, days_left, posted_url, url_registered_at")
+      .neq("channel", "kin"),
   ]);
 
   // 심의 프리뷰 토큰 — 서버에서만 읽어 인증된 관리자에게만 전달(NEXT_PUBLIC_ 아님, 번들 미노출).
