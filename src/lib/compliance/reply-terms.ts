@@ -94,7 +94,13 @@ const DRUG_BRANDS = [
   "마운자로", "젭바운드", "위고비", "오젬픽", "삭센다", "큐시미아", "트루리시티", "자디앙", "포시가",
   "프롤리아", "이베니티", "휴미라", "키트루다", "옵디보", "타그리소", "엔허투", "레켐비", "보톡스", "리피토", "크레스토",
 ];
-const DISEASE_SUFFIX =/[가-힣]{1,6}(?:암|병|염|증|증후군|장애|경색|출혈)(?![가-힣])/g;
+// 뒤에 한글이 붙어도 「수술·진단·치료…」면 병명이다(SH6 「여유증수술」 — 질문 제목·답변 모두에서 못 잡았다).
+const DISEASE_SUFFIX =/[가-힣]{1,6}(?:암|병|염|증|증후군|장애|경색|출혈)(?=수술|진단|치료|검사|판정|환자|소견|약|[^가-힣]|$)/g;
+/** 접미 패턴에 걸리지만 병명이 아닌 말(보험 일반어 등). kin_harvest.py 가 같은 목록을 읽는다(단일 출처). */
+const NOT_DISEASE = [
+  "질병", "간병", "유병", "발병", "투병", "지병", "중증", "경증", "검증", "인증", "보증", "영수증", "확인증",
+  "신분증", "자격증", "가입증", "후유장애", "궁금증",
+];
 /** 답글 단독으로도 병명을 조건으로 판단하면(○○병이면) 막는다. */
 const DISEASE_CONDITION = /(?:[가-힣○◯]{1,6})(?:암|병|염|증)\s*이?면\s/g;
 
@@ -110,7 +116,8 @@ function hits(text: string, list: Pattern[], rule: ReplyRule, reason: string): R
 function diseasesIn(text: string): string[] {
   const found = new Set<string>();
   for (const d of DISEASES) if (text.includes(d)) found.add(d);
-  for (const m of text.matchAll(DISEASE_SUFFIX)) found.add(m[0]);
+  for (const m of text.matchAll(DISEASE_SUFFIX))
+    if (!NOT_DISEASE.some((x) => m[0].endsWith(x))) found.add(m[0]);
   return [...found];
 }
 

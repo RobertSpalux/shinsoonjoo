@@ -81,7 +81,11 @@ OFF_TOPIC_RE = re.compile(r"건강보험\s*(?:료|지역|직장|피부양)|국�
 # 법률 질문은 보험 분류(dirId)로 올라오기도 하고, 답변 조각의 「실비」(= 실제 비용)가 실손청구 검색에 걸린다
 # (「치매 어머니가 상속인인 경우 상속재산분할협의와 성년후견」 — 조각 「기본 실비가 수십만 원」). 분류와 무관하게
 # 제목에 법률 낱말이 있고 보험 신호어가 없으면 뺀다.
-LEGAL_RE = re.compile(r"상속|후견|소송|고소|고발|합의금|이혼|양육비|채무|파산|회생|한정승인|유언|증여|형사|민사|변호사|판결|재판")
+# 시효·청구 기한은 보험 신호어가 있어도, 제목이든 본문 조각이든 걸리면 뺀다 — 기산점·중단 사유가 사안마다 달라
+# 답변에서 사실을 검증할 수 없다(SH7 관제탑 결정).
+DEADLINE_RE = re.compile(r"시효|청구\s*기한|청구기간|기한\s*(?:지나|넘)")
+LEGAL_RE = re.compile(r"상속|후견|소송|고소|고발|합의금|이혼|양육비|채무|파산|회생|한정승인|유언|증여|형사|민사|변호사|판결|재판|"
+                      + DEADLINE_RE.pattern)
 # 보험 분류로 들어왔어도 제목·본문 조각 어디에도 보험 신호어가 없으면 뺀다. 조각의 「실비」 단독은 「실제 비용」 뜻이 많아
 # 신호로 치지 않는다(제목의 「실비」는 INSURANCE_TITLE_RE 가 신호로 본다).
 SIGNAL_RE = re.compile(r"보험|실손|부담보(?!증)|고지|알릴\s*의무|보장|담보|특약|유병자|간편\s*심사|보험금|청구")
@@ -118,6 +122,34 @@ def insurer_names():
     return re.findall(r'"([^"]+)"', m.group(1)) if m else []
 
 
+REPLY_TS = os.path.join(os.path.dirname(HERE), "src", "lib", "compliance", "reply-terms.ts")
+def disease_dict(path=REPLY_TS):
+    """reply-terms.ts DISEASES·DRUG_BRANDS·DISEASE_SUFFIX·NOT_DISEASE — 되받기 게이트와 같은 사전(단일 출처)."""
+    ts = open(path, encoding="utf-8").read()
+
+    def arr(name):
+        m = re.search(rf"const {name} = \[(.*?)\];", ts, re.S)
+        return re.findall(r'"([^"]+)"', m.group(1)) if m else []
+    m = re.search(r"const DISEASE_SUFFIX\s*=\s*/(.+?)/g;", ts)
+    return arr("DISEASES"), arr("DRUG_BRANDS"), re.compile(m.group(1)) if m else None, arr("NOT_DISEASE")
+
+
+def title_disease(title, dicts=None):
+    """제목의 병명·약 상품명(첫 것) 또는 None. 게이트가 되받기로 어차피 막으니 수집 단계에서 뺀다(SH6).
+    게이트(reply-terms diseasesIn)와 같은 판정 — 「암」은 「암보험」「암진단비」에도 들어 있지만 게이트가 답변의 「암」을
+    되받기로 막으므로 여기서도 뺀다(SH6 실수집 「암진단비를 줄이고 싶은데」 3회차까지 막힘)."""
+    diseases, drugs, suffix, not_disease = dicts or disease_dict()
+    t = title or ""
+    for d in drugs + diseases:
+        if d in t:
+            return d
+    if suffix:
+        for m in suffix.finditer(t):
+            if not any(m.group(0).endswith(x) for x in not_disease):
+                return m.group(0)
+    return None
+
+
 # ── 순수 함수(테스트 대상) ─────────────────────────────────────
 def question_url(link):
     """답변 앵커(answerNo)를 뗀 질문 URL. docId 가 없으면 None."""
@@ -151,12 +183,14 @@ def group_items(items_by_topic):
     return out
 
 
-def exclusion(q, insurers=()):
-    """제외 사유(문자열) 또는 None."""
+def exclusion(q, insurers=(), dicts=None):
+    """제외 사유(문자열) 또는 None. dicts = disease_dict() 결과(없으면 읽는다)."""
     text = q["title"] + " " + " ".join(q["snippets"])
     d, title = str(q.get("dirId") or ""), q["title"]
     if not (d.startswith(INSURANCE_DIR) or INSURANCE_TITLE_RE.search(title)):
         return "보험 질문 아님(분류·제목)"
+    if DEADLINE_RE.search(text):
+        return "법률(시효·기한) — 사실 검증 불가"
     legal = LEGAL_RE.search(title)
     if legal and not INSURANCE_TITLE_RE.search(title):
         return f"법률 질문({legal.group(0)}) — 제목에 보험 신호어 없음"
@@ -166,6 +200,9 @@ def exclusion(q, insurers=()):
         return "법률·노무·대출 분류(제목에 보험·우리 소재 낱말 없음)"
     if OFF_TOPIC_RE.search(title) and not (CORE_RE.search(title) and not re.search(r"대인|대물|자동차", title)):
         return f"우리 소재 아님({OFF_TOPIC_RE.search(title).group(0)})"
+    dz = title_disease(title, dicts)
+    if dz:
+        return f"제목 병명 — 되받기 불가피({dz})"
     if q["answers_seen"] >= ANSWERS_MAX:
         return f"답변 다수(answerNo≥{q['answers_seen']})"
     m = COMPARE_RE.search(q["title"])
@@ -243,10 +280,10 @@ def collect(env, now=None, baseline_if_empty=True, search_fn=None, ledger_path=L
     except (FileNotFoundError, json.JSONDecodeError):
         ledger = {}
     fresh, baseline = apply_ledger(questions, ledger, now, baseline_if_empty)
-    insurers = insurer_names()
+    insurers, dicts = insurer_names(), disease_dict()
     cands, dropped = [], []
     for q in fresh:
-        why = exclusion(q, insurers)
+        why = exclusion(q, insurers, dicts)
         row = {"url": q["url"], "docId": q["docId"], "title": q["title"], "summary": summarize(q),
                "topic": q["topics"][0], "topics": q["topics"], "answers_seen": q["answers_seen"],
                "age": q["age"], "closed": "미확인(API 미제공)"}
