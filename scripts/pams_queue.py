@@ -116,7 +116,8 @@ def fetch_reviews(env):
     url, h = kit._rest(env)
     rv = url.rsplit("/", 1)[0] + "/ad_reviews"
     rows = requests.get(rv, params={"select": "channel,status,premium_articles(slug)",
-                                    "status": "in.(submitted,under_review,approved)"}, headers=h, timeout=30).json()
+                                    "status": "in.(submitted,under_review,approved)", "channel": kit.NOT_KIN},
+                        headers=h, timeout=30).json()
     return [{"slug": (r.get("premium_articles") or {}).get("slug"), "channel": r["channel"], "status": r["status"]}
             for r in rows]
 

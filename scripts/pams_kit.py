@@ -70,6 +70,10 @@ MAIN_SPEC = ""
 # 네이버 게시위치 = 팜스에 사전등록된 블로그 주소(CLAUDE.md §6.4 사전등록표). 글 단위 URL 은 승인 뒤 게시위치 등록 단계에서 넣는다.
 NAVER_BLOG = "https://blog.naver.com/insightlab-daily"
 KST = timezone(timedelta(hours=9))
+# ad_reviews 를 글(premium_articles) 기준으로 읽는 곳은 전부 이 필터를 붙인다 — sql/006 뒤 channel='kin'(지식iN 답변) 행은
+# article_id 가 NULL 이고 하루 3~5건씩 쌓인다. 안 거르면 ① None 이 섞여 sorted()·join 이 깨지고(publish_approved)
+# ② PostgREST 기본 1000행 한도에 글 행이 밀려 잘린다. 지식iN 심의필은 kin_pipeline.py 가 따로 본다.
+NOT_KIN = "neq.kin"
 # 창 없는 실행(작업 스케줄러에서 10분마다 창이 뜨지 않게)
 NO_WINDOW = (subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP) if os.name == "nt" else 0
 

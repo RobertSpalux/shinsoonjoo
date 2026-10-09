@@ -203,7 +203,8 @@ def db_reviews_and_titles(env):
     url, h = kit._rest(env)
     base = url.rsplit("/", 1)[0]
     rv = requests.get(f"{base}/ad_reviews", params={
-        "select": "article_id,channel,status,review_no,review_from,reviewed_at,posted_url,url_registered_at"}, headers=h, timeout=30).json()
+        "select": "article_id,channel,status,review_no,review_from,reviewed_at,posted_url,url_registered_at",
+        "channel": kit.NOT_KIN}, headers=h, timeout=30).json()
     ar = requests.get(url, params={"select": "id,slug,title"}, headers=h, timeout=30).json()
     titles = {}
     for a in ar:

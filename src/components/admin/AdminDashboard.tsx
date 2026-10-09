@@ -194,6 +194,7 @@ export default function AdminDashboard({
   const reviewsByArticle = useMemo(() => {
     const m = new Map<string, Record<string, AdReview>>();
     for (const r of adReviews) {
+      if (!r.article_id) continue; // 글이 아닌 심의 행(지식iN, sql/006) — 글×채널 맵에 넣지 않는다
       const rec = m.get(r.article_id) ?? {};
       if (!rec[r.channel]) rec[r.channel] = r; // adReviews는 최신순 → 첫 행이 활성
       m.set(r.article_id, rec);

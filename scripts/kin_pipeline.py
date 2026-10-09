@@ -184,21 +184,39 @@ def compose_final(kit_rec, notice_text, review_no, f, t, today):
     return f"{answer}\n\n{filled}"
 
 
+KIT_FIELDS = ("심의유형", "손보/생보", "광고형태", "게시위치", "카테고리", "특이사항", "파일첨부", "지식iN 질문", "원고해시")
+
+
 def kit_text(rec):
-    """PAMS 지식인 폼에 옮길 값 — robert-os 가 칸 실측 뒤 기계로 읽을 수 있게 「이름: 값」 줄로."""
+    """PAMS 지식인 폼에 옮길 값. 형식 고정(SH4 2026-10-09, test_kin_pipeline 이 지킨다) — robert-os pams_apply 가 읽는다.
+
+    · 1줄: `[PAMS 접수 문자열] 지식인 · <소재> · <키트id>`
+    · 그다음 빈 줄까지 = 필드 블록. 줄마다 `<KIT_FIELDS 이름>: <값>` 하나, 순서 고정. **값 뒤에 설명을 붙이지 않는다**
+      (본진 키트 「게시위치:」「규격:」 줄과 같은 규칙 — 설명은 아래 「안내」 블록).
+    · `── PAMS 에 붙여 넣을 원고 ──` 다음 줄부터 `── 끝 ──` 앞 줄까지 = 「답변내용」 에디터에 넣을 원고(바이트 그대로).
+    · 나머지(안내·질문 참고)는 사람용 — 기계는 읽지 않는다.
+    폼 칸 순서: 카테고리를 **먼저** 고른다(자동생성 칸이 채워짐) → 원고. 「저장」·「제출」·자가점검은 기계 금지."""
+    fields = {
+        "심의유형": "지식인",
+        "손보/생보": "손보",
+        "광고형태": "바이럴(지식in)",
+        "게시위치": POSTING_LOCATION,
+        "카테고리": rec["category"],
+        "특이사항": rec["note"],
+        "파일첨부": "없음",
+        "지식iN 질문": rec["question_url"],
+        "원고해시": f"sha256 {rec['answer_sha256']}",
+    }
     return "\n".join([
         f"[PAMS 접수 문자열] 지식인 · {rec['topic']} · {rec['id']}",
+        *[f"{k}: {fields[k]}" for k in KIT_FIELDS],
         "",
-        "심의유형: 지식인 심의(네이버)   ← 폼 jumgumpyoji.jsp?nums=1 (광고형태 「바이럴(지식in)」 고정)",
-        "손보/생보: 손보",
-        f"게시위치: {POSTING_LOCATION}   ← 폼 기본값 그대로",
-        f"카테고리: {rec['category']}   ← 고르면 아래 칸에 안내문구+필수안내사항 자동생성(지우지 않는다)",
-        "답변내용(본문 에디터): 아래 원고를 그대로 붙인다(텍스트만, 이미지 없음)",
-        "자가점검: 사람이 확인 후 체크(기계 금지)",
-        f"특이사항: {rec['note']}",
-        "파일첨부: 없음(증빙 인용 없음 — 통계·의학정보·기관 귀속 문장 미사용)",
-        f"지식iN 질문: {rec['question_url']}   ← 답변을 달 곳(PAMS 칸 아님)",
-        f"원고해시: sha256 {rec['answer_sha256']}",
+        "── 안내(사람용) ──",
+        "· 폼: jumgumpyoji.jsp?nums=1 — 광고형태 「바이럴(지식in)」·게시위치 「네이버 지식인」은 폼 기본값 그대로.",
+        "· 카테고리를 먼저 고른다 → 「답변내용」 아래 칸에 안내문구+필수안내사항이 자동생성된다(지우지 않는다).",
+        "· 원고는 텍스트만(이미지 없음). 자가점검은 사람이 확인 후 체크.",
+        "· 파일첨부 없음 = 증빙 인용 없음(통계·의학정보·기관 귀속 문장 미사용).",
+        "· 「지식iN 질문」은 답변을 달 곳이다(PAMS 칸 아님).",
         "",
         "── 질문 제목(참고) ──",
         rec["question_title"],
@@ -315,13 +333,17 @@ def record_review(env, rec, review_no, f, t):
     """ad_reviews 에 channel='kin' 행. 🔴 article_id 가 NOT NULL·FK 라 지식인 답변(글이 아님)은 지금 넣을 수 없다
     (2026-10-09 OpenAPI 실측). sql/006_ad_reviews_kin.sql 적용 전에는 실패를 돌려주고 상태 파일에만 남긴다."""
     url, h = _rest(env, "ad_reviews")
-    body = {"channel": "kin", "review_type": "kin", "ad_form": "바이럴(지식in)", "status": "approved",
+    # channel='kin' = 지식iN 행의 유일한 식별 키(sql/006 체크·NOT_KIN 필터). review_type 은 PAMS 심의유형 — 기존 값 'jisikin'
+    # (src/app/api/admin/ad-review/route.ts REVIEW_TYPES). 'kin' 은 review_type 체크에 없다.
+    body = {"channel": "kin", "review_type": "jisikin", "ad_form": "바이럴(지식in)", "status": "approved",
             "posting_title": POSTING_LOCATION, "review_authority": "프라임에셋",
             "review_no": review_no, "review_from": f, "review_to": t,
             "reviewed_at": datetime.now(kit.KST).isoformat(),
             "notes": f"지식iN 답변 {rec['id']} · 질문 {rec['question_url']} · 원고 sha256 {rec['answer_sha256']}"}
-    if rec.get("kin_answer_id"):
-        body["kin_answer_id"] = rec["kin_answer_id"]
+    if not rec.get("kin_answer_id"):
+        # sql/006 체크(ad_reviews_article_or_kin)가 kin 행에 kin_answer_id 를 요구한다 — 초안 행 기록이 실패한 키트
+        return None, "ad_reviews 기록 못함 — kin_answers 초안 행이 없다(run 때 기록 실패). 상태 파일에만 남김"
+    body["kin_answer_id"] = rec["kin_answer_id"]
     r = requests.post(url, json=body, headers={**h, "Content-Type": "application/json",
                                                "Prefer": "return=representation"}, timeout=30)
     if r.status_code >= 300:

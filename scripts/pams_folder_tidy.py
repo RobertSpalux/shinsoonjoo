@@ -190,7 +190,8 @@ def fetch_rows(env):
     url, h = kit._rest(env)
     rv = url.rsplit("/", 1)[0] + "/ad_reviews"
     r = requests.get(rv, params={"select": "channel,status,notes,submitted_at,created_at,"
-                                           "premium_articles(slug,is_main_published,is_naver_published)"},
+                                           "premium_articles(slug,is_main_published,is_naver_published)",
+                                 "channel": kit.NOT_KIN},
                      headers=h, timeout=30)
     r.raise_for_status()
     return r.json()

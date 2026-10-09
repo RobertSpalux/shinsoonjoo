@@ -196,6 +196,18 @@ class Flow(unittest.TestCase):
         self.assertIn("카테고리: 그외 기타(건강,화재,펫 보험 등)", txt)
         self.assertIn("── PAMS 에 붙여 넣을 원고 ──\n" + BODY + "\n── 끝 ──", txt)
         self.assertIn("저장」 금지", txt)
+        # 형식 계약(robert-os pams_apply 가 읽는다) — 1줄 머리 + 필드 블록(순서 고정, 값 뒤 설명 없음)
+        lines = txt.split("\n")
+        self.assertTrue(lines[0].startswith("[PAMS 접수 문자열] 지식인 · "))
+        block = lines[1:1 + len(kp.KIT_FIELDS)]
+        self.assertEqual([ln.split(": ", 1)[0] for ln in block], list(kp.KIT_FIELDS))
+        self.assertEqual(lines[1 + len(kp.KIT_FIELDS)], "")
+        for ln in block:
+            self.assertNotIn("←", ln)
+        fields = dict(ln.split(": ", 1) for ln in block)
+        self.assertEqual(fields["카테고리"], "그외 기타(건강,화재,펫 보험 등)")
+        self.assertTrue(fields["원고해시"].startswith("sha256 "))
+        self.assertLessEqual(len(fields["특이사항"].encode("utf-8")), 100)
         self.assertEqual(len(self.sent), 1)
         self.assertIn("「제출」은 로버트", self.sent[0])
 
