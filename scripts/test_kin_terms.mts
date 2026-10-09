@@ -38,7 +38,17 @@ ok(!company.pass && company.findings.some((f) => f.rule === "recommend"), "① �
 const echo = checkKinAnswer(P.replace("세 번째는", "우울증 이력이라면 세 번째는"), "우울증 병력이 있어요");
 ok(!echo.pass && echo.findings.some((f) => f.rule === "echo"), "⑤ 질문자 병명 되받기 막힘");
 
-const assertive = checkKinAnswer(P.replace("세 번째는", "걱정 마세요. 세 번째는"), "");
+// 약 상품명 — 질문 「제2형당뇨병 마운자로 실비청구」(SH5 견본 1) 되받기는 ①·⑤ 둘 다, 질문에 없어도 ①
+const drugQ = "제2형당뇨병 마운자로 실비청구(동네병원)";
+const drugEcho = checkKinAnswer(P.replace("세 번째는", "마운자로 처방이라면 세 번째는"), drugQ);
+ok(!drugEcho.pass && drugEcho.findings.some((f) => f.rule === "recommend" && f.term.includes("마운자로")), "① 약 상품명 막힘");
+ok(drugEcho.findings.some((f) => f.rule === "echo" && f.term.includes("마운자로")), "⑤ 질문의 약 상품명 되받기 막힘");
+const drugAlone = checkKinAnswer(P.replace("세 번째는", "위고비 처방이라면 세 번째는"), "부담보 조건 질문입니다");
+ok(!drugAlone.pass && drugAlone.findings.some((f) => f.rule === "recommend"), "① 질문에 없는 약 상품명도 막힘");
+const generic = checkKinAnswer(P.replace("세 번째는", "주사제 처방이라면 세 번째는"), "마운자로 처방 이력 고지");
+ok(generic.pass, "일반명(주사제)은 통과", generic.findings);
+
+const assertive =checkKinAnswer(P.replace("세 번째는", "걱정 마세요. 세 번째는"), "");
 ok(!assertive.pass && assertive.findings.some((f) => f.rule === "assertive"), "② 단정 막힘");
 
 const ask = checkKinAnswer(P.replace("세 번째는", "가입하신 상품을 알려 주시면 세 번째는"), "");

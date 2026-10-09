@@ -306,7 +306,8 @@ def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, t
                 pending.pop(u)
             else:
                 why = "; ".join(f"{f['rule']}: {f['term']}" for f in v["findings"])
-                feedback[u] = why
+                # 다시 쓰는 모델에는 규칙 사유까지 준다 — 「본문 946자」만으로는 줄일 목표(600~900자)를 모른다(SH5 견본 2)
+                feedback[u] = "; ".join(f"{f['rule']}: {f['term']} ({f.get('reason', '')})" for f in v["findings"])
                 result[u] = (None, f"게이트: {why}")
     return [(c, *result.get(c["url"], (None, "처리 안 됨"))) for c in cands]
 
@@ -349,6 +350,29 @@ def record_review(env, rec, review_no, f, t):
     if r.status_code >= 300:
         return None, f"ad_reviews 기록 못함(HTTP {r.status_code}) — sql/006 미적용이면 정상. 상태 파일에만 남김"
     return r.json()[0]["id"], "ad_reviews kin 행"
+
+
+EXPIRY_WARN_DAYS = 30
+
+
+def count_expiring(env, today, days=EXPIRY_WARN_DAYS):
+    """ad_reviews channel=kin 승인 행 중 오늘~days일 안에 끝나는 것 수(§6.3 — 유효기간 만료는 미심의급 제재).
+    지식iN 행은 article_id 가 NULL 이라 ad_reviews_expiring 뷰(premium_articles INNER JOIN)에 안 잡힌다 → 여기서 따로 센다."""
+    url, h = _rest(env, "ad_reviews")
+    end = (date.fromisoformat(today) + timedelta(days=days)).isoformat()
+    r = requests.get(url, params=[("select", "id"), ("channel", "eq.kin"), ("status", "eq.approved"),
+                                  ("review_to", f"gte.{today}"), ("review_to", f"lte.{end}")], headers=h, timeout=30)
+    if r.status_code >= 300:
+        raise KinError(f"HTTP {r.status_code}")
+    return len(r.json())
+
+
+def expiry_line(today, count_fn):
+    try:
+        n = count_fn(today)
+    except Exception as e:  # noqa: BLE001 — 조회 실패가 수집·초안을 막지 않는다. 대신 「실패」를 숨기지 않는다
+        return f"지식iN 심의필 만료 {EXPIRY_WARN_DAYS}일 이내: 조회 실패({e})"
+    return f"지식iN 심의필 만료 {EXPIRY_WARN_DAYS}일 이내 {n}건" + (" — PAMS 연장 신청 필요" if n else "")
 
 
 def set_posted_url(env, rec):
@@ -467,14 +491,15 @@ def notify_fn(env, dry):
 
 
 def cmd_run(env, n, dry, harvest_fn=None, make_fn=make_answers, notify=None, state_path=STATE_PATH,
-            kit_dir=KIT_DIR, save_row=save_draft_row, now=None):
+            kit_dir=KIT_DIR, save_row=save_draft_row, now=None, expiring_fn=None):
     now = now or datetime.now(kit.KST)
     today = now.date().isoformat()
     state = load_state(state_path)
     res = (harvest_fn or (lambda: kin_harvest.collect(env, now=now)))()
     chosen = pick(res["candidates"], state, today, n)
     lines = [f"지식iN 수집: 질문 {res['seen_total']} · 후보 {len(res['candidates'])} · 제외 {len(res['excluded'])}"
-             + (" · 첫 실행 기준선" if res.get("baseline") else "") + f" · 오늘 만들 것 {len(chosen)}"]
+             + (" · 첫 실행 기준선" if res.get("baseline") else "") + f" · 오늘 만들 것 {len(chosen)}",
+             expiry_line(today, expiring_fn or (lambda d: count_expiring(env, d)))]
     made = []
     for c, answer, why in (make_fn(chosen) if chosen else []):
         if not answer:
