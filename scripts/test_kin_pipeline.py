@@ -42,7 +42,18 @@ class Harvest(unittest.TestCase):
         base = {"title": "고지의무 문의", "snippets": [], "answers_seen": 0, "dirId": "401030203"}
         self.assertIsNone(kh.exclusion(base, ["삼성화재"]))
         self.assertIn("보험 질문 아님", kh.exclusion({**base, "title": "전치3주 폭행 사건", "dirId": "602060203"}))
-        self.assertIsNone(kh.exclusion({**base, "title": "마운자로 실비청구", "dirId": "7010106"}))
+        # SH6 — 제목에 병명·약 상품명이 있으면 게이트(되받기)가 어차피 막는다 → 수집 단계에서 뺀다
+        self.assertIn("제목 병명 — 되받기 불가피(마운자로)",
+                      kh.exclusion({**base, "title": "마운자로 실비청구", "dirId": "7010106"}))
+        self.assertIn("제목 병명", kh.exclusion({**base, "title": "제2형당뇨병 실비청구(동네병원)"}))
+        self.assertIn("제목 병명", kh.exclusion({**base, "title": "갑상선암 진단 후 고지의무"}))
+        self.assertIn("제목 병명", kh.exclusion({**base, "title": "통풍부담보관련 범위 질문드립니다", "dirId": "7010108"}))
+        # SH6 실수집 — 「여유증수술」(병명 + 수술 붙여 씀) · 「암진단비」(게이트가 답변의 「암」을 막는다)
+        self.assertEqual(kh.title_disease("여유증수술"), "여유증")
+        self.assertEqual(kh.title_disease("암진단비를 줄이고 싶은데 어느 특약을 삭제"), "암")
+        for title in ("질병 부담보 해제", "간병인보험 고지", "실비 영수증 청구 문의", "실손24 청구 궁금증",
+                      "유병자보험 가입 고지", "상해 후유장애 청구", "간병인가입시 상해고지"):
+            self.assertIsNone(kh.title_disease(title), title)
         # 2026-10-09 첫 실수집에서 섞여 들어온 것들
         for title, d in [("산재 민사소송시 과실비율이 궁금합니다", "6100403"),
                          ("부동산 약정서 등문의(매매, 부담보즈여)", "60202"),
@@ -55,7 +66,6 @@ class Harvest(unittest.TestCase):
                          ("버팀목 전세대출 보험 관련 문의", "4020201")]:
             self.assertIsNotNone(kh.exclusion({**base, "title": title, "dirId": d}), title)
         for title, d in [("보험 부담보 해제 이후의 진료 보상 못받나요?", "60215"),
-                         ("통풍부담보관련 범위 질문드립니다", "7010108"),
                          ("간병인가입시 상해고지", "1060101")]:
             self.assertIsNone(kh.exclusion({**base, "title": title, "dirId": d}), title)
         # SH5 — 법률 질문이 보험 분류로 들어와도 뺀다(조각의 「실비」 = 실제 비용)
@@ -262,6 +272,24 @@ class Flow(unittest.TestCase):
                               expiring_fn=lambda d: asked.append(d) or 2)
         self.assertEqual(asked, ["2026-10-09"])
         self.assertIn("지식iN 심의필 만료 30일 이내 2건 — PAMS 연장 신청 필요", lines)
+        # SH6 관제탑 결정 — N>0 이면 텔레그램에도 한 줄(만든 키트가 없어도). 시험은 가짜 notify 로만(실발송 없음)
+        self.assertEqual(self.sent, ["⏰ 지식iN 심의필 만료 30일 이내 2건 — PAMS 연장 신청 필요"])
+        self.sent.clear()
+        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=make, notify=self.sent.append,
+                   state_path=self.state, kit_dir=self.kits, now=datetime(2026, 10, 9, 9, tzinfo=KST),
+                   expiring_fn=lambda d: 0)
+        self.assertEqual(self.sent, [])   # 0건이면 보내지 않는다
+        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=make, notify=self.sent.append,
+                   state_path=self.state, kit_dir=self.kits, now=datetime(2026, 10, 9, 9, tzinfo=KST),
+                   expiring_fn=lambda d: 1 / 0)
+        self.assertEqual(self.sent, [])   # 조회 실패도 텔레그램으로 겁주지 않는다(요약 줄에만 「조회 실패」)
+        made = lambda cs: [(c, BODY, "") for c in cs[:1]]  # noqa: E731
+        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=made, notify=self.sent.append,
+                   state_path=self.state, kit_dir=self.kits, now=datetime(2026, 10, 9, 9, tzinfo=KST),
+                   expiring_fn=lambda d: 3)
+        self.assertEqual(len(self.sent), 1)   # 접수 대기 알림과 한 통으로
+        self.assertTrue(self.sent[0].startswith("🙋 지식인 심의 접수 대기 1건"))
+        self.assertTrue(self.sent[0].endswith("⏰ 지식iN 심의필 만료 30일 이내 3건 — PAMS 연장 신청 필요"))
         self.assertEqual(kp.expiry_line("2026-10-09", lambda d: 0), "지식iN 심의필 만료 30일 이내 0건")
         self.assertIn("조회 실패", kp.expiry_line("2026-10-09", lambda d: kp.count_expiring({}, d)))
 
@@ -309,6 +337,62 @@ class Flow(unittest.TestCase):
         res = kp.make_answers([{"url": "u", "title": "t", "summary": "s"}], draft_fn, gate_fn, lambda xs: [""] * len(xs))
         self.assertEqual(res[0][1], "좋은 본문")
         self.assertIn("premium: 3만원대", calls[1][0]["feedback"])
+
+    def test_style_catalog_and_plan(self):
+        """SH6 — 여닫는 방식 각 8가지 이상, 한 실행 안에서 서로 다른 번호."""
+        self.assertGreaterEqual(len(kp._ts_array("KIN_OPENINGS")), 8)
+        self.assertGreaterEqual(len(kp._ts_array("KIN_CLOSINGS")), 8)
+        self.assertIn("제 의견으로는", kp.fixed_phrases())
+        import random
+        plan = kp.style_plan(5, random.Random(1))
+        for k in ("open", "close", "opinion"):
+            self.assertEqual(len({p[k] for p in plan}), 5, k)
+
+    def test_variety_findings(self):
+        today = "2026-10-09"
+        old = ("제 의견으로는 이 질문은 고지 문항부터 보셔야 합니다. 둘째 문장입니다. "
+               "결국 계약 전체를 담보 단위로 펼쳐 대조해 봐야 정확해집니다.")
+        hist = [{"text": old, "day": "2026-10-08"}]
+        same_open = ("제 의견으로는 이 질문은 고지 문항부터 보셔야 합니다! 다른 문장입니다. "
+                     "약관 문구에 따라 결론이 달라질 수 있습니다.")
+        f = kp.variety_findings(same_open, hist, today, [])
+        self.assertTrue(any("첫 문장" in x["term"] for x in f), f)
+        self.assertFalse(any("마지막 문장" in x["term"] for x in f))
+        fresh = "판단을 가르는 기준은 청약서 문항의 기간입니다. 가운데 문장입니다. 다음엔 약관의 정의 조항을 보시면 됩니다."
+        self.assertEqual(kp.variety_findings(fresh, hist, today, ["제 의견으로는"]), [])
+        # 고정 어구 하루 1회 — 오늘 이미 쓴 어구면 막고, 어제 쓴 것은 괜찮다
+        phrase = "가운데에 제 의견으로는 이렇습니다."
+        self.assertEqual(kp.variety_findings(fresh.replace("가운데 문장입니다.", phrase), hist, today, ["제 의견으로는"]), [])
+        hist_today = [{"text": old, "day": today}]
+        f = kp.variety_findings(fresh.replace("가운데 문장입니다.", phrase), hist_today, today, ["제 의견으로는"])
+        self.assertEqual([x["term"] for x in f], ["고정 어구 하루 2회: 제 의견으로는"])
+        # 최근 10건까지만 본다
+        many = [{"text": "다른 글입니다. 끝입니다.", "day": "2026-10-01"}] * 10 + hist
+        self.assertEqual(kp.variety_findings(same_open, many, today, []), [])
+
+    def test_make_answers_rewrites_on_repeat_with_new_style(self):
+        """같은 실행 안에서 앞 답변과 첫 문장이 겹치면 다른 틀로 다시 쓴다."""
+        calls = []
+        a1 = "판단을 가르는 기준은 문항의 기간입니다. 가운데입니다. 약관 문구에서 갈립니다."
+        a2 = "먼저 볼 것은 가입 시점입니다. 가운데입니다. 다음 순서는 청약서 사본입니다."
+
+        def draft_fn(reqs):
+            calls.append(reqs)
+            return [{"id": r["id"], "text": a2 if r.get("feedback") else a1} for r in reqs]
+
+        def gate_fn(items):
+            return [{"pass": True, "findings": []} for _ in items]
+        styles = [{"open": i, "close": i, "opinion": i} for i in range(6)]
+        cands = [{"url": "u1", "title": "t", "summary": "s"}, {"url": "u2", "title": "t", "summary": "s"}]
+        log = []
+        res = kp.make_answers(cands, draft_fn, gate_fn, lambda xs: [""] * len(xs), history=[], today="2026-10-09",
+                              phrases=[], styles=styles, on_round=lambda *a: log.append(a))
+        self.assertEqual([r[1] for r in res], [a1, a2])
+        self.assertEqual([r["style"]["open"] for r in calls[0]], [0, 1])
+        self.assertEqual(calls[1][0]["id"], "u2")
+        self.assertEqual(calls[1][0]["style"]["open"], 2)          # 겹친 뒤엔 아직 안 쓴 틀
+        self.assertIn("repeat: 첫 문장", calls[1][0]["feedback"])
+        self.assertEqual([(r[0], r[1]) for r in log], [(1, "u1"), (1, "u2"), (2, "u2")])
 
     def test_special_note_fits(self):
         for t in kh.TOPICS:

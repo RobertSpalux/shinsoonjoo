@@ -279,14 +279,123 @@ def draft(items):
     return _tsx("scripts/kin_draft.mts", items)
 
 
-def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, tries=2):
-    """후보 → [(후보, 답변 전문 | None, 막힌 사유)]. 게이트에 걸리면 사유를 붙여 처음부터 한 번 더 쓴다(고쳐 쓰지 않는다)."""
+# ── 틀 반복 금지(SH6 2026-10-09 관제탑) ─────────────────────────
+# 견본 3건이 모두 「제 의견으로는」으로 열고 「담보 단위로 펼쳐 … 대조」로 닫았다. 하루 3~5건이 같은 틀이면
+# 네이버 어뷰징·저품질 판정 위험 → ① 질문마다 서로 다른 여닫는 방식·의견 어구를 지정하고(factory-prompt KIN_*)
+# ② 첫 문장·끝 문장을 최근 10건과 비교해 70% 이상 비슷하면 다시 쓴다 ③ 고정 어구는 하루 1회까지.
+SIMILAR_MAX = 0.70
+HISTORY_N = 10
+_PROMPT_TS = os.path.join(ROOT, "src", "lib", "factory-prompt.ts")
+
+
+def _ts_array(name, path=_PROMPT_TS):
+    """factory-prompt.ts 의 문자열 배열 — 단일 출처(손으로 옮기지 않는다)."""
+    ts = open(path, encoding="utf-8").read()
+    m = re.search(rf"export const {name} = \[(.*?)\];", ts, re.S)
+    if not m:
+        raise KinError(f"{name} 를 factory-prompt.ts 에서 못 찾았다")
+    return re.findall(r'"([^"]+)"', m.group(1))
+
+
+def fixed_phrases():
+    """하루 1회까지인 고정 어구 = 의견 귀속 어구 전부 + 옛 고정 맺음말."""
+    return _ts_array("KIN_OPINION_PHRASES") + ["담보 단위로 펼쳐"]
+
+
+def sentences(body):
+    return [s for s in (x.strip() for x in re.split(r"(?<=[.?!])\s+|\n+", body or "")) if s]
+
+
+def _norm(s):
+    return re.sub(r"[^0-9A-Za-z가-힣]", "", s or "")
+
+
+def similarity(a, b):
+    from difflib import SequenceMatcher
+    a, b = _norm(a), _norm(b)
+    return SequenceMatcher(None, a, b).ratio() if a and b else 0.0
+
+
+def variety_findings(answer, history, today, phrases):
+    """history = [{text, day}] (최근 kin_answers + 같은 실행에서 통과한 것). 걸리면 [{rule, term, reason}]."""
+    body = body_part(answer).strip()
+    ss = sentences(body)
+    if not ss:
+        return []
+    out = []
+    recent = history[:HISTORY_N]
+    for label, mine, idx in (("첫 문장", ss[0], 0), ("마지막 문장", ss[-1], -1)):
+        for h in recent:
+            hs = sentences(body_part(h["text"]).strip())
+            if not hs:
+                continue
+            r = similarity(mine, hs[idx])
+            if r >= SIMILAR_MAX:
+                out.append({"rule": "repeat", "term": f"{label} {int(r * 100)}% 유사: {hs[idx][:30]}",
+                            "reason": f"최근 {HISTORY_N}건과 {label}이 {int(SIMILAR_MAX * 100)}% 이상 비슷하다 — 다른 방식으로 열고 닫는다"})
+                break
+    used_today = " ".join(h["text"] for h in history if h.get("day") == today)
+    for p in phrases:
+        if p in body and p in used_today:
+            out.append({"rule": "repeat", "term": f"고정 어구 하루 2회: {p}",
+                        "reason": "같은 고정 어구는 하루 1회까지 — 지정된 다른 어구를 쓴다"})
+    return out
+
+
+def load_history(env, limit=HISTORY_N):
+    """kin_answers 최근 limit 건(답변 초안·생성일 KST). 조회 실패는 빈 목록(같은 실행 안에서만 비교)."""
+    try:
+        url, h = _rest(env, "kin_answers")
+        r = requests.get(url, params={"select": "answer_draft,created_at", "order": "created_at.desc", "limit": str(limit)},
+                         headers=h, timeout=30)
+        if r.status_code >= 300:
+            return []
+        out = []
+        for row in r.json():
+            day = ""
+            try:
+                day = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")).astimezone(kit.KST).date().isoformat()
+            except Exception:  # noqa: BLE001
+                pass
+            if row.get("answer_draft"):
+                out.append({"text": row["answer_draft"], "day": day})
+        return out
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def style_plan(n, rng=None, n_open=None, n_close=None, n_opinion=None):
+    """질문 n 건(+재작성분)에 서로 다른 여닫는 방식·의견 어구 번호 — 앞에서부터 꺼내 쓴다."""
+    import random
+    rng = rng or random.Random()
+    n_open = n_open or len(_ts_array("KIN_OPENINGS"))
+    n_close = n_close or len(_ts_array("KIN_CLOSINGS"))
+    n_opinion = n_opinion or len(_ts_array("KIN_OPINION_PHRASES"))
+    o, c, p = (rng.sample(range(k), k) for k in (n_open, n_close, n_opinion))
+    return [{"open": o[i % n_open], "close": c[i % n_close], "opinion": p[i % n_opinion]} for i in range(n)]
+
+
+def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, tries=3, history=None, today=None,
+                 phrases=None, styles=None, on_round=None):
+    """후보 → [(후보, 답변 전문 | None, 막힌 사유)]. 게이트·반복 검사에 걸리면 사유를 붙여 처음부터 다시 쓴다(고쳐 쓰지 않는다).
+
+    history = 최근 답변 [{text, day}](kin_answers) — 같은 실행에서 통과한 답변도 차례로 더해 비교한다.
+    on_round(회차, 질문url, 답변, 틀, findings) — 회차별 판정 기록용(견본 보고)."""
     pending = {c["url"]: c for c in cands}
     feedback, result = {}, {}
-    for _ in range(tries):
+    history = list(history or [])
+    today = today or datetime.now(kit.KST).date().isoformat()
+    phrases = fixed_phrases() if phrases is None else phrases
+    styles = styles if styles is not None else style_plan(len(cands) * tries)
+    style_of, used = {}, 0
+    for c in cands:   # 질문마다 서로 다른 틀, 재작성 때는 아직 안 쓴 틀
+        style_of[c["url"]] = styles[used] if used < len(styles) else None
+        used += 1
+    for rnd in range(1, tries + 1):
         if not pending:
             break
-        reqs = [{"id": u, "title": c["title"], "body": c["summary"], **({"feedback": feedback[u]} if u in feedback else {})}
+        reqs = [{"id": u, "title": c["title"], "body": c["summary"], **({"feedback": feedback[u]} if u in feedback else {}),
+                 **({"style": style_of[u]} if style_of.get(u) else {})}
                 for u, c in pending.items()]
         drafts = {d["id"]: d for d in draft_fn(reqs)}
         for u in list(pending):
@@ -301,11 +410,21 @@ def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, t
         answers = [(u, compose_answer(t, b)) for (u, t), b in zip(ok_items, blocks)]
         verdicts = gate_fn([{"answer": a, "question": q[u]} for u, a in answers])
         for (u, a), v in zip(answers, verdicts):
+            findings = list(v["findings"]) if not v["pass"] else []
             if v["pass"]:
+                findings = variety_findings(a, history, today, phrases)
+            if on_round:
+                on_round(rnd, u, a, style_of.get(u), findings)
+            if not findings:
                 result[u] = (a, "")
+                history.insert(0, {"text": a, "day": today})
                 pending.pop(u)
             else:
-                why = "; ".join(f"{f['rule']}: {f['term']}" for f in v["findings"])
+                if any(f["rule"] == "repeat" for f in findings) and used < len(styles):
+                    style_of[u] = styles[used]   # 틀이 겹쳤으면 다음엔 다른 틀로
+                    used += 1
+                why = "; ".join(f"{f['rule']}: {f['term']}" for f in findings)
+                v = {**v, "findings": findings}
                 # 다시 쓰는 모델에는 규칙 사유까지 준다 — 「본문 946자」만으로는 줄일 목표(600~900자)를 모른다(SH5 견본 2)
                 feedback[u] = "; ".join(f"{f['rule']}: {f['term']} ({f.get('reason', '')})" for f in v["findings"])
                 result[u] = (None, f"게이트: {why}")
@@ -367,12 +486,17 @@ def count_expiring(env, today, days=EXPIRY_WARN_DAYS):
     return len(r.json())
 
 
-def expiry_line(today, count_fn):
+def expiry_check(today, count_fn):
+    """(건수 | None, 요약 줄). 조회 실패는 None — 수집·초안을 막지 않되 「실패」를 숨기지 않는다."""
     try:
         n = count_fn(today)
-    except Exception as e:  # noqa: BLE001 — 조회 실패가 수집·초안을 막지 않는다. 대신 「실패」를 숨기지 않는다
-        return f"지식iN 심의필 만료 {EXPIRY_WARN_DAYS}일 이내: 조회 실패({e})"
-    return f"지식iN 심의필 만료 {EXPIRY_WARN_DAYS}일 이내 {n}건" + (" — PAMS 연장 신청 필요" if n else "")
+    except Exception as e:  # noqa: BLE001
+        return None, f"지식iN 심의필 만료 {EXPIRY_WARN_DAYS}일 이내: 조회 실패({e})"
+    return n, f"지식iN 심의필 만료 {EXPIRY_WARN_DAYS}일 이내 {n}건" + (" — PAMS 연장 신청 필요" if n else "")
+
+
+def expiry_line(today, count_fn):
+    return expiry_check(today, count_fn)[1]
 
 
 def set_posted_url(env, rec):
@@ -490,16 +614,19 @@ def notify_fn(env, dry):
     return lambda t: pams_auto.telegram(env, t)
 
 
-def cmd_run(env, n, dry, harvest_fn=None, make_fn=make_answers, notify=None, state_path=STATE_PATH,
-            kit_dir=KIT_DIR, save_row=save_draft_row, now=None, expiring_fn=None):
+def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=STATE_PATH,
+            kit_dir=KIT_DIR, save_row=save_draft_row, now=None, expiring_fn=None, history_fn=None):
     now = now or datetime.now(kit.KST)
     today = now.date().isoformat()
     state = load_state(state_path)
     res = (harvest_fn or (lambda: kin_harvest.collect(env, now=now)))()
     chosen = pick(res["candidates"], state, today, n)
+    expiring, exp_line = expiry_check(today, expiring_fn or (lambda d: count_expiring(env, d)))
     lines = [f"지식iN 수집: 질문 {res['seen_total']} · 후보 {len(res['candidates'])} · 제외 {len(res['excluded'])}"
-             + (" · 첫 실행 기준선" if res.get("baseline") else "") + f" · 오늘 만들 것 {len(chosen)}",
-             expiry_line(today, expiring_fn or (lambda d: count_expiring(env, d)))]
+             + (" · 첫 실행 기준선" if res.get("baseline") else "") + f" · 오늘 만들 것 {len(chosen)}", exp_line]
+    if make_fn is None:
+        def make_fn(cs):
+            return make_answers(cs, history=(history_fn or (lambda: load_history(env)))(), today=today)
     made = []
     for c, answer, why in (make_fn(chosen) if chosen else []):
         if not answer:
@@ -521,11 +648,15 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=make_answers, notify=None, sta
         lines.append(f"✅ [{c['topic']}] {c['title'][:40]} → {rec['id']} (본문 {len(body_part(answer).strip())}자)")
     if not dry:
         save_state(state, state_path)
+    msgs = []
     if made:
-        (notify or notify_fn(env, dry))(
-            f"🙋 지식인 심의 접수 대기 {len(made)}건 — PAMS 지식인 심의에 옮긴 뒤 「제출」은 로버트가(저장 금지)\n"
-            + "\n".join(f"· {r['id']} [{r['topic']}] {r['question_title'][:30]}" for r in made)
-            + f"\n키트: {kit_dir}")
+        msgs.append(f"🙋 지식인 심의 접수 대기 {len(made)}건 — PAMS 지식인 심의에 옮긴 뒤 「제출」은 로버트가(저장 금지)\n"
+                    + "\n".join(f"· {r['id']} [{r['topic']}] {r['question_title'][:30]}" for r in made)
+                    + f"\n키트: {kit_dir}")
+    if expiring:   # 관제탑 결정(SH6) — N>0 이면 텔레그램에도 한 줄(§6.3 만료 = 미심의급 제재)
+        msgs.append(f"⏰ {exp_line}")
+    if msgs:
+        (notify or notify_fn(env, dry))("\n\n".join(msgs))
     return lines, made
 
 
