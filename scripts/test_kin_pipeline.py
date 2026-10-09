@@ -76,6 +76,17 @@ class Harvest(unittest.TestCase):
         self.assertIn("법률 질문(상속)", kh.exclusion({**dementia, "dirId": "401030201"}))
         self.assertIn("보험 신호어 없음", kh.exclusion({**base, "title": "이거 어떻게 하나요", "snippets": ["기본 실비만 들어요"]}))
         self.assertIsNone(kh.exclusion({**base, "title": "사망보험금 상속 문의"}))   # 제목에 보험 낱말이 있으면 남긴다
+        # SH7 — 시효·청구 기한은 보험 신호어가 있어도, 제목이든 본문 조각이든 뺀다
+        for title, snip in [("실비 청구 시효가 지났을까요", ""),
+                            ("실손보험 청구기간 문의", ""),
+                            ("보험금 청구 기한 있나요", ""),
+                            ("실비 청구 가능할까요", "3년 전 입원인데 기한 지나서 못 받는다고"),
+                            ("실비 청구 거절", "소멸시효 3년이라 안 된다고 하네요"),
+                            ("실비 청구 가능할까요", "청구 기한을 넘겼는지 궁금합니다")]:
+            q = {**base, "title": title, "snippets": [snip] if snip else []}
+            self.assertEqual(kh.exclusion(q), "법률(시효·기한) — 사실 검증 불가", title + snip)
+        for title in ("실비 청구 서류 문의", "고지의무 기간 5년 맞나요"):
+            self.assertIsNone(kh.exclusion({**base, "title": title}), title)
         self.assertIn("답변 다수", kh.exclusion({**base, "answers_seen": 3}))
         self.assertIn("비교", kh.exclusion({**base, "title": "실비 어디가 좋나요 비교"}))
         self.assertIn("특정 회사", kh.exclusion({**base, "snippets": ["삼성화재 가입"]}, ["삼성화재"]))

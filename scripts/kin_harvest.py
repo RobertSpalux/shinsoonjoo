@@ -81,7 +81,11 @@ OFF_TOPIC_RE = re.compile(r"건강보험\s*(?:료|지역|직장|피부양)|국�
 # 법률 질문은 보험 분류(dirId)로 올라오기도 하고, 답변 조각의 「실비」(= 실제 비용)가 실손청구 검색에 걸린다
 # (「치매 어머니가 상속인인 경우 상속재산분할협의와 성년후견」 — 조각 「기본 실비가 수십만 원」). 분류와 무관하게
 # 제목에 법률 낱말이 있고 보험 신호어가 없으면 뺀다.
-LEGAL_RE = re.compile(r"상속|후견|소송|고소|고발|합의금|이혼|양육비|채무|파산|회생|한정승인|유언|증여|형사|민사|변호사|판결|재판")
+# 시효·청구 기한은 보험 신호어가 있어도, 제목이든 본문 조각이든 걸리면 뺀다 — 기산점·중단 사유가 사안마다 달라
+# 답변에서 사실을 검증할 수 없다(SH7 관제탑 결정).
+DEADLINE_RE = re.compile(r"시효|청구\s*기한|청구기간|기한\s*(?:지나|넘)")
+LEGAL_RE = re.compile(r"상속|후견|소송|고소|고발|합의금|이혼|양육비|채무|파산|회생|한정승인|유언|증여|형사|민사|변호사|판결|재판|"
+                      + DEADLINE_RE.pattern)
 # 보험 분류로 들어왔어도 제목·본문 조각 어디에도 보험 신호어가 없으면 뺀다. 조각의 「실비」 단독은 「실제 비용」 뜻이 많아
 # 신호로 치지 않는다(제목의 「실비」는 INSURANCE_TITLE_RE 가 신호로 본다).
 SIGNAL_RE = re.compile(r"보험|실손|부담보(?!증)|고지|알릴\s*의무|보장|담보|특약|유병자|간편\s*심사|보험금|청구")
@@ -185,6 +189,8 @@ def exclusion(q, insurers=(), dicts=None):
     d, title = str(q.get("dirId") or ""), q["title"]
     if not (d.startswith(INSURANCE_DIR) or INSURANCE_TITLE_RE.search(title)):
         return "보험 질문 아님(분류·제목)"
+    if DEADLINE_RE.search(text):
+        return "법률(시효·기한) — 사실 검증 불가"
     legal = LEGAL_RE.search(title)
     if legal and not INSURANCE_TITLE_RE.search(title):
         return f"법률 질문({legal.group(0)}) — 제목에 보험 신호어 없음"
