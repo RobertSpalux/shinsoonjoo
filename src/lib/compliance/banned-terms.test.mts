@@ -83,6 +83,8 @@ ok("보험사는 해지를 기다린다 → block", levelOf({ main_website_markd
 console.log("[신규 B등급 — warn + 동사 오탐 제외]");
 ok("미친 가성비 → warn", levelOf({ main_website_markdown: "완전 미친 가성비." }) === "warn");
 ok("영향을 미친다 → clean(동사 제외)", levelOf({ main_website_markdown: "보험료에 영향을 미친다." }) === "clean");
+ok("금액에 못 미친다면 → clean(동사 제외)", levelOf({ main_website_markdown: "필요한 금액에 못 미친다면 보완합니다." }) === "clean");
+ok("기준에 미친다 → clean(동사 제외)", levelOf({ main_website_markdown: "합계가 기준에 미친다면 유지합니다." }) === "clean");
 ok("죽어도 → warn", levelOf({ main_website_markdown: "죽어도 안 나오는 경우가 있습니다." }) === "warn");
 ok("돈 날린다 → warn", levelOf({ main_website_markdown: "돈 날린다는 말이 있습니다." }) === "warn");
 
