@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "선한금융 PAMS 캡처",
+  "version": "0.1.0",
+  "description": "네이버 비공개 글 탭을 텍스트 PDF 로 인쇄해 Downloads\\PAMS접수 에 저장한다. 게시·발행·쿠키 접근 없음.",
+  "action": { "default_title": "PAMS 캡처 PDF 저장" },
+  "background": { "service_worker": "background.js", "type": "module" },
+  "permissions": ["activeTab", "debugger", "downloads", "scripting", "tabs"],
+  "host_permissions": ["https://blog.naver.com/*", "https://m.blog.naver.com/*"]
+}
