@@ -5,6 +5,7 @@
 TR2(2026-10-09) 실측의 우리 제목을 그대로 고정한다: 45~50자 「— 부제」형은 실패해야 하고,
 승부 키워드 15 제안 제목은 전부 통과해야 한다(금지어 A·B 등급 0 포함).
 """
+import json
 import os
 import sys
 import unittest
@@ -189,17 +190,57 @@ class DraftGateTest(unittest.TestCase):
                     "naver_blog_content": body()}
 
     def test_pass(self):
-        self.assertEqual(self.di.naver_gate(self.row, self.data), [])
+        self.assertEqual(self.di.naver_gate(self.row, self.data), ([], None))
 
     def test_unregistered_keyword_blocks(self):
         with self.assertRaises(self.di.kit.KitError) as c:
             self.di.naver_gate({**self.row, "slug": "y"}, self.data)
         self.assertIn("미등록", str(c.exception))
 
+    def test_meta_keyword_used_when_unregistered(self):
+        # 장부에 없는 새 글 — meta.json 의 naver_keyword 로 재고, 장부에 적을 키워드를 돌려준다
+        self.assertEqual(self.di.naver_gate({**self.row, "slug": "y"}, self.data, meta_kw="부담보 해제"), ([], "부담보 해제"))
+
+    def test_meta_keyword_still_measured(self):
+        with self.assertRaises(self.di.kit.KitError) as c:
+            self.di.naver_gate({**self.row, "slug": "y"}, self.data, meta_kw="실손보험 청구 거절")
+        self.assertIn("키워드 낱말 빠짐", str(c.exception))
+
+    def test_ledger_and_meta_mismatch_blocks(self):
+        with self.assertRaises(self.di.kit.KitError) as c:
+            self.di.naver_gate(self.row, self.data, meta_kw="부담보 해제 기간")
+        self.assertIn("불일치", str(c.exception))
+
+    def test_register_keyword_writes_ledger(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "kw.json")
+            with open(p, "w", encoding="utf-8") as fp:
+                json.dump({"_doc": "x", "articles": {"a": "가"}, "plan": [{"no": 1}]}, fp, ensure_ascii=False)
+            self.di.register_keyword("y", "부담보 해제", p)
+            with open(p, encoding="utf-8") as fp:
+                got = json.load(fp)
+        self.assertEqual(got["articles"], {"a": "가", "y": "부담보 해제"})
+        self.assertEqual(got["plan"], [{"no": 1}])
+
     def test_short_body_blocks(self):
         with self.assertRaises(self.di.kit.KitError) as c:
             self.di.naver_gate({**self.row, "naver_blog_content": body(n_chars=2238)}, self.data)
         self.assertIn("2,500~3,500", str(c.exception))
+
+
+class BannedVerbTest(unittest.TestCase):
+    """preflight 가 banned-terms.ts 의 「미친」 정규식을 파이썬으로도 읽는다(가변 길이 lookbehind 면 글자 그대로로 떨어진다)."""
+
+    def setUp(self):
+        self.rx = dict(preflight.parse_banned_terms()["B"])["미친"]
+
+    def test_verb_forms_clean(self):
+        for s in ("금액에 못 미친다면", "영향을 미친다", "기준에 미친다는"):
+            self.assertIsNone(self.rx.search(s), s)
+
+    def test_adjective_hit(self):
+        self.assertIsNotNone(self.rx.search("완전 미친 가성비"))
 
 
 if __name__ == "__main__":
