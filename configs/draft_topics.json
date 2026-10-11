@@ -1,0 +1,62 @@
+{
+  "_doc": [
+    "주 3편 초안 공급기(scripts/draft_weekly.py)의 주제 순환 장부 — 2026-10-12 SH13 신설.",
+    "「92 계획 주제 장부」는 저장소·robert-os 어디에도 없다(SH10 보고). 그래서 연금→종신→법인→절세 순서로 엇갈려 적은 이 장부가 순서의 정본이다. 92 장부가 생기면 topics 를 그 순서로 바꾼다.",
+    "순환 = 위에서부터 아직 안 쓴 주제 3개(출력 폴더에 같은 slug 의 통과·반려 기록이 있으면 쓴 것으로 본다).",
+    "각도는 전부 「이미 가입한 계약의 점검·제도 설명」이다. 재무 컨설팅·절세 솔루션·CEO플랜 프레임 금지(CLAUDE.md §6.7).",
+    "keyword = 네이버 승부 키워드. 초안 meta.json 의 naver_keyword 로만 넘기고, 장부(naver_keywords.json) 기록은 draft_insert.py --insert 몫이다.",
+    "notices 의 문구는 robert-os shared/rules/rules_finance_gate.md 「상품군 유의문구」 원문이다. 손으로 고치지 않는다 — test_draft_weekly.py 가 원문과 글자 단위로 대조한다."
+  ],
+  "internal_links": [
+    "https://goodfinance.kr/news/insurance-remodeling-self-checklist-7",
+    "https://goodfinance.kr/news/pre-existing-condition-disclosure-exclusion-guide"
+  ],
+  "notices": {
+    "wholeLife": [
+      "본 상품은 보장성 상품으로 저축 목적으로는 적합하지 않습니다.",
+      "중도해지 시 납입한 보험료보다 환급금이 적거나 없을 수 있습니다.",
+      "2년 내 자살 등 보험금 미지급 사유에 해당하는 경우 보험금 지급이 거절될 수 있습니다."
+    ],
+    "taxAdvice": ["세금 관련 자세한 사항은 세무사 등 전문가와 상의 바랍니다."],
+    "taxFree": ["비과세 혜택은 관련 세법 요건 충족 시 적용되며 자세한 사항은 세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다."],
+    "noRefund": ["중도해지 시 납입한 보험료보다 환급금이 적거나 없을 수 있습니다."]
+  },
+  "topics": [
+    {"slug": "annuity-start-age-payout-type-check", "category": "연금", "keyword": "연금보험 연금개시",
+     "angle": "이미 가입한 연금보험이 여러 건이면 계약마다 연금개시 나이와 수령 방식(종신형·확정형 등)이 다를 수 있다. 계약을 한 표로 모아 개시 나이·수령 방식·납입 상태를 나란히 놓아야 실제 수령 흐름이 보인다는 점검 글.",
+     "notices": ["noRefund"]},
+    {"slug": "whole-life-death-benefit-sum-by-cause", "category": "종신", "keyword": "종신보험 사망보험금",
+     "angle": "사망보장은 일반사망·질병사망·상해사망으로 나뉘고 지급 조건과 보험기간이 다르다. 여러 계약에 흩어진 사망보장을 원인별로 합산하고 특약 만기를 함께 적어야 실제 합계와 공백이 보인다는 점검 글. 종신보험을 저축·목돈 마련으로 설명하지 않는다.",
+     "notices": ["wholeLife"]},
+    {"slug": "corporate-policy-owner-beneficiary-check", "category": "법인", "keyword": "법인 보험 계약자",
+     "angle": "법인이 계약자인 보험은 계약자·피보험자·수익자가 각각 누구인지에 따라 보험금이 누구에게 가는지가 달라진다. 대표자 변경·임원 퇴임 같은 변화가 있었는데 계약 관계자가 그대로인 경우가 있어 세 칸을 나란히 점검해야 한다는 제도 설명 글. 세무 효과·절세 효과를 말하지 않는다.",
+     "notices": ["taxAdvice"]},
+    {"slug": "protection-premium-tax-credit-requirements", "category": "절세", "keyword": "보장성보험료 세액공제",
+     "angle": "연말정산 보장성보험료 세액공제는 계약자가 누구인지, 피보험자가 기본공제대상자인지에 따라 적용 여부가 갈린다. 가족 명의로 흩어진 보장성 계약의 계약자·피보험자 칸을 점검하는 제도 설명 글. 공제율·한도 숫자는 근거 원문을 확인하지 못했으면 [확인: ___] 로 남긴다.",
+     "notices": ["taxAdvice"]},
+    {"slug": "annuity-policy-owner-insured-payee-check", "category": "연금", "keyword": "연금보험 수익자",
+     "angle": "연금보험은 계약자·피보험자·연금수익자·사망 시 수익자가 따로 지정된다. 계약 당시와 가족 상황이 달라졌는데 수익자 칸이 그대로인 경우가 있어 계약별로 네 칸을 점검해야 한다는 글.",
+     "notices": ["noRefund"]},
+    {"slug": "whole-life-rider-expiry-age-gap", "category": "종신", "keyword": "종신보험 특약 만기",
+     "angle": "종신보험의 주계약은 평생 보장이지만 함께 붙은 특약은 80세·90세 등 만기가 따로 정해진 경우가 많다. 주계약과 특약의 만기를 나이대별로 펼쳐 보아야 나이가 들수록 줄어드는 보장이 보인다는 점검 글.",
+     "notices": ["wholeLife"]},
+    {"slug": "corporate-group-accident-insured-roster", "category": "법인", "keyword": "법인 단체상해보험 명단",
+     "angle": "법인이 가입한 단체상해보험은 피보험자 명단이 입사·퇴사에 맞춰 바뀌어야 한다. 명단 변경이 늦으면 보장 공백이나 불필요한 보장이 생길 수 있어 명단·보장 범위·보험기간을 함께 점검해야 한다는 제도 설명 글.",
+     "notices": []},
+    {"slug": "savings-insurance-tax-free-requirements", "category": "절세", "keyword": "저축성보험 비과세 요건",
+     "angle": "저축성보험 보험차익 비과세는 관련 세법 요건을 충족해야 적용된다. 이미 가입한 계약이 납입기간·유지기간·납입 방식에서 어떤 상태인지 계약별로 점검하는 제도 설명 글. 제목에 비과세를 쓰면 「관련 세법 요건 충족시」를 제목에 함께 쓴다. 수익률·환급률을 말하지 않는다.",
+     "notices": ["taxFree", "noRefund"]},
+    {"slug": "annuity-premium-payment-holiday-options", "category": "연금", "keyword": "연금보험 납입 어려울 때",
+     "angle": "연금보험 납입이 어려워졌을 때 해지 말고도 약관에 따라 납입 일시중지·감액 같은 선택지가 있는지 먼저 확인해야 한다는 제도 설명 글. 상품·약관마다 다르다는 점을 분명히 하고, 해지를 권하지도 유지를 단정하지도 않는다.",
+     "notices": ["noRefund"]},
+    {"slug": "whole-life-beneficiary-designation-check", "category": "종신", "keyword": "종신보험 수익자 지정",
+     "angle": "종신보험 사망보험금 수익자를 「법정상속인」으로 둔 경우와 특정인을 지정한 경우 보험금이 누구에게 가는지가 다르다. 결혼·이혼·자녀 출생 같은 변화 뒤에 수익자 칸을 점검해야 한다는 제도 설명 글. 상속세 등 세금 효과를 단정하지 않는다.",
+     "notices": ["wholeLife", "taxAdvice"]},
+    {"slug": "corporate-business-liability-coverage-scope", "category": "법인", "keyword": "법인 영업배상책임보험",
+     "angle": "법인이 가입한 영업배상책임보험은 보장하는 사업장·업종·사고 유형이 증권에 정해져 있다. 사업장 이전·업종 추가 뒤에 증권의 기재 내용이 그대로인 경우가 있어 증권 기재 사항과 실제 영업을 맞춰 보는 점검 글.",
+     "notices": []},
+    {"slug": "pension-savings-insurance-tax-credit-check", "category": "절세", "keyword": "연금저축보험 세액공제",
+     "angle": "연금저축보험은 연금계좌 세액공제 대상이지만 공제 한도·연금 외 수령 시 과세 등 세법 요건이 따른다. 이미 가입한 연금저축보험의 납입 상태와 수령 계획을 점검하는 제도 설명 글. 공제율·한도 숫자는 근거 원문을 확인하지 못했으면 [확인: ___] 로 남긴다.",
+     "notices": ["taxAdvice", "noRefund"]}
+  ]
+}
