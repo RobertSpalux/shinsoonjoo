@@ -1,0 +1,36 @@
+{
+  "slug": "corporate-policy-owner-beneficiary-check",
+  "overline": "법인 계약 점검",
+  "title": "법인 보험\n증권의\n세 칸",
+  "subtitle": "계약자·피보험자·수익자를 나란히 봅니다",
+  "table_title": "세 칸이 정하는 것",
+  "col_before": "뜻",
+  "col_after": "볼 것",
+  "table_rows": [
+    [
+      "계약자",
+      "계약을 관리하는 쪽",
+      "법인 명의인지"
+    ],
+    [
+      "피보험자",
+      "보험사고의 대상",
+      "현직인지 퇴임했는지"
+    ],
+    [
+      "수익자",
+      "보험금이 가는 곳",
+      "변경 절차 완료 여부"
+    ]
+  ],
+  "table_note": "변경 절차와 서류는 보험사 및 상품별로\n상이할 수 있으며 세부사항은 해당 약관 기준",
+  "points_title": "세 칸을 볼 때",
+  "points": [
+    "보험회사 기준 현재 내용",
+    "회사의 지금 모습과 대조",
+    "해지·신규가 전제 아님"
+  ],
+  "cta_line": "법인 계약 세 칸, 함께 점검",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}
