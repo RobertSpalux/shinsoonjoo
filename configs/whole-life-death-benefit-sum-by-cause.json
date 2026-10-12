@@ -1,0 +1,36 @@
+{
+  "slug": "whole-life-death-benefit-sum-by-cause",
+  "overline": "종신보험 점검",
+  "title": "사망보험금은\n숫자 하나가\n아닙니다",
+  "subtitle": "원인별 합계와 특약 만기를 함께 봅니다",
+  "table_title": "원인에 따라 더해지는 보장",
+  "col_before": "질병 사망",
+  "col_after": "사고 사망",
+  "table_rows": [
+    [
+      "일반사망",
+      "더해짐",
+      "더해짐"
+    ],
+    [
+      "질병사망",
+      "더해짐",
+      "해당 없음"
+    ],
+    [
+      "상해·재해사망",
+      "해당 없음",
+      "더해짐"
+    ]
+  ],
+  "table_note": "보험사 및 상품별로 상이할 수 있으며\n세부사항은 해당 약관 기준",
+  "points_title": "점검할 때 함께 보는 것",
+  "points": [
+    "원인별 합계 두 개",
+    "특약마다 다른 보험기간",
+    "보험수익자와 유지 상태"
+  ],
+  "cta_line": "내 사망보장, 원인별로 펼쳐 보기",
+  "cta_sub": "담보 단위로 점검",
+  "cta_url": "goodfinance.kr/diagnosis"
+}
