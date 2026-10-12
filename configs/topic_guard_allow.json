@@ -1,0 +1,15 @@
+{
+  "_doc": "topic_guard 예외 — 일부러 나눠 쓰는 글만 (새 slug, 기존 slug, 이유)로 적는다. scripts/topic_guard.py check() 가 이 짝을 뺀다. 이유 없이 적지 않는다.",
+  "allow": [
+    {
+      "new": "whole-life-cancel-refund-keep-options",
+      "existing": "copay-ceiling-refund-silson-excluded",
+      "reason": "SH15 20호 — 종신보험 해지환급금·유지 제도(감액완납·보험계약대출·부활). 기존 글은 건강보험 본인부담상한제 환급금과 실손 공제라 상품·제도가 다르다. 겹친 말은 「환급금」 한 낱말"
+    },
+    {
+      "new": "whole-life-cancel-refund-keep-options",
+      "existing": "overseas-stay-3month-silson-premium-refund",
+      "reason": "SH15 20호 — 종신보험 해지 전 유지 제도. 기존 글은 해외 장기체류 실손보험료 환급이라 상품·제도가 다르다. 겹친 말은 「전에·해지·환급」 일반어"
+    }
+  ]
+}

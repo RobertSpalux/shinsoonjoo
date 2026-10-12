@@ -1,6 +1,10 @@
 {
   "_doc": "네이버 키워드 장부 — WRITING-SPEC §4-4. articles: slug → 네이버 제목이 노리는 키워드(낱말 공백 구분, 제목에 전부·맨 앞). plan: 승부 키워드 15(TR2 2026-10-09). 새 글을 쓰면 articles 에 slug 를 적는다 — 적지 않으면 preflight 가 키워드 위치를 재지 못한다.",
-  "articles": {},
+  "articles": {
+    "silson-claim-deadline-3year-start-point": "실비 청구 기간",
+    "daily-liability-nusu-own-home-tenant-landlord": "일배책 누수",
+    "whole-life-cancel-refund-keep-options": "종신보험 해지"
+  },
   "plan": [
     {"no": 1, "keyword": "건강검진 재검 고지", "title": "건강검진 재검 고지, 재검 결과가 정상이면 보험 가입 때 알려야 하나요"},
     {"no": 2, "keyword": "해외 체류 실손보험 중지", "title": "해외 체류 실손보험 중지, 귀국한 뒤에는 어떻게 다시 살리나요"},
