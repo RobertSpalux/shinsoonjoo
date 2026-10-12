@@ -131,6 +131,8 @@ def needs_main_kit(article, state, file_exists=os.path.exists, is_stale=kit.kit_
         return False, "발행됨"
     if kit.channel_locked(article, "main"):
         return False, "본진 접수·승인됨"
+    if kit.naver_only(article):
+        return False, "네이버 단독(본진판 없음)"
     key = f"{article['slug']}|main"
     prev = state["kits"].get(key)
     h = kit.content_hash(article, "main")
@@ -141,6 +143,18 @@ def needs_main_kit(article, state, file_exists=os.path.exists, is_stale=kit.kit_
     if state["gate_blocked"].get(key) == gate_key(article, "main"):
         return False, "게이트 막힘(원고·확인 이력 그대로)"
     return True, ("원고 변경" if prev else "새 초안")
+
+
+def name_taken(article, channel, state, kit_dir, file_exists=os.path.exists, now=None):
+    """오늘 이름(MMDD_N호_채널.zip)이 이미 있는데 이 기계가 만든 키트가 아니면 그 파일명, 아니면 None.
+    🔴 관제탑이 손으로 묶은 키트를 덮어쓰지 않는다(SH16 — 18·19·20호 수동 키트와 같은 이름)."""
+    name = kit.kit_basename(article["slug"], channel, now) + ".zip"
+    target = os.path.join(kit_dir, name)
+    prev = (state["kits"].get(f"{article['slug']}|{channel}") or {}).get("zip") or ""
+    if file_exists(target) and os.path.normcase(prev) != os.path.normcase(target):
+        log(f"멈춤: {name} 이미 있음(자동 생성 기록 없음) — 덮어쓰지 않는다")
+        return name
+    return None
 
 
 def match_capture(filename, candidates):
@@ -246,7 +260,7 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
     main_drafts = fetch_drafts("main")
     for a in main_drafts:
         need, why = needs_main_kit(a, state, file_exists)
-        if need:
+        if need and not name_taken(a, "main", state, kit_dir, file_exists):
             jobs.append((a, "main", None, why))
 
     naver_waiting = [a for a in fetch_drafts("naver") if not kit.channel_locked(a, "naver")]
@@ -262,6 +276,12 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
             continue
         if state["gate_blocked"].get(f"{art['slug']}|naver") == gate_key(art, "naver") and rec.get("slug") == art["slug"]:
             continue  # 확인 미완료 그대로 — 서버를 다시 띄우지 않는다
+        taken = name_taken(art, "naver", state, kit_dir, file_exists)
+        if taken:
+            notify(f"[PAMS 키트] {kit.title_label(art.get('title'), art['slug'])} 네이버 — {taken} 이 이미 있어 만들지 않았습니다"
+                   "(손으로 만든 키트로 보고 덮어쓰지 않음). 자동으로 다시 만들려면 그 zip 을 옮긴 뒤 캡처를 다시 저장하세요.")
+            state["captures"][fn] = {"status": "bad", "slug": art["slug"], "sig": file_sig(cap), "why": f"{taken} 있음"}
+            continue
         jobs.append((art, "naver", cap, why))
 
     log(f"바퀴: 본진 초안 {len(main_drafts)}편 · 네이버 대기 {len(naver_waiting)}편 · 작업 {len(jobs)}건")

@@ -124,6 +124,20 @@ class MainKitTest(unittest.TestCase):
         h.drafts["main"] = [art(acks=[{"field": "x", "term": "15%", "offset": 1}])]
         self.assertEqual(len(h.run()), 1)
 
+    def test_naver_only_gets_no_main_kit(self):
+        """SH16 — 네이버 단독(main_website_markdown NULL·빈칸)은 본진 키트를 만들지 않는다. 네이버 캡처 짝은 그대로."""
+        for body in (None, "", "  \n"):
+            need, why = auto.needs_main_kit(art(main_website_markdown=body), {"kits": {}, "gate_blocked": {}})
+            self.assertFalse(need, repr(body))
+            self.assertIn("네이버 단독", why)
+        h = Harness(main=[art(main_website_markdown=None)])
+        self.assertEqual(h.run(), [])
+        self.assertEqual(h.built, [])
+        cap = os.path.join(h.dir, "7호.pdf")
+        open(cap, "wb").write(b"img")
+        self.assertEqual(len(h.run()), 1)
+        self.assertEqual([(s, c) for s, c, _ in h.built], [("ltc-grade-home-care-rider-check", "naver")])
+
     def test_published_or_submitted_is_skipped(self):
         h = Harness(main=[art(is_main_published=True),
                           art(slug="caregiver-daily-benefit-support-vs-use",
@@ -221,6 +235,32 @@ class CaptureTest(unittest.TestCase):
         self.assertEqual(len(h.notes), 1, "같은 캡처로 바퀴마다 다시 알리지 않는다")
         self.cap(h, "7호_수정.pdf")
         self.assertEqual(len(h.run()), 1, "고쳐서 새 이름으로 저장하면 키트를 만든다")
+
+    def test_handmade_zip_with_same_name_is_not_overwritten(self):
+        """SH16 — 관제탑이 손으로 묶은 「MMDD_N호_네이버.zip」이 있으면 덮어쓰지 않고 한 번 알린다. 캡처는 그대로 둔다."""
+        h = Harness(main=[], naver=[art()])
+        manual = os.path.join(h.dir, kit.kit_basename("ltc-grade-home-care-rider-check", "naver") + ".zip")
+        open(manual, "w").write("손으로 만든 키트")
+        p = self.cap(h, "7호.pdf")
+        self.assertEqual(h.run(), [])
+        self.assertEqual(h.built, [])
+        self.assertEqual(open(manual).read(), "손으로 만든 키트")
+        self.assertTrue(os.path.exists(p))
+        self.assertEqual(len(h.notes), 1)
+        self.assertIn("이미 있어 만들지 않았습니다", h.notes[0])
+        h.run()
+        self.assertEqual(len(h.notes), 1, "같은 캡처로 바퀴마다 다시 알리지 않는다")
+
+    def test_own_kit_same_name_is_rebuilt(self):
+        """이 기계가 만든(상태에 기록된) 같은 이름 키트는 원고가 바뀌면 다시 만든다 — 막는 건 손으로 만든 것만."""
+        st = {"kits": {}, "gate_blocked": {}, "captures": {}}
+        d = tempfile.mkdtemp()
+        a = art()
+        z = os.path.join(d, kit.kit_basename(a["slug"], "main") + ".zip")
+        open(z, "w").write("auto")
+        self.assertEqual(auto.name_taken(a, "main", st, d), os.path.basename(z))
+        st["kits"][f"{a['slug']}|main"] = {"zip": z}
+        self.assertIsNone(auto.name_taken(a, "main", st, d))
 
     def test_gate_blocked_capture_waits(self):
         h = Harness(main=[], naver=[art()], gate_blocked={"ltc-grade-home-care-rider-check"})

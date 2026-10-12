@@ -61,12 +61,14 @@ def keyword_of(title):
 TITLE_BOX = "■ 제목 칸에 붙여 넣을 제목 — 이것 하나뿐"
 
 
-def title_box(title):
+def title_box(title, naver_only=False):
     """붙여 넣을 제목은 **딱 하나**, 맨 위 별도 상자(2026-10-01 7호: 안내문에 제목처럼 보이는 줄이 둘이라
-    로버트가 헷갈렸고, 끝에 마침표가 붙은 제목으로 올라갔다). DB naver_title 그대로 · 끝 문장부호 없음."""
+    로버트가 헷갈렸고, 끝에 마침표가 붙은 제목으로 올라갔다). DB naver_title 그대로 · 끝 문장부호 없음.
+    네이버 단독 글은 본진 링크 줄(📄)이 붙지 않는다(SH16)."""
     bar = "━" * 40
-    return [TITLE_BOX, bar, f"  {title}", bar,
-            "  (본문·html 안에는 제목이 없다. 본문 맨 끝 「📄 …」 줄은 본진 글 링크이고 제목이 아니다.)"]
+    tail = ("  (본문·html 안에는 제목이 없다. 네이버 단독 글이라 본진 글 링크 줄(📄)은 없다.)" if naver_only else
+            "  (본문·html 안에는 제목이 없다. 본문 맨 끝 「📄 …」 줄은 본진 글 링크이고 제목이 아니다.)")
+    return [TITLE_BOX, bar, f"  {title}", bar, tail]
 
 
 def check_title(title):
@@ -132,10 +134,25 @@ def render_png(html_path, png_path):
         raise kit.KitError(f"안내 png 실패 — {r.stderr.strip()[:200]}")
 
 
-def build(env, article, server, out_dir=OUT_DIR, now=None):
+def existing_outputs(out_dir, base):
+    """이미 있는 같은 이름 산출물(MMDD_N호_네이버비공개.* · _본문 · _이미지N · _안내) — 순수 함수(테스트 대상)."""
+    if not os.path.isdir(out_dir):
+        return []
+    return sorted(n for n in os.listdir(out_dir)
+                  if n.startswith(base) and n[len(base):len(base) + 1] in (".", "_"))
+
+
+def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
     slug = article["slug"]
     issue = kit.issue_label(slug)
     base = kit.kit_basename(slug, "naver", now).replace("_네이버", "_네이버비공개")
+    # 🔴 같은 이름 파일이 있으면 덮어쓰기 전에 멈춘다 — 관제탑이 손으로 만든 안내(SH16 18·19·20호)를 지우지 않게.
+    #    compose 를 부르기 전에 본다(조립 기록 naver_composed_hash 도 남기지 않는다).
+    taken = existing_outputs(out_dir, base)
+    if taken and not force:
+        raise kit.KitError(f"{out_dir} 에 같은 이름 파일이 이미 있습니다 — {', '.join(taken[:4])}"
+                           + (f" 외 {len(taken) - 4}개" if len(taken) > 4 else "")
+                           + ". 덮어쓰지 않았습니다(다시 만들려면 --force)")
     body = pa.admin_post(server, env, "/api/admin/compose",
                          {"articleId": article["id"], "channel": "naver", "mode": "submission"})
     os.makedirs(out_dir, exist_ok=True)
@@ -150,7 +167,7 @@ def build(env, article, server, out_dir=OUT_DIR, now=None):
         f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(issue)} 네이버 본문 (제목 아님)</title>"
         f"<body style='max-width:860px;margin:24px auto;padding:0 16px'>\n{rich}</body>")
     st = steps(issue, title, len(imgs), base)
-    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", ""] + title_box(title) + ["", "할 일:"] + ["  " + s for s in st] + [
+    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", ""] + title_box(title, kit.naver_only(article)) + ["", "할 일:"] + ["  " + s for s in st] + [
         "", format_line(), f"사진 {len(imgs)}장: " + (", ".join(imgs) or "없음"), "", "── 본문(조립본 · 심의 제출용) ──"]
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(head) + "\n" + body["text"] + "\n")
@@ -185,11 +202,16 @@ def main():
     ap.add_argument("slug")
     ap.add_argument("--send", action="store_true", help="안내 한 장을 텔레그램으로 보낸다(기본은 준비만)")
     ap.add_argument("--base-url")
+    ap.add_argument("--force", action="store_true", help="같은 이름 산출물이 있어도 덮어쓴다(기본은 멈춤)")
     a = ap.parse_args()
     env = kit.load_env()
     art = kit.fetch_article(env, a.slug)
-    with kit.LocalServer(base_url=a.base_url, port=3944) as srv:
-        res = build(env, art, srv)
+    try:
+        with kit.LocalServer(base_url=a.base_url, port=3944) as srv:
+            res = build(env, art, srv, force=a.force)
+    except kit.KitError as e:
+        print(str(e))
+        sys.exit(1)
     print(json.dumps(res, ensure_ascii=False, indent=1))
     if a.send:
         send(env, res)
