@@ -75,6 +75,33 @@ class Steps(unittest.TestCase):
         self.assertNotIn("<li>1. ", h)
         self.assertEqual(h.count("<li>"), sum(1 for l in self.s if not l.startswith(" ")))
 
+    def test_naver_only_box_has_no_main_link_line(self):
+        self.assertIn("줄은 본진 글 링크", g.title_box("t")[-1])
+        self.assertIn("본진 글 링크 줄(📄)은 없다", g.title_box("t", naver_only=True)[-1])
+
+    def test_existing_outputs_stop_before_overwrite(self):
+        """SH16 — 관제탑이 손으로 만든 1012_18호_네이버비공개.* 가 있으면 build 가 compose 전에 멈춘다(--force 만 덮어씀)."""
+        import tempfile
+        d = tempfile.mkdtemp()
+        base = "1012_18호_네이버비공개"
+        for n in (base + ".txt", base + "_이미지1.png", base + "_안내.png", "1012_18호_네이버.zip", base + "X.txt"):
+            open(os.path.join(d, n), "w").write("x")
+        self.assertEqual(g.existing_outputs(d, base), [base + ".txt", base + "_안내.png", base + "_이미지1.png"])
+        self.assertEqual(g.existing_outputs(d, "1012_19호_네이버비공개"), [])
+
+        class Boom:
+            def __getattr__(self, k):
+                raise AssertionError("compose 서버를 부르면 안 된다")
+        old = g.kit.kit_basename
+        g.kit.kit_basename = lambda slug, ch, now=None: "1012_18호_네이버"
+        try:
+            with self.assertRaises(kit.KitError) as cm:
+                g.build({}, {"slug": "silson-claim-deadline-3year-start-point", "id": "x"}, Boom(), out_dir=d)
+            self.assertIn("덮어쓰지 않았습니다", str(cm.exception))
+        finally:
+            g.kit.kit_basename = old
+        self.assertEqual(open(os.path.join(d, base + ".txt")).read(), "x")
+
     def test_format_line(self):
         self.assertIn("configs/naver-format.json", g.format_line())
         self.assertNotIn("읽기 실패", g.format_line())

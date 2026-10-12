@@ -5,6 +5,11 @@
 
     python scripts/draft_insert.py <meta.json> <main.md> <naver.txt>          # 검사만(드라이런)
     python scripts/draft_insert.py <meta.json> <main.md> <naver.txt> --insert # 검사 통과 시 저장
+    python scripts/draft_insert.py <meta.json> - <naver.txt>                  # 네이버 단독(meta.naver_only=true)
+
+naver_only=true (SH16): 본진판 없이 네이버만 심의받는 글. main.md 자리에 「-」를 쓴다.
+           main_website_markdown 을 NULL 로 저장 — 본진판 없음이 DB 에 드러난다. pams_auto 는 본진 키트를 만들지 않고,
+           네이버 조립(compose)은 본진 링크(📄)를 붙이지 않는다. 본진은 나중에 별도 원고(별도 slug)로 쓴다.
 
 meta.json: slug · title · naver_title · category · seed_key · summary · tags[] · key_points[] · faq_json[] · verify_claims[]
            (+ raw_source_name · raw_source_url · raw_source_fulltext · naver_keyword)
@@ -41,9 +46,16 @@ def build_row(meta, main_md, naver_txt):
     miss = [k for k in REQUIRED if not meta.get(k)]
     if miss:
         raise kit.KitError("meta.json 에 빠진 값: " + ", ".join(miss))
+    main = (main_md or "").strip()
+    if meta.get("naver_only"):
+        if main:
+            raise kit.KitError("meta.naver_only=true 인데 본진 원고가 있습니다 — 네이버 단독이면 main.md 자리에 「-」")
+        main = None   # 본진판 없음 = NULL (빈 문자열이 아니라)
+    elif not main:
+        raise kit.KitError("본진 원고가 비었습니다 — 네이버 단독이면 meta.json 에 \"naver_only\": true")
     row = {k: meta[k] for k in REQUIRED}
     row.update(
-        content_type="evergreen", main_website_markdown=main_md.strip(), naver_blog_content=naver_txt.strip(),
+        content_type="evergreen", main_website_markdown=main, naver_blog_content=naver_txt.strip(),
         raw_source_name=meta.get("raw_source_name"), raw_source_url=meta.get("raw_source_url"),
         raw_source_fulltext=meta.get("raw_source_fulltext"),
         needs_human_review=True, is_main_published=False, is_naver_published=False, is_blogspot_published=False,
@@ -98,7 +110,8 @@ def main():
     env = kit.load_env()
     try:
         meta = json.load(open(a.meta, encoding="utf-8"))
-        row = build_row(meta, open(a.main_md, encoding="utf-8").read(), open(a.naver_txt, encoding="utf-8").read())
+        main_md = "" if a.main_md == "-" else open(a.main_md, encoding="utf-8").read()
+        row = build_row(meta, main_md, open(a.naver_txt, encoding="utf-8").read())
         notes, new_kw = naver_gate(row, meta_kw=meta.get("naver_keyword"))
         topic_guard.guard(env, {"slug": row["slug"], "title": row["title"], "naver_title": row["naver_title"]})
     except kit.KitError as e:
@@ -106,6 +119,8 @@ def main():
         sys.exit(1)
     print("네이버 규칙 10 통과" + ("" if not notes else " (" + " / ".join(notes) + ")"))
     print("주제 중복 검사 통과 —", row["slug"])
+    if row["main_website_markdown"] is None:
+        print("네이버 단독 — 본진판 없음(main_website_markdown = NULL · 본진 키트 안 만듦)")
     if new_kw:
         print(f"네이버 키워드 「{new_kw}」 — 장부 미등록(meta.json 값 사용)" + (" → 저장 시 장부에 적는다" if not a.insert else ""))
     if not a.insert:

@@ -138,6 +138,12 @@ def channel_locked(article, channel):
                for r in (article.get("ad_reviews") or []))
 
 
+def naver_only(article):
+    """네이버 단독 글인가 — 본진판(main_website_markdown)이 비어 있다(draft_insert meta.naver_only, SH16).
+    본진 키트를 만들지 않고, 네이버 조립본에 본진 링크(📄)를 붙이지 않는다(없는 페이지)."""
+    return not (article.get("main_website_markdown") or "").strip()
+
+
 # ── 이름·해시 ────────────────────────────────────────────────
 def issue_label(slug):
     try:

@@ -74,7 +74,7 @@ export async function POST(request: Request) {
   const { data: a } = await supabase
     .from("premium_articles")
     .select(
-      "id, title, naver_title, blogspot_title, slug, tags, naver_blog_content, blogspot_content"
+      "id, title, naver_title, blogspot_title, slug, tags, naver_blog_content, blogspot_content, main_website_markdown"
     )
     .eq("id", articleId)
     .maybeSingle();
@@ -116,9 +116,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "네이버 원고 없음" }, { status: 400 });
   }
   // 제목은 본문과 **따로** 돌려준다 — 네이버는 제목 칸과 본문 칸이 다르다.
+  // 네이버 단독 글(본진판 없음, SH16)은 본진 링크(📄 /news/<slug>)를 붙이지 않는다 — 없는 페이지다.
+  const naverOnly = !a.main_website_markdown?.trim();
   const text = toNaverText(a.naver_blog_content, {
     articleTitle: a.title,
-    slug: a.slug,
+    slug: naverOnly ? undefined : a.slug,
     tags: a.tags,
     review,
     mode: composeMode,
