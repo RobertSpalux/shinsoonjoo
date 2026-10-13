@@ -60,6 +60,40 @@ class Plan(unittest.TestCase):
         p = q.plan([it], [{"slug": C, "channel": "main", "status": "submitted"}], kits)
         self.assertEqual(p["next"], it)
 
+    def test_naver_only_not_held(self):
+        """네이버 단독 글(본진판 없음, SH16)은 before_main_ok 를 안 적어도 본진을 기다리지 않는다(SH17)."""
+        S = "silson-claim-deadline-3year-start-point"
+        it = {"slug": S, "channel": "naver"}
+        kits = {(S, "naver"): "1012_18호_네이버.zip"}
+        p = q.plan([it], [], kits)
+        self.assertIsNone(p["next"])                      # 모르면(naver_only 안 넘김) 종전대로 대기
+        self.assertEqual(p["held"], [it])
+        p = q.plan([it], [], kits, naver_only={S})
+        self.assertEqual(p["next"], it)
+        self.assertEqual(p["held"], [])
+        # 다른 글의 네이버는 여전히 본진 승인 대기
+        p = q.plan([{"slug": C, "channel": "naver"}], [], {(C, "naver"): "x.zip"}, naver_only={S})
+        self.assertIsNone(p["next"])
+
+    def test_fetch_naver_only_uses_kit_rule(self):
+        """판정은 pams_kit.naver_only(본진판 NULL/공백) 하나 — 같은 규칙을 두 벌 두지 않는다."""
+        rows = [{"slug": "a", "main_website_markdown": None}, {"slug": "b", "main_website_markdown": "  "},
+                {"slug": "c", "main_website_markdown": "본진"}]
+        seen = {}
+
+        class R:
+            def json(self):
+                return rows
+        orig = (q.requests.get, q.kit._rest)
+        q.kit._rest = lambda env: ("u", {})
+        q.requests.get = lambda url, params=None, **kw: (seen.update(params), R())[1]
+        try:
+            self.assertEqual(q.fetch_naver_only({}, ["c", "a", "b", "a"]), {"a", "b"})
+            self.assertEqual(seen["slug"], "in.(a,b,c)")
+            self.assertEqual(q.fetch_naver_only({}, []), set())
+        finally:
+            q.requests.get, q.kit._rest = orig
+
     def test_full_queue(self):
         full = [{"slug": s, "channel": "x", "status": "submitted"} for s in ("a", "b", "c")]
         p = q.plan(ORDER, full, KITS)
