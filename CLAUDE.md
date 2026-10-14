@@ -329,6 +329,8 @@
   | 블로그,카페 | blog.naver.com/insightlab-daily |
   | 기타 | threads.com/@goodfinance_sj |
   | 기타 | goodfinance.kr |
+  | 지식인 | kin.naver.com/profile/index.naver?u=1%2FTiutTkBIu3PlKaTmp%2FUoz1X38rrlIQe%2FN%2BAn39e5U%3D (계정 jx22cc) |
+  → **[정정 2026-10-14] 6번째 행(지식인)은 10/9에 `kin.naver.com/profile/insightlab-daily` 로 등록했으나 실제 프로필 주소가 아니었다. 위 주소가 정본이며 PAMS 사전등록은 수정 완료.**
   → **드롭다운에 없는 채널은 `기타`로 등록하면 된다.** 스레드·자체 홈페이지 [미확정] 해소.
   ⚠️ **[교훈] 헌법의 [미확정] 표기도 낡는다.** 실물이 이미 해소됐는데 문서만 남아 있었다.
   코드뿐 아니라 **팜스 화면도 판단 전에 실물을 본다.**
