@@ -14,5 +14,8 @@
   "simplified-disclosure-hospitalization-clinical-trial-scope": 17,
   "silson-claim-deadline-3year-start-point": 18,
   "daily-liability-nusu-own-home-tenant-landlord": 19,
-  "whole-life-cancel-refund-keep-options": 20
+  "whole-life-cancel-refund-keep-options": 20,
+  "annuity-insurance-cancel-tax-keep-options": 21,
+  "noncovered-injection-silson-treatment-purpose": 22,
+  "silson-duplicate-proportional-compensation": 23
 }

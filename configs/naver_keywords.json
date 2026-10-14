@@ -3,7 +3,10 @@
   "articles": {
     "silson-claim-deadline-3year-start-point": "실비 청구 기간",
     "daily-liability-nusu-own-home-tenant-landlord": "일배책 누수",
-    "whole-life-cancel-refund-keep-options": "종신보험 해지"
+    "whole-life-cancel-refund-keep-options": "종신보험 해지",
+    "annuity-insurance-cancel-tax-keep-options": "연금보험 해지",
+    "noncovered-injection-silson-treatment-purpose": "비급여 주사 실비",
+    "silson-duplicate-proportional-compensation": "실손 중복 가입"
   },
   "plan": [
     {"no": 1, "keyword": "건강검진 재검 고지", "title": "건강검진 재검 고지, 재검 결과가 정상이면 보험 가입 때 알려야 하나요"},
