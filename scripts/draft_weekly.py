@@ -224,6 +224,22 @@ def build_corpus(docs, k=SHINGLE):
     return sh, exact
 
 
+SOURCE_HEAD = re.compile(r"^출처$")
+
+
+def canonical_lines(text):
+    """원래 글마다 같아야 하는 줄 — 겹침 검사에서 뺀다(순수 함수).
+    ① 내부링크 URL(우리 네이버 글·본진 기사) ② 「출처」 소제목 아래 줄(대장 정본 자료명·발표일 — 글자를 바꾸면 반송).
+    2026-10-14 SH18: 같은 블로그 URL 의 숫자 조각, 같은 자료명 출처 줄이 서로 「베낀 문장」으로 잡혔다(본문 문장은 그대로 잰다)."""
+    rows = [ln.strip() for ln in (text or "").split("\n")]
+    out = list(naver_rules.INTERNAL_URL.findall(text or ""))
+    for i, ln in enumerate(rows):
+        if SOURCE_HEAD.match(ln):
+            out += [r for r in rows[i + 1:] if r]
+            break
+    return out
+
+
 def overlap(text, corpus, exempt=(), min_len=20, ratio=OVERLAP_RATIO, k=SHINGLE):
     """이미 쓴 원고와 같은 문장(또는 조각이 ratio 이상 겹치는 문장) → [{sentence, source, ratio}].
     유의문구·소제목처럼 원래 같아야 하는 문장은 exempt 로 뺀다."""
@@ -424,7 +440,8 @@ def judge(draft, topic, cfg, corpus, env=None, use_ts=True, tmp_dir=None, today=
     stages.append({"name": "네이버 규칙 10", "pass": not (f1 + f2), "issues": f1 + f2, "detail": " / ".join(n1 + n2)})
 
     exempt = notices + required + cfg["internal_links"]
-    ov = overlap(draft["naver"], corpus, exempt) + overlap(draft["main"], corpus, exempt)
+    ov = (overlap(draft["naver"], corpus, exempt + canonical_lines(draft["naver"]))
+          + overlap(draft["main"], corpus, exempt + canonical_lines(draft["main"])))
     stages.append({"name": "문장 겹침(게시·접수·지난 초안)", "pass": not ov, "issues": ov})
 
     if env is not None:

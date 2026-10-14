@@ -155,6 +155,28 @@ class OverlapTest(unittest.TestCase):
         c = dw.build_corpus([("DB x naver", self.PUBLISHED + "\n" + n)])
         self.assertEqual(dw.overlap("종신보험 특약은 만기가 따로 정해진 경우가 많습니다.\n" + n, c, exempt=[n]), [])
 
+    # SH18(2026-10-14): 같은 블로그 URL 숫자 조각·같은 자료명 출처 줄이 「베낀 문장」으로 잡혔다
+    OTHER = ("앞선 글입니다.\nhttps://blog.naver.com/insightlab-daily/224439282318\n\n출처\n"
+             "1. 금융감독원, 주요 민원사례로 알아보는 소비자 유의사항 - 보험계약대출 관련 유의사항 -, 2025, 2025.3.31 — 3쪽")
+
+    def test_canonical_lines_url_and_sources(self):
+        got = dw.canonical_lines("본문입니다.\nhttps://blog.naver.com/insightlab-daily/224433950154\n\n출처\n1. 가, 나, 2026, 2026.1.1\n")
+        self.assertIn("https://blog.naver.com/insightlab-daily/224433950154", got)
+        self.assertIn("1. 가, 나, 2026, 2026.1.1", got)
+        self.assertNotIn("본문입니다.", got)
+
+    def test_internal_url_and_source_line_not_overlap(self):
+        c = dw.build_corpus([("DB y naver", self.OTHER)])
+        new = ("새 글 본문입니다.\nhttps://blog.naver.com/insightlab-daily/224433950154\n\n출처\n"
+               "1. 금융감독원, 주요 민원사례로 알아보는 소비자 유의사항 - 보험계약대출 관련 유의사항 -, 2025, 2025.3.31 — 1쪽")
+        self.assertTrue(dw.overlap(new, c))                                   # 예외 없이 재면 잡힌다(종전 동작)
+        self.assertEqual(dw.overlap(new, c, exempt=dw.canonical_lines(new)), [])
+
+    def test_body_copy_still_blocks_with_canonical_exempt(self):
+        c = dw.build_corpus([("DB x naver", self.PUBLISHED)])
+        new = "부담보 기간이 끝났는데도 해제 신청을 하지 않아 그대로 남아 있는 경우가 있습니다.\n\n출처\n1. 가, 나, 2026, 2026.1.1"
+        self.assertTrue(dw.overlap(new, c, exempt=dw.canonical_lines(new)))  # 본문 문장은 그대로 잰다
+
 
 class TsVerdictTest(unittest.TestCase):
     """check_draft.mts 결과 해석 — 근거 위반이 [확인: ___] 칸 때문뿐이면 초안은 남기고, 나머지는 막는다."""
