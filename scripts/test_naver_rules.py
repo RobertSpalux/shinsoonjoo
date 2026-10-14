@@ -24,10 +24,15 @@ LINK_C = "https://m.blog.naver.com/insightlab-daily/224400000002"
 LINK_D = "https://goodfinance.kr/news/daily-life-liability-deductible-nusu"
 
 
-def body(n_chars=2800, faq=3, summary=True, links=(LINK_A, LINK_B), faq_head=None):
+TABLE = ["[표1] 세대별로 들어 있는 자리", "구분 | 자리 | 근거", "3·4세대 | 특약으로 분리 | 표준약관"]
+
+
+def body(n_chars=2800, faq=3, summary=True, links=(LINK_A, LINK_B), faq_head=None, table=TABLE, images=5):
     lines = ["상담을 하다 보면 같은 질문을 하시는 분이 많습니다."]
-    filler = "가" * (n_chars - nr.body_len("\n".join(lines)) - 200)
+    media = list(table) + [f"[이미지{'①②③④⑤⑥⑦⑧⑨⑩'[i]}]" for i in range(images)]
+    filler = "가" * (n_chars - nr.body_len("\n".join(lines + media)) - 200)
     lines.append(filler)
+    lines += media
     lines.append(faq_head or f"자주 묻는 질문 {faq}가지")
     for i in range(faq):
         lines += [f"Q. 질문 {i + 1}인가요", "A. 답입니다."]
@@ -130,6 +135,47 @@ class BodyTest(unittest.TestCase):
         self.assertTrue(any("넘음" in x for x in n), n)
 
 
+class MediaTest(unittest.TestCase):
+    """규칙 5(표 1개 이상)·규칙 6(이미지 5~7) — TR3 결론 2(2026-10-14)."""
+
+    def test_no_table_fails(self):
+        f, _ = nr.check_body(body(table=()))
+        self.assertTrue(any("표 0개" in x for x in f), f)
+
+    def test_table_head_without_rows_not_counted(self):
+        # 「[표1]」 줄만 있고 「|」 줄이 없으면 표가 아니다(그림으로 넣은 표 · ▶ 줄로 푼 표)
+        f, _ = nr.check_body(body(table=["[표1] 제목만", "▶ 경우 · 값"]))
+        self.assertTrue(any("표 0개" in x and "모자라" in x for x in f), f)
+
+    def test_header_only_table_not_counted(self):
+        self.assertEqual(nr.count_tables("[표1] 제목\n구분 | 값\n\n본문"), 0)
+        self.assertEqual(nr.count_tables("[표1] 제목\n구분 | 값\n가 | 나\n\n[표2] 둘\nA | B\nC | D"), 2)
+
+    def test_image_bounds(self):
+        for n, ok in ((4, False), (5, True), (7, True), (8, False)):
+            f, _ = nr.check_body(body(images=n))
+            self.assertEqual(not any("이미지 자리" in x for x in f), ok, (n, f))
+
+    def test_inline_image_mention_not_counted(self):
+        # 문장 속 「[이미지①]」 언급·「[이미지①] 설명」 은 자리표시가 아니다 — 단독 줄만 센다
+        self.assertEqual(nr.count_images("본문 [이미지①] 가운데\n[이미지②] 설명\n[이미지 3]\n [이미지④] \n[이미지]"), 3)
+
+    def test_media_skippable(self):
+        f, _ = nr.check_body(body(table=(), images=0), media=False)
+        self.assertEqual(f, [], f)
+
+    def test_real_drafts_pass_media(self):
+        # 21·22·23호 등 저장소의 네이버 원고는 TR3 실측대로 표 1 · 이미지 5 — 새 검사가 이들을 막으면 검사가 틀린 것
+        root = os.path.join(nr.ROOT, "assets", "naver")
+        for slug in ("annuity-insurance-cancel-tax-keep-options", "noncovered-injection-silson-treatment-purpose",
+                     "silson-duplicate-proportional-compensation"):
+            p = os.path.join(root, slug, "naver.txt")
+            with open(p, encoding="utf-8") as fp:
+                text = fp.read()
+            self.assertEqual(nr.check_media(text), [], slug)
+            self.assertEqual((nr.count_tables(text), nr.count_images(text)), (1, 5), slug)
+
+
 class ArticleTest(unittest.TestCase):
     def test_no_naver_skips(self):
         ok, d = nr.check_article({"slug": "x", "naver_title": "", "naver_blog_content": ""})
@@ -150,6 +196,23 @@ class ArticleTest(unittest.TestCase):
                "naver_blog_content": body()}
         ok, d = nr.check_article(art, data)
         self.assertTrue(ok, d)
+
+    def test_media_blocks_new_draft(self):
+        data = {"articles": {"x": "부담보 해제"}, "plan": []}
+        art = {"slug": "x", "naver_title": "부담보 해제 후 그 부위로 병원에 가면 실손에서 바로 보장되나요",
+               "naver_blog_content": body(images=3), "created_at": "2026-10-15T01:00:00+00:00"}
+        ok, d = nr.check_article(art, data)
+        self.assertFalse(ok)
+        self.assertIn("이미지 자리 3개", d)
+
+    def test_media_is_note_for_older_draft(self):
+        # MEDIA_RULES_FROM 이전 초안(18~23호 등)은 표·이미지로 새로 막지 않는다 — 메모만
+        data = {"articles": {"x": "부담보 해제"}, "plan": []}
+        art = {"slug": "x", "naver_title": "부담보 해제 후 그 부위로 병원에 가면 실손에서 바로 보장되나요",
+               "naver_blog_content": body(table=()), "created_at": "2026-10-12T01:00:00+00:00"}
+        ok, d = nr.check_article(art, data)
+        self.assertTrue(ok, d)
+        self.assertIn("이전 초안이라 경고", d)
 
 
 class PreflightWiringTest(unittest.TestCase):
@@ -222,6 +285,11 @@ class DraftGateTest(unittest.TestCase):
                 got = json.load(fp)
         self.assertEqual(got["articles"], {"a": "가", "y": "부담보 해제"})
         self.assertEqual(got["plan"], [{"no": 1}])
+
+    def test_no_table_blocks(self):
+        with self.assertRaises(self.di.kit.KitError) as c:
+            self.di.naver_gate({**self.row, "naver_blog_content": body(table=())}, self.data)
+        self.assertIn("표 0개", str(c.exception))
 
     def test_short_body_blocks(self):
         with self.assertRaises(self.di.kit.KitError) as c:
