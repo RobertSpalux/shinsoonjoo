@@ -102,6 +102,24 @@ class Steps(unittest.TestCase):
             g.kit.kit_basename = old
         self.assertEqual(open(os.path.join(d, base + ".txt")).read(), "x")
 
+    def test_heading_gate(self):
+        """NF1 — 24호 html 이 24px 소제목 0개로 조용히 나갔다. 원고 소제목보다 적으면 멈춘다."""
+        fix = os.path.join(kit.ROOT, "src", "lib", "__fixtures__", "naver-rich")
+        for no in ("22", "23"):
+            text = open(os.path.join(fix, no + ".txt"), encoding="utf-8").read()
+            gold = open(os.path.join(fix, no + ".html"), encoding="utf-8").read()
+            heads = g.source_headings(text)
+            self.assertEqual(len(heads), gold.count("font-size:24px"), heads)   # 손작업 정답본과 같은 수
+            self.assertIn("알아두실 용어 4가지", heads)                          # 밑에 본문이 붙어도 소제목
+            self.assertEqual(g.check_rich_headings(text, gold), len(heads))
+        text = open(os.path.join(fix, "24.txt"), encoding="utf-8").read()
+        self.assertEqual(len(g.source_headings(text)), 10)
+        self.assertNotIn("같은 문장 뒤에 \"다만\"이 붙습니다.", g.source_headings(text))
+        old = '<p style="font-size:19px;">알아두실 용어 4가지</p>'               # 고치기 전 24호 html 모양
+        with self.assertRaises(kit.KitError) as cm:
+            g.check_rich_headings(text, old)
+        self.assertIn("산출물을 만들지 않았습니다", str(cm.exception))
+
     def test_format_line(self):
         self.assertIn("configs/naver-format.json", g.format_line())
         self.assertNotIn("읽기 실패", g.format_line())
