@@ -752,6 +752,8 @@ def check_naver_osmu_parity(article):
     text = article.get("naver_blog_content") or ""
     if not text:
         return True, "네이버 원고 없음 — 검사 생략"
+    if "naver" in frozen_channels(article):   # 접수·승인분은 원안 — 복사 사고를 막을 단계가 지났다(MN1b, 18호 본진판)
+        return True, "네이버 접수·승인분 — 원안 수정 불가라 검사 생략"
     fails = []
     if "[필수안내사항]" in text or "심의필 제" in text:
         fails.append("필수안내사항이 원고에 박혀 있다 — 복사 시 osmu 가 붙이므로 두 번 들어간다")
@@ -817,6 +819,10 @@ def check_naver_format(article):
     text = article.get("naver_blog_content") or ""
     if not text:
         return True, "네이버 원고 없음 — 검사 생략"
+    # 네이버가 접수·승인된 글은 원안 수정 불가 — check_naver_rules 와 같이 건너뛴다(MN1b 2026-10-15:
+    #   23호 네이버 승인본의 출처 줄이 「항목 — 설명」으로 잡혀 본진판 preflight 가 영구 실패했다).
+    if "naver" in frozen_channels(article):
+        return True, "네이버 접수·승인분 — 원안 수정 불가라 검사 생략"
     fails = []
     rows = [ln.strip() for ln in text.split(chr(10))]
 
