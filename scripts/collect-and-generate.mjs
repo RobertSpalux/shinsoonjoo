@@ -11,6 +11,7 @@
  */
 import Parser from "rss-parser";
 import { createClient } from "@supabase/supabase-js";
+import { waitFactoryJob } from "./factory-job.mjs";
 
 const {
   NEXT_PUBLIC_SUPABASE_URL,
@@ -564,8 +565,12 @@ async function generateArticle(item) {
       // 발행 통제: 생성분은 항상 초안(route.ts가 is_main_published=false 고정). 발행은 /admin에서만.
     }),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(`generate 실패(${res.status}): ${json.error ?? "unknown"}`);
+  const first = await res.json();
+  // API2 — 서버는 대기열에 넣고 202 를 준다. 로컬 PC 러너가 생성하면 종전과 같은 응답을 받는다.
+  const waited = await waitFactoryJob(SITE_URL, FACTORY_SECRET, res, first);
+  const status = waited?.status ?? res.status;
+  const json = waited?.json ?? first;
+  if (status < 200 || status >= 300) throw new Error(`generate 실패(${status}): ${json.error ?? "unknown"}`);
   // carousel_warning: 카드 검증 가드(route.ts)가 재시도 후에도 실패하면 사유를 실어 보냄
   // high_risk_topics / review_reasons: 고위험 주제·사람 검수 게이트 관측용
   return {
