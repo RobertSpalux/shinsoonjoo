@@ -22,3 +22,13 @@ paths = [
   '''^configs/sources\.json$''',
   '''^scripts/seeds/evergreen-seeds\.mjs$''',
 ]
+
+# 오탐 — 네이버 meta.json 의 "seed_key": "csection-…" 는 글 slug 이지 API 키가 아니다.
+#   2026-10-15 #84 CI 에서 1건(assets/naver/csection-silson-childbirth-280day/meta.json).
+[[allowlists]]
+description = "seed_key 는 글 slug"
+targetRules = ["generic-api-key"]
+regexTarget = "line"
+regexes = [
+  '''"seed_key":\s*"[a-z0-9-]+"''',
+]
