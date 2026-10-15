@@ -90,8 +90,8 @@ def steps(issue, title, n_images, base):
         f"3. 본문: {base}.html 을 크롬으로 열어 전체 선택(Ctrl+A) → 복사 → 네이버 본문에 붙여 넣는다. "
         "html 안에는 제목이 없다 — 첫 사진 아래 따옴표 문장은 본문 첫 줄이니 지우지 않는다.",
         "   · 서식(글자 크기·굵기)이 같이 들어온다. 색은 지정하지 않는다.",
-        f"4. 사진 {n_images}장: 본문의 [이미지①][이미지②][이미지③] 자리에 {base}_이미지1·2·3 을 순서대로 넣고 "
-        "자리표시 줄([이미지…])만 지운다 — 앞뒤 문장은 건드리지 않는다."
+        f"4. 사진 {n_images}장: html 안 [이미지N] 자리에 {base}_이미지N 이 이미 들어 있다(마지막 진단 카드는 링크 포함). "
+        "붙여 넣은 뒤 빠진 사진이 있으면 그 자리에 넣고 남아 있는 자리표시 줄([이미지…])만 지운다 — 앞뒤 문장은 건드리지 않는다."
         if n_images else "4. 사진 없음 — [이미지] 자리표시 줄만 지운다.",
         "5. 필수안내사항의 심의필 줄은 공란(제_____호) 그대로 둔다 — 심의 전이다.",
         "6. 공개 설정 = 「비공개」 → 발행.",
@@ -134,6 +134,38 @@ def render_png(html_path, png_path):
         raise kit.KitError(f"안내 png 실패 — {r.stderr.strip()[:200]}")
 
 
+NOTICE_RULE = "─────────────"
+_HEAD_SKIP = re.compile(r"^([-•·▶>|📄#\[\"“'‘「─]|\d+\.\s|[QA]\.\s|https?://)")
+
+
+def source_headings(text):
+    """원고 소제목 — 빈 줄 뒤 블록의 첫 줄 중 소제목 모양(40자 이하·문장부호/「다」로 안 끝남). 순수 함수(테스트 대상).
+
+    naver-rich.ts 와 **따로** 센다 — 같은 함수로 세면 변환기가 틀려도 게이트가 같이 틀린다.
+    """
+    out, prev_blank = [], True
+    for raw in text.split(NOTICE_RULE)[0].split("\n"):
+        ln = raw.strip()
+        if not ln:
+            prev_blank = True
+            continue
+        if (prev_blank and len(ln) <= 40 and not _HEAD_SKIP.match(ln) and not re.search(r"[.?!다]$", ln)
+                and " · " not in ln):
+            out.append(ln)
+        prev_blank = False
+    return out
+
+
+def check_rich_headings(text, rich):
+    """🔴 24px 소제목이 원고 소제목보다 적으면 멈춘다(NF1 — 24호 html 이 소제목 0개로 조용히 나갔다)."""
+    want = source_headings(text)
+    got = rich.count("font-size:24px")
+    if got < len(want):
+        raise kit.KitError(f"네이버 서식 html 소제목 {got}개 < 원고 소제목 {len(want)}개 — 산출물을 만들지 않았습니다"
+                           f" (원고 소제목: {' / '.join(want[:12])})")
+    return got
+
+
 def existing_outputs(out_dir, base):
     """이미 있는 같은 이름 산출물(MMDD_N호_네이버비공개.* · _본문 · _이미지N · _안내) — 순수 함수(테스트 대상)."""
     if not os.path.isdir(out_dir):
@@ -160,6 +192,16 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
     body_path = os.path.join(out_dir, base + "_본문.txt")
     open(body_path, "w", encoding="utf-8", newline="\n").write(body["text"])
     rich = pa.rich_html(body_path, imgs)
+    try:
+        check_rich_headings(body["text"], rich)
+    except kit.KitError:
+        # 틀린 파일을 남기지 않는다 — 방금 쓴 본문·사진을 거둔다
+        for n in [base + "_본문.txt", *imgs]:
+            try:
+                os.remove(os.path.join(out_dir, n))
+            except OSError:
+                pass
+        raise
     html_path = os.path.join(out_dir, base + ".html")
     title = check_title(body["title"])
     # 탭 이름에도 제목을 쓰지 않는다 — 붙여 넣을 제목은 txt·png 맨 위 상자 하나뿐
