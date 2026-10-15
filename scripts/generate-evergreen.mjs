@@ -19,6 +19,7 @@ import { pathToFileURL } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { EVERGREEN_SEEDS } from "./seeds/evergreen-seeds.mjs";
 import { buildAnecdoteSection } from "./anecdote-bank.mjs";
+import { waitFactoryJob } from "./factory-job.mjs";
 
 const {
   NEXT_PUBLIC_SUPABASE_URL,
@@ -360,9 +361,13 @@ async function generateEvergreen(seed, content, sourceFulltext) {
     err.status = res.status;
     throw err;
   }
-  if (!res.ok) {
-    const err = new Error(`generate 실패(${res.status}): ${json.error ?? "unknown"}`);
-    err.status = res.status;
+  // API2 — 서버는 대기열에 넣고 202 를 준다. 로컬 PC 러너가 생성하면 종전과 같은 응답을 받는다.
+  const waited = await waitFactoryJob(SITE_URL, FACTORY_SECRET, res, json);
+  const status = waited?.status ?? res.status;
+  if (waited) json = waited.json;
+  if (status < 200 || status >= 300) {
+    const err = new Error(`generate 실패(${status}): ${json.error ?? "unknown"}`);
+    err.status = status;
     throw err;
   }
   return json; // { article, carousel_warning?, markdown_warning?, needs_human_review?, review_reasons?, high_risk_topics?, usage }

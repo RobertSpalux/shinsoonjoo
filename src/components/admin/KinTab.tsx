@@ -50,6 +50,40 @@ async function updateKinRow(id: string, fields: Record<string, unknown>) {
   return res.ok;
 }
 
+const POLL_MS = 4_000;
+/** queued 로 이만큼 남아 있으면 로컬 러너(PC)가 꺼진 것으로 본다 — src/lib/ai-jobs.ts RUNNER_OFFLINE_MS 와 같다 */
+const OFFLINE_MS = 60_000;
+/** 러너가 집어 간 뒤 이만큼 지나도 끝나지 않으면 기다리지 않는다(작업은 계속 돈다) */
+const RUNNING_MAX_MS = 15 * 60_000;
+
+type JobOutcome =
+  | { kind: "done"; answer: KinAnswer }
+  | { kind: "error"; message: string }
+  | { kind: "offline" };
+
+async function waitForJob(jobId: string): Promise<JobOutcome> {
+  const started = Date.now();
+  for (;;) {
+    await new Promise((r) => setTimeout(r, POLL_MS));
+    const res = await fetch(`/api/admin/ai-jobs/${jobId}`, { cache: "no-store" }).catch(() => null);
+    const job = res?.ok ? await res.json().catch(() => null) : null;
+    const elapsed = Date.now() - started;
+    if (job?.status === "done") {
+      const answer = job.result?.answer as KinAnswer | undefined;
+      return answer
+        ? { kind: "done", answer }
+        : { kind: "error", message: job.result?.error ?? "초안 생성 실패" };
+    }
+    if (job?.status === "error") {
+      return { kind: "error", message: job.error ?? job.result?.error ?? "초안 생성 실패" };
+    }
+    if ((!job || job.status === "queued") && elapsed >= OFFLINE_MS) return { kind: "offline" };
+    if (elapsed >= RUNNING_MAX_MS) {
+      return { kind: "error", message: "생성이 오래 걸립니다 — 잠시 후 새로고침해 목록을 확인하세요" };
+    }
+  }
+}
+
 export default function KinTab({
   answers,
   setAnswers,
@@ -101,11 +135,22 @@ export default function KinTab({
         }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok) {
+      if (!res.ok || !json.job_id) {
         onToast(json.error ?? "초안 생성 실패");
         return;
       }
-      setAnswers((prev) => [json.answer as KinAnswer, ...prev]);
+      // API2 — 생성은 로컬 PC 러너가 한다. 대기열 작업 상태를 폴링해 결과를 받는다.
+      const outcome = await waitForJob(json.job_id as string);
+      if (outcome.kind === "offline") {
+        setQUrl(""); setQTitle(""); setQBody(""); setArticleId(""); setArticleUrl("");
+        onToast("PC 꺼짐 — 대기열에 남음 (PC가 켜지면 초안이 목록에 생깁니다)");
+        return;
+      }
+      if (outcome.kind === "error") {
+        onToast(outcome.message);
+        return;
+      }
+      setAnswers((prev) => [outcome.answer, ...prev]);
       setQUrl(""); setQTitle(""); setQBody(""); setArticleId(""); setArticleUrl("");
       onToast("초안 생성 완료 — 검수 후 직접 게시하세요");
     } catch {
