@@ -104,6 +104,18 @@ def pick(candidates, state, today, n):
     return out
 
 
+def in_scope(candidates):
+    """키트를 만들기 직전 한 번 더 — 보험 질문이 아니면 뺀다(KQ1: 「부동산 중개인 고지의무위반」이 심의까지 갔다).
+    → (남길 후보, [(뺀 후보, 사유)]). 분류는 질문 URL 의 dirId 로 본다."""
+    keep, off = [], []
+    for c in candidates:
+        m = kin_harvest.DIR_RX.search(c.get("url") or "")
+        why = kin_harvest.scope_exclusion(c.get("title"), f"{c.get('title') or ''} {c.get('summary') or ''}",
+                                          m.group(1) if m else "")
+        (off.append((c, why)) if why else keep.append(c))
+    return keep, off
+
+
 def special_note(topic):
     """특이사항 칸 — 100바이트 이내. 넘으면 접수가 통째로 실패한다."""
     s = f"지식iN 답변 · {topic} · 링크 없음 · 증빙 해당 없음"
@@ -620,10 +632,12 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
     today = now.date().isoformat()
     state = load_state(state_path)
     res = (harvest_fn or (lambda: kin_harvest.collect(env, now=now)))()
-    chosen = pick(res["candidates"], state, today, n)
+    scoped, off = in_scope(res["candidates"])
+    chosen = pick(scoped, state, today, n)
     expiring, exp_line = expiry_check(today, expiring_fn or (lambda d: count_expiring(env, d)))
     lines = [f"지식iN 수집: 질문 {res['seen_total']} · 후보 {len(res['candidates'])} · 제외 {len(res['excluded'])}"
              + (" · 첫 실행 기준선" if res.get("baseline") else "") + f" · 오늘 만들 것 {len(chosen)}", exp_line]
+    lines += [f"⛔ 보험 무관 — {c['title'][:40]} ({why})" for c, why in off]
     if make_fn is None:
         def make_fn(cs):
             return make_answers(cs, history=(history_fn or (lambda: load_history(env)))(), today=today)

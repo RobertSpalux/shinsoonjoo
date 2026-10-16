@@ -69,11 +69,18 @@ PII_RE = re.compile(
 # 「고지」「청구」 같은 검색어는 법률·노무 질문까지 끌고 온다(2026-10-09 첫 실수집: 후보 91건 중 다수가 폭행·상속·실업급여).
 # 지식iN 분류 40103…(경제 > 금융 > 보험 — 실측 link 의 dirId 401030201·401030203·4010302) 이거나 제목에 보험 낱말이 있어야 한다.
 INSURANCE_DIR = "40103"
-INSURANCE_TITLE_RE = re.compile(r"보험|(?<!과)실비|실손|부담보(?!증)|고지\s*(?:의무|사항)|(?:가입|상해|병력|질병)\s*(?:시\s*)?고지"
+ALLOW_DIRS = (INSURANCE_DIR,)
+# 「고지의무」「고지사항」 단독은 제목 신호로 치지 않는다 — 부동산 중개·매매(공인중개사 고지의무)에도 쓰는 낱말이다
+# (KQ1 2026-10-16: 「부동산 중개인 고지의무위반」 dirId=60103 이 이 낱말 하나로 통과해 심의까지 받았다).
+INSURANCE_TITLE_RE = re.compile(r"보험|(?<!과)실비|실손|부담보(?!증)|(?:가입|상해|병력|질병)\s*(?:시\s*)?고지"
                                 r"|알릴\s*의무|간병인?보험|간병인\s*가입|유병자|간편\s*심사|특약")
-# 법률(602…)·노무(610…)·대출(402…) 분류는 제목에 **우리 소재 낱말**(CORE_RE)이 있어야 남긴다
-# (「간병인 낙상 보상책임」「부담보증」「4대보험 상실」「전세대출 보험」 — 2026-10-09 실수집에서 섞여 들어온 것).
-OUTSIDE_DIRS = ("602", "610", "402")
+# 보험 맥락 낱말 — 제목+본문 조각에 하나는 있어야 한다. 「고지」「알릴 의무」는 넣지 않는다(다른 분야와 겹친다).
+# 조각의 「실비」는 「실제 비용」 뜻이 많아 넣지 않는다(제목의 「실비」는 INSURANCE_TITLE_RE 가 본다).
+CONTEXT_RE = re.compile(r"보험|실손|보장|담보|특약|약관|청구|가입|해지|납입|유병자|간편\s*심사")
+# 부동산(601…)·법률(602…)·노무(610…)·대출(402…) 분류는 제목에 **우리 소재 낱말**(CORE_RE)이 있어야 남긴다
+# (「간병인 낙상 보상책임」「부담보증」「4대보험 상실」「전세대출 보험」 — 2026-10-09 실수집에서 섞여 들어온 것,
+#  「부동산 중개인 고지의무위반」 — 2026-10-16 KQ1).
+OUTSIDE_DIRS = ("601", "602", "610", "402")
 CORE_RE = re.compile(r"(?<!과)실비|실손|부담보(?!증)|고지\s*의무|알릴\s*의무|간병인?보험|유병자|간편\s*심사|리모델링")
 # 우리 소재가 아닌 보험(공적보험·자동차·펫·급여) — 우리 낱말이 함께 있으면 남긴다(자동차 사고는 그래도 뺀다)
 OFF_TOPIC_RE = re.compile(r"건강보험\s*(?:료|지역|직장|피부양)|국민연금|고용보험|산재보험|4대\s*보험|자동차보험|대인\s*접수|대물"
@@ -183,11 +190,26 @@ def group_items(items_by_topic):
     return out
 
 
+def scope_exclusion(title, text, dir_id):
+    """보험 질문인지 두 겹으로 본다 — 분류(허용·차단 dirId)와 제목, 그리고 제목+조각의 보험 맥락 낱말.
+    제외 사유 또는 None. kin_pipeline 이 키트를 만들기 직전에 한 번 더 부른다."""
+    d, title = str(dir_id or ""), title or ""
+    allowed = d.startswith(ALLOW_DIRS)
+    if not (allowed or INSURANCE_TITLE_RE.search(title)):
+        return "보험 질문 아님(분류·제목)"
+    if not (CONTEXT_RE.search(text or "") or re.search(r"(?<!과)실비", title)
+            or (allowed and SIGNAL_RE.search(text or ""))):   # 보험 분류 안에서는 「고지의무」도 보험 뜻이다
+        return "보험 맥락 낱말 없음(겹치는 낱말 단독)"
+    if d.startswith(OUTSIDE_DIRS) and not (CORE_RE.search(title) and re.search(r"보험|(?<!과)실비|실손", title)):
+        return "부동산·법률·노무·대출 분류(제목에 보험·우리 소재 낱말 없음)"
+    return None
+
+
 def exclusion(q, insurers=(), dicts=None):
     """제외 사유(문자열) 또는 None. dicts = disease_dict() 결과(없으면 읽는다)."""
     text = q["title"] + " " + " ".join(q["snippets"])
     d, title = str(q.get("dirId") or ""), q["title"]
-    if not (d.startswith(INSURANCE_DIR) or INSURANCE_TITLE_RE.search(title)):
+    if not (d.startswith(ALLOW_DIRS) or INSURANCE_TITLE_RE.search(title)):
         return "보험 질문 아님(분류·제목)"
     if DEADLINE_RE.search(text):
         return "법률(시효·기한) — 사실 검증 불가"
@@ -196,8 +218,9 @@ def exclusion(q, insurers=(), dicts=None):
         return f"법률 질문({legal.group(0)}) — 제목에 보험 신호어 없음"
     if not (INSURANCE_TITLE_RE.search(title) or SIGNAL_RE.search(text)):
         return "보험 분류지만 제목·본문에 보험 신호어 없음"
-    if d.startswith(OUTSIDE_DIRS) and not (CORE_RE.search(title) and re.search(r"보험|(?<!과)실비|실손", title)):
-        return "법률·노무·대출 분류(제목에 보험·우리 소재 낱말 없음)"
+    scope = scope_exclusion(title, text, d)   # 맥락 낱말 · 차단 분류
+    if scope:
+        return scope
     if OFF_TOPIC_RE.search(title) and not (CORE_RE.search(title) and not re.search(r"대인|대물|자동차", title)):
         return f"우리 소재 아님({OFF_TOPIC_RE.search(title).group(0)})"
     dz = title_disease(title, dicts)
