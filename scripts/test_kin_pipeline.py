@@ -92,6 +92,46 @@ class Harvest(unittest.TestCase):
         self.assertIn("특정 회사", kh.exclusion({**base, "snippets": ["삼성화재 가입"]}, ["삼성화재"]))
         self.assertIn("개인정보", kh.exclusion({**base, "snippets": ["연락 010-1234-5678"]}))
 
+    # KQ1 회귀 — 2026-10-14~16 키트로 만든 실제 질문(kin_state.json 의 제목·요약·dirId 그대로).
+    # 495567566 은 「고지의무」 낱말 하나로 부동산(60103) 질문이 통과해 심의까지 받았다.
+    KQ1_OFF = ("60103", "부동산 중개인 고지의무위반",
+               "일단 방향만 말씀드리면, 공인중개사는 거래에 중요한 영향을 미치는 사항을 사전에 알려야 할 고지의무가 있어요. "
+               "집 앞 도로가 국유지고 이용료가 발생한다는 건 매수 결정에 분명히 영향을 주는 중요한 정보라서, 이걸 알고도 안...")
+    KQ1_ON = [
+        ("401030201", "보험 최종납입월 및 납입횟수 관련", "1세대 실비이고 최종납입월이 24년06월이고 납입횟수 180회(총 180회)라고 되어 있습니다."),
+        ("709", "실비 가입 후 언제쯤 병원에 가도 괜찮을까요?",
+         "하지만 보험사의 '계약 전 알릴 의무(고지의무)'와 '실비 보상 약관'의 냉혹한 구조를 모르고 가입 직후 병원에..."),
+        ("401030201", "오토바이 과실100 자기신체사고",
+         "또한 운전자보험이나 개인 실손·상해후유장해 보험이 있다면 가입 조건(이륜차 부담보 여부 등)에 따라"),
+        ("60803", "국밈보험공단 기타 징수금", "② 건강보험공단 관할 지사에 '이의신청서' 공식 제출: - 환수 고지서를 보낸 공단 담당자에게"),
+        ("4010302", "양압기 구매", "건강체보험의 경우에는 최근 5년 이내의 입원력을 묻기 때문에 고지를 해야만 하고"),
+        ("70112", "노안 늦추는 안약이나 레이저 치료받으면 실비 청구 가능한....",
+         "노안 늦추는 안약이나 레이저 치료받으면 제가 개인적으로 든 실손 의료비(실비) 보험으로 청구 가능한가요?"),
+        ("4010302", "보험금 청구를 포기하고 싶다고 했는데 보류 처리됐습니다. ....",
+         "오토바이 부담보 특약 부가 등 계약 변경을 점검해 두셔야 합니다."),
+        ("4010302", "티빙 보상 중 피싱 안전보험은 따로 가입해야 하나요?", "현재 가입한 보험의 보장 내용 분석"),
+    ]
+
+    def test_kq1_insurance_scope(self):
+        dicts = kh.disease_dict()    # 실수집과 같은 병명 사전
+        d, title, snip = self.KQ1_OFF
+        q = {"title": title, "snippets": [snip], "answers_seen": 0, "dirId": d}
+        self.assertIsNotNone(kh.exclusion(q, dicts=dicts))
+        self.assertIsNotNone(kh.scope_exclusion(title, title + " " + snip, d))
+        # 「고지의무」 단독으로는 분류가 어디든 통과하지 않는다 — 차단 분류는 낱말을 보태도 막는다
+        self.assertIsNotNone(kh.scope_exclusion("고지의무 위반 문의", "고지의무 위반", "709"))
+        self.assertIsNotNone(kh.scope_exclusion(title, title + " 중개사 보증보험 청구 절차", d))
+        for d, title, snip in self.KQ1_ON:
+            q = {"title": title, "snippets": [snip], "answers_seen": 0, "dirId": d}
+            self.assertIsNone(kh.exclusion(q, dicts=dicts), title)
+        # kin_pipeline 의 키트 직전 재확인 — 같은 판정
+        url = "https://kin.naver.com/qna/detail.naver?dirId={}&docId={}"
+        cands = [{"url": url.format(d, i), "title": t, "summary": s, "topic": "고지의무"}
+                 for i, (d, t, s) in enumerate([self.KQ1_OFF] + self.KQ1_ON)]
+        keep, off = kp.in_scope(cands)
+        self.assertEqual([c["title"] for c, _ in off], ["부동산 중개인 고지의무위반"])
+        self.assertEqual(len(keep), 8)
+
     def test_ledger_baseline_then_fresh_then_stale(self):
         led, now = {}, datetime(2026, 10, 9, 9, tzinfo=KST)
         q1 = {"1": {"docId": "1", "title": "t", "snippets": [], "topics": ["부담보"], "answers_seen": 0, "url": "u1"}}
@@ -209,7 +249,7 @@ class Flow(unittest.TestCase):
                 "candidates": [{"url": "https://kin.naver.com/qna/detail.naver?dirId=1&docId=11", "topic": "부담보",
                                 "title": "부담보 질문", "summary": "요약"},
                                {"url": "https://kin.naver.com/qna/detail.naver?dirId=1&docId=12", "topic": "간병",
-                                "title": "간병 질문", "summary": "요약"}]}
+                                "title": "간병보험 질문", "summary": "요약"}]}
 
     def test_run_approve_posted_weekly(self):
         now = datetime(2026, 10, 9, 9, tzinfo=KST)
