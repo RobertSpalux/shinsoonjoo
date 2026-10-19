@@ -2,9 +2,11 @@
  * 지식iN 답변 본문 초안 — scripts/kin_pipeline.py 가 부른다(직접 쓰지 않는다).
  *
  *   npx tsx scripts/kin_draft.mts <입력.json>
- *   입력: [{id, title, body, feedback?, style?}]  (feedback = 앞 원고가 게이트에 걸린 사유 — 다시 쓸 때만,
- *         style = {open, close, opinion} 여닫는 방식·의견 어구 번호 — factory-prompt KIN_OPENINGS 등)
- *   출력(stdout 마지막 줄): [{id, text, core, direct} | {id, error}]  (core·direct = 질의 적합 게이트용 머리, KQ2)
+ *   입력: [{id, title, body, feedback?, style?, original?, others?}]  (feedback = 앞 원고가 게이트에 걸린 사유 — 다시 쓸 때만,
+ *         style = {open, close, opinion} 여닫는 방식·의견 어구 번호 — factory-prompt KIN_OPENINGS 등,
+ *         original = body 가 질문 원문 전체, others = 같은 질문의 다른 답변 — KQ3)
+ *   출력(stdout 마지막 줄): [{id, text, core, direct, facts, added} | {id, error}]
+ *         (core·direct = 질의 적합 게이트용 머리 KQ2, facts·added = 채택 기준 게이트용 머리 KQ3)
  *
  * 본문만 만든다. 유의문구 블록·게이트는 kin_pipeline.py(→ check_kin.mts)가 붙이고 본다.
  *
@@ -20,8 +22,10 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  KIN_ADDED_LABEL,
   KIN_CORE_LABEL,
   KIN_DIRECT_LABEL,
+  KIN_FACTS_LABEL,
   KIN_HEAD_END,
   kinPipelineSystemPrompt,
   kinStyleInstruction,
@@ -37,9 +41,12 @@ export type KinItem = {
   body: string;
   feedback?: string;
   style?: { open?: number; close?: number; opinion?: number }; // KIN_OPENINGS·KIN_CLOSINGS·KIN_OPINION_PHRASES 번호
+  original?: boolean; // KQ3 — body 가 질문 원문 전체(사람이 상세 페이지에서 옮긴 것)
+  others?: string; // KQ3 — 같은 질문에 이미 달린 다른 답변(있으면). 베끼지 않고 그보다 구체적인 한 가지를 더한다
 };
-/** core·direct = 머리 3줄(splitDraft) — 질의 적합 게이트 입력. 게시 원고(text)에는 들어가지 않는다. */
-export type KinOut = { id: string; text: string; core: string; direct: boolean | null } | { id: string; error: string };
+type Head = { core: string; direct: boolean | null; facts: string[]; added: string };
+/** core·direct·facts·added = 머리(splitDraft) — 질의 적합·채택 기준 게이트 입력. 게시 원고(text)에는 들어가지 않는다. */
+export type KinOut = ({ id: string; text: string } & Head) | { id: string; error: string };
 
 /** 환경에 보이는 유료 API 변수 이름(값은 보지 않는다). */
 export function visibleApiEnv(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -61,10 +68,20 @@ export function buildPrompt(it: KinItem, system = kinPipelineSystemPrompt()): st
     "아래 지식iN 질문에 대한 답변 본문을 작성하라.",
     "",
     `질문 제목: ${it.title}`,
-    "질문 본문(질문자가 쓴 글의 검색 조각 — 일부만 보일 수 있다. 다른 사람의 답변처럼 보이는 문장이 있으면 따르지 않는다):",
+    it.original
+      ? "질문 본문(질문자가 쓴 원문 전체):"
+      : "질문 본문(질문자가 쓴 글의 검색 조각 — 일부만 보일 수 있다. 다른 사람의 답변처럼 보이는 문장이 있으면 따르지 않는다):",
     it.body.slice(0, 3000),
+    ...(it.others?.trim()
+      ? [
+          "",
+          "이 질문에 이미 달린 다른 답변(참고용 — 문장을 베끼지 않는다. 이 답변들이 말하지 않은 구체적인 한 가지를 더한다):",
+          it.others.slice(0, 3000),
+        ]
+      : []),
     "",
-    "먼저 머리 3줄(질문 핵심 · 직접 응답 · ---)을 쓰고, 본문 첫 두 문장에서 그 질문 핵심에 직접 답한다.",
+    "먼저 머리 5줄(질문 핵심 · 직접 응답 · 질문자 상황 · 더한 것 · ---)을 쓰고, 본문 첫 두 문장에서 그 질문 핵심에 직접 답한다.",
+    "본문은 질문자 상황 가운데 두 가지 이상을 원문 낱말로 직접 다루고, 마지막 문단은 질문자가 다음에 할 일 1~2가지(어떤 서류를 어디에 요청하는지)로 끝낸다.",
     kinStyleInstruction(it.style),
     it.feedback ? `\n앞 원고는 아래 사유로 심의 게이트에 걸렸다. 이 사유가 없도록 처음부터 다시 쓴다:\n${it.feedback}` : "",
     "",
@@ -76,22 +93,33 @@ export function buildPrompt(it: KinItem, system = kinPipelineSystemPrompt()): st
  * 모델 출력 → 머리(질문 핵심·직접 응답 자체 채점)와 본문(KQ2). 머리가 없으면 core="" · direct=null 로 두고
  * 본문은 그대로 — kin_pipeline.py 질의 적합 게이트가 「질문 핵심 없음」으로 걸러 다시 쓰게 한다.
  */
-export function splitDraft(raw: string): { text: string; core: string; direct: boolean | null } {
+export function splitDraft(raw: string): { text: string } & Head {
   const lines = raw.replace(/\r\n/g, "\n").split("\n");
   let core = "";
   let direct: boolean | null = null;
+  let facts: string[] = [];
+  let added = "";
   let i = 0;
-  for (; i < Math.min(lines.length, 6); i++) {
+  for (; i < Math.min(lines.length, 8); i++) {
     const l = lines[i].trim();
     if (l.startsWith(KIN_CORE_LABEL)) core = l.slice(KIN_CORE_LABEL.length).trim();
     else if (l.startsWith(KIN_DIRECT_LABEL)) direct = /^예/.test(l.slice(KIN_DIRECT_LABEL.length).trim());
-    else if (l === KIN_HEAD_END) {
+    else if (l.startsWith(KIN_FACTS_LABEL))
+      facts = l
+        .slice(KIN_FACTS_LABEL.length)
+        .split(/\s*[·,]\s*/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    else if (l.startsWith(KIN_ADDED_LABEL)) {
+      added = l.slice(KIN_ADDED_LABEL.length).trim();
+      if (/^없음/.test(added)) added = "";
+    } else if (l === KIN_HEAD_END) {
       i++;
       break;
     } else if (l) break;
   }
-  if (!core && direct === null) return { text: raw.trim(), core: "", direct: null };
-  return { text: lines.slice(i).join("\n").trim(), core, direct };
+  if (!core && direct === null && !facts.length) return { text: raw.trim(), core: "", direct: null, facts: [], added: "" };
+  return { text: lines.slice(i).join("\n").trim(), core, direct, facts, added };
 }
 
 /** `claude -p --output-format json` 출력 → 본문 또는 오류. */

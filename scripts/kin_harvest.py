@@ -24,8 +24,9 @@
       ② 조각에 답변 표지(ANSWER_LIKE_RE — 「질문자님」「핵심 결론」「문의해 주시기 바랍니다」 등)가 없다.
     질문 조각이 하나도 없으면 그 질문은 후보에서 뺀다(「질문 본문 없음」) — 남의 답을 질문 대신 쓰지 않는다.
     「snippets」(전체 조각)는 소재·개인정보·회사명 제외 판정에만 쓰고, 초안·DB 에는 넘기지 않는다.
-  · 질문 상세 페이지 GET 은 하지 않는다 — robots.txt 를 확인하지 못했다(KQ2 2026-10-19 에도 이 세션에서
-    kin.naver.com 조회가 막혔다). 그래서 HTML 선택자가 아니라 검색 API 의 link·description 으로 가른다.
+  · 질문 상세 페이지 GET 은 하지 않는다 — kin.naver.com/robots.txt(KQ3 2026-10-19 실측)가 ClaudeBot·anthropic-ai 등을
+    Disallow: / 로 막고 AI 학습·RAG 목적 봇 접근을 금지한다. 원문은 사람이 옮긴 파일만 쓴다(kin_pipeline.QUESTION_DIR).
+    그래서 HTML 선택자가 아니라 검색 API 의 link·description 으로 가른다.
 
 제외: 답변 다수 · 특정 회사·상품 비교/추천 요청 · 개인정보(전화·주민번호·이메일·증권번호)가 보이는 질문.
 """

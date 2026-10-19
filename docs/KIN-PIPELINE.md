@@ -5,6 +5,7 @@
 ```
 kin_harvest.py   네이버 검색 API(kin) → 우리 소재 질문 후보        (로그인·스크래핑 없음)
 kin_pipeline.py run
+  ├ 원문          kin_questions\<docId>.txt(사람이 옮김) 있는 후보만 — 없으면 초안 없음(KQ3)
   ├ pick          하루 5건 · 같은 소재 하루 1건 · 직전 날 마지막 소재 연속 금지 · 이미 다룬 질문 제외
   ├ kin_draft.mts 답변 본문(factory-prompt kinPipelineSystemPrompt)
   ├ check_kin.mts 게이트(src/lib/compliance/kin-terms.ts) — 걸리면 사유를 주고 처음부터 1회 재작성, 또 걸리면 버림
@@ -39,8 +40,36 @@ kin_pipeline.py weekly   성적표 한 줄
 - 작성일 없음 → 「72시간」 = 우리 대장(`%LOCALAPPDATA%\SHIN\kin_seen.json`)의 **첫 관측** 기준. 첫 실행은 기준선만 적는다.
 - 채택·마감 여부 없음 → 「마감: 미확인」. 게시 전에 화면에서 본다.
 - 답변 수 없음 → link 의 `answerNo` 최댓값을 하한으로(≥3 이면 「답변 다수」 제외).
-- 질문 본문 전문 없음 → description 조각(남의 답변일 수 있음)만 초안기에 준다.
-- 질문 상세 페이지 GET 은 하지 않는다 — `kin.naver.com/robots.txt` 를 확인하지 못했다.
+- 질문 본문 전문 없음 → description 조각은 후보 고르기(소재·제외 판정)에만 쓴다.
+- **[확정 2026-10-19 KQ3] 질문 상세 페이지는 기계가 읽지 않는다.** `kin.naver.com/robots.txt` 실측:
+  `anthropic-ai`·`ClaudeBot`·`Claude-Web`·`Claude-SearchBot` 등 `Disallow: /`, 그리고
+  「BOT ACCESS FOR THE PURPOSES OF AI TRAINING AND RETRIEVAL-AUGMENTED GENERATION (RAG) IS STRICTLY PROHIBITED」.
+  질문 페이지를 자동으로 읽어 답변 생성에 넣는 것이 여기에 해당한다.
+
+## 질문 원문 — 원문 없으면 초안 없음 (KQ3 2026-10-19)
+
+로버트(10/19): 「질문자가 치아보험을 물어봤으면 그에 대한 내용을 제대로 답변해야 할 거 아냐… 추상적 답변만 하면 신뢰도 깎이잖아」.
+기준은 심의 통과가 아니라 **질문자가 채택할 답**이다. 검색 조각만으로는 가입 시기·상품 종류·거절 사유를 몰라 일반론이 된다.
+
+- `kin_pipeline run` 은 `%LOCALAPPDATA%\SHIN\kin_questions\<docId>.txt` 가 있는 후보만 초안을 만든다. 없으면
+  「📝 원문 없음 — 초안 안 만듦」 줄 + (그날 만든 것이 없으면) 텔레그램 「지식인 원문 필요 N건」.
+- 파일은 **사람이** 질문 페이지에서 옮긴다(형식 `kin_pipeline.parse_original`):
+  ```
+  제목: <질문 제목>
+  ── 질문 본문 ──
+  <질문자가 쓴 본문 전체>
+  ── 다른 답변 ──
+  <다른 답변이 이미 말한 것 — 요약이어도 된다. 없으면 이 칸째 생략>
+  ```
+- 🔴 [미확정] 사람이 옮긴 원문을 생성에 넣는 것이 지식iN 이용 정책상 괜찮은지는 관제탑 판단 대기.
+- 원문이 붙으면 `kin_answers.question_body` 에 조각이 아니라 원문 본문이 들어간다.
+
+**채택 기준 게이트**(`adoption_findings` — 질의 적합 게이트 KQ2 확장, 원문 후보에만):
+1. 머리 `질문자 상황:` 의 사실 중 **원문과 본문 양쪽에 같은 낱말**이 있는 것이 2개 이상(지어낸 상황은 안 센다).
+2. 첫 두 문장 직접 답 — `intent_findings`(KQ2).
+3. 마지막 문단 = 다음 할 일(서류 낱말 + 요청·발급 같은 행동).
+4. 다른 답변이 있으면 — 머리 `더한 것:` 이 본문에 있고, 다른 답변 문장과 70% 이상 같은 문장이 없다.
+불합격 → 사유를 붙여 재생성 1회 → 재불합격이면 후보 제외.
 
 ## robert-os 할 일(이 저장소 밖)
 

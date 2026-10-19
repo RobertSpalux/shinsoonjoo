@@ -285,6 +285,10 @@ class Flow(unittest.TestCase):
         self.kits = os.path.join(self.d, "kits")
         self.sent = []
 
+    @staticmethod
+    def orig(doc_id):   # KQ3 — 사람이 옮긴 원문이 있는 것으로 친다
+        return {"title": "", "body": "질문자가 쓴 원문 본문입니다.", "others": ""}
+
     def harvest(self):
         return {"seen_total": 3, "baseline": False, "excluded": [],
                 "candidates": [{"url": "https://kin.naver.com/qna/detail.naver?dirId=1&docId=11", "topic": "부담보",
@@ -295,7 +299,7 @@ class Flow(unittest.TestCase):
     def test_run_approve_posted_weekly(self):
         now = datetime(2026, 10, 9, 9, tzinfo=KST)
         make = lambda cs: [(c, BODY, "") if c["topic"] == "부담보" else (c, None, "게이트: premium: 3만원대") for c in cs]  # noqa: E731
-        lines, made = kp.cmd_run({}, 3, False, harvest_fn=self.harvest, make_fn=make, notify=self.sent.append,
+        lines, made = kp.cmd_run({}, 3, False, harvest_fn=self.harvest, originals_fn=self.orig, make_fn=make, notify=self.sent.append,
                                  state_path=self.state, kit_dir=self.kits, save_row=lambda e, r: ("kin-1", "ok"), now=now)
         self.assertEqual(len(made), 1)
         self.assertTrue(any("✖ [간병]" in l for l in lines))
@@ -359,7 +363,7 @@ class Flow(unittest.TestCase):
         """§6.3 — 일일 요약에 「심의필 만료 30일 이내 N건」 한 줄. 조회 실패는 숨기지 않고 수집도 막지 않는다."""
         make = lambda cs: []  # noqa: E731
         asked = []
-        lines, _ = kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=make, notify=self.sent.append,
+        lines, _ = kp.cmd_run({}, 3, True, harvest_fn=self.harvest, originals_fn=self.orig, make_fn=make, notify=self.sent.append,
                               state_path=self.state, kit_dir=self.kits, now=datetime(2026, 10, 9, 9, tzinfo=KST),
                               expiring_fn=lambda d: asked.append(d) or 2)
         self.assertEqual(asked, ["2026-10-09"])
@@ -367,16 +371,16 @@ class Flow(unittest.TestCase):
         # SH6 관제탑 결정 — N>0 이면 텔레그램에도 한 줄(만든 키트가 없어도). 시험은 가짜 notify 로만(실발송 없음)
         self.assertEqual(self.sent, ["⏰ 지식iN 심의필 만료 30일 이내 2건 — PAMS 연장 신청 필요"])
         self.sent.clear()
-        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=make, notify=self.sent.append,
+        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, originals_fn=self.orig, make_fn=make, notify=self.sent.append,
                    state_path=self.state, kit_dir=self.kits, now=datetime(2026, 10, 9, 9, tzinfo=KST),
                    expiring_fn=lambda d: 0)
         self.assertEqual(self.sent, [])   # 0건이면 보내지 않는다
-        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=make, notify=self.sent.append,
+        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, originals_fn=self.orig, make_fn=make, notify=self.sent.append,
                    state_path=self.state, kit_dir=self.kits, now=datetime(2026, 10, 9, 9, tzinfo=KST),
                    expiring_fn=lambda d: 1 / 0)
         self.assertEqual(self.sent, [])   # 조회 실패도 텔레그램으로 겁주지 않는다(요약 줄에만 「조회 실패」)
         made = lambda cs: [(c, BODY, "") for c in cs[:1]]  # noqa: E731
-        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=made, notify=self.sent.append,
+        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, originals_fn=self.orig, make_fn=made, notify=self.sent.append,
                    state_path=self.state, kit_dir=self.kits, now=datetime(2026, 10, 9, 9, tzinfo=KST),
                    expiring_fn=lambda d: 3)
         self.assertEqual(len(self.sent), 1)   # 접수 대기 알림과 한 통으로
@@ -410,7 +414,7 @@ class Flow(unittest.TestCase):
 
     def test_dry_run_writes_nothing(self):
         make = lambda cs: [(c, BODY, "") for c in cs]  # noqa: E731
-        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, make_fn=make, notify=self.sent.append,
+        kp.cmd_run({}, 3, True, harvest_fn=self.harvest, originals_fn=self.orig, make_fn=make, notify=self.sent.append,
                    state_path=self.state, kit_dir=self.kits, save_row=lambda *a: self.fail("DB 쓰면 안 됨"))
         self.assertFalse(os.path.exists(self.state))
         self.assertFalse(os.path.exists(self.kits))
@@ -546,6 +550,93 @@ class Flow(unittest.TestCase):
         self.assertIn("질의 적합 불합격", res[0][2])
         self.assertEqual(len(calls), 2)
         self.assertIn("intent: 답을 미루는 서두", calls[1][0]["feedback"])
+
+    # ── KQ3 — 원문 없으면 초안 없음 · 채택 기준 게이트 ─────────────────
+    KQ3_Q = ("치아보험 가입 전에 고지해야 하나요\n"
+             "치아보험 가입하려는데 2년 전에 치과 검진에서 치료 권유를 받았어요. 치료는 안 받았는데 고지해야 하나요?")
+    KQ3_GOOD = ("치아보험 청약서는 통상 최근 일정 기간 안에 치료를 받았거나 치료가 필요하다는 소견을 들은 적이 있는지를 묻습니다. "
+                "2년 전 일이라도 문항이 묻는 기간 안에 들어가면, 실제 치료를 받지 않았더라도 치료 권유를 받은 사실은 알리는 쪽으로 보는 경우가 많습니다."
+                "\n\n제 의견으로는 가운데 문단입니다."
+                "\n\n가입 전에 청약서의 고지 문항을 먼저 받아 보시고, 그때 다닌 치과에 진료 기록 사본을 요청해 날짜를 확인해 두시면 됩니다.")
+    KQ3_ABSTRACT = ("이 사안의 판단을 가르는 기준은 청약서의 고지 문항이 어느 기간까지, 어떤 내용을 묻고 있는지입니다. "
+                    "계약 전 알릴 의무는 보험회사가 질문한 범위 안에서 사실대로 답하는 의무입니다."
+                    "\n\n결국 약관 문구와 가입 시기에 따라 결론이 달라질 수 있습니다.")
+
+    def test_kq3_parse_original(self):
+        txt = "제목: 치아보험 고지\n── 질문 본문 ──\n" + self.KQ3_Q + "\n── 다른 답변 ──\n고지 문항을 보라는 답변"
+        o = kp.parse_original("﻿" + txt.replace("\n", "\r\n"))
+        self.assertEqual(o["title"], "치아보험 고지")
+        self.assertIn("2년 전에", o["body"])
+        self.assertEqual(o["others"], "고지 문항을 보라는 답변")
+        self.assertIsNone(kp.parse_original("제목: x\n본문 표지 없음"))
+        self.assertIsNone(kp.parse_original("제목: x\n── 질문 본문 ──\n짧은 조각"))   # 조각 수준은 원문이 아니다
+        d = tempfile.mkdtemp()
+        open(os.path.join(d, "495435597.txt"), "w", encoding="utf-8").write(txt)
+        self.assertEqual(kp.load_original("495435597", d)["title"], "치아보험 고지")
+        self.assertIsNone(kp.load_original("1", d))
+
+    def test_kq3_attach_originals(self):
+        cands = [{"url": "https://kin.naver.com/qna/detail.naver?dirId=1&docId=7", "title": "검색 제목", "summary": "조각"},
+                 {"url": "https://kin.naver.com/qna/detail.naver?dirId=1&docId=8", "title": "t", "summary": "조각"}]
+        have, missing = kp.attach_originals(cands, lambda d: {"title": "", "body": "원문", "others": "남"} if d == "7" else None)
+        self.assertEqual([c["url"][-1] for c in have], ["7"])
+        self.assertEqual(have[0]["summary"], "원문")        # kin_answers.question_body = 원문 전체
+        self.assertEqual(have[0]["title"], "검색 제목")     # 원문 제목이 비면 검색 제목
+        self.assertTrue(have[0]["original"])
+        self.assertEqual([c["url"][-1] for c in missing], ["8"])
+
+    def test_kq3_run_skips_without_original(self):
+        d = tempfile.mkdtemp()
+        sent = []
+        lines, made = kp.cmd_run({}, 3, True, harvest_fn=self.harvest, originals_fn=lambda doc: None,
+                                 make_fn=lambda cs: self.fail("원문 없으면 초안을 만들면 안 됨"), notify=sent.append,
+                                 state_path=os.path.join(d, "s.json"), kit_dir=os.path.join(d, "k"),
+                                 now=datetime(2026, 10, 19, 9, tzinfo=KST), expiring_fn=lambda x: 0)
+        self.assertEqual(made, [])
+        self.assertEqual(sum("📝 원문 없음 — 초안 안 만듦" in l for l in lines), 2)
+        self.assertIn("원문 없음 2", lines[0])
+        self.assertEqual(len(sent), 1)
+        self.assertTrue(sent[0].startswith("📝 지식인 원문 필요 2건"))
+
+    def test_kq3_adoption_findings(self):
+        q = self.KQ3_Q
+        self.assertEqual(kp.adoption_findings(q, ["치아보험", "2년 전", "치료 권유"], "", "", self.KQ3_GOOD), [])
+        terms = [f["term"] for f in kp.adoption_findings(q, [], "", "", self.KQ3_ABSTRACT)]
+        self.assertTrue(any(t.startswith("질문자 상황 반영 0/2") for t in terms), terms)
+        self.assertIn("마지막 문단에 다음 할 일 없음", terms)
+        # 지어낸 상황(원문에 없는 낱말)은 세지 않는다
+        self.assertTrue(kp.adoption_findings(q, ["치아보험", "실손 거절"], "", "", self.KQ3_GOOD))
+        # 다른 답변 — 더한 것이 본문에 없거나, 다른 답변 문장을 베끼면 불합격
+        others = "치아보험 청약서는 통상 최근 일정 기간 안에 치료를 받았거나 치료가 필요하다는 소견을 들은 적이 있는지를 묻습니다."
+        terms = [f["term"] for f in kp.adoption_findings(q, ["치아보험", "2년 전"], "", others, self.KQ3_GOOD)]
+        self.assertIn("다른 답변보다 더한 것 없음", terms)
+        self.assertTrue(any(t.startswith("다른 답변 베낌") for t in terms), terms)
+        ok = kp.adoption_findings(q, ["치아보험", "2년 전"], "진료 기록 사본 요청", "고지 문항을 보시라는 답변입니다.", self.KQ3_GOOD)
+        self.assertEqual(ok, [])
+
+    def test_kq3_make_answers_drops_abstract(self):
+        """원문 후보 — 상황을 안 다루고 할 일 없이 끝나면 1회 재생성, 또 그러면 후보 제외. 재생성 사유에 채택 기준."""
+        calls = []
+        body = ("치아보험 청약서는 통상 일정 기간 안의 치료 소견을 묻습니다. 문항이 묻는 기간이 기준입니다."
+                "\n\n결국 약관 문구에 따라 결론이 달라질 수 있습니다.")
+
+        def draft_fn(reqs):
+            calls.append(reqs)
+            return [{"id": r["id"], "text": body, "core": "치아보험 고지 대상인가", "direct": True, "facts": [], "added": ""}
+                    for r in reqs]
+        c = {"url": "u", "title": "치아보험 가입 전에 고지해야 하나요", "summary": self.KQ3_Q.split("\n", 1)[1],
+             "original": True, "others": ""}
+        res = kp.make_answers([c], draft_fn, lambda xs: [{"pass": True, "findings": []} for _ in xs],
+                              lambda xs: [""] * len(xs), history=[], phrases=[], styles=[{"open": 0, "close": 0, "opinion": 0}] * 3)
+        self.assertIsNone(res[0][1])
+        self.assertIn("질의 적합 불합격", res[0][2])
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(calls[0][0]["original"])
+        self.assertIn("adopt: 마지막 문단에 다음 할 일 없음", calls[1][0]["feedback"])
+        # 원문이 아닌 후보(옛 경로)에는 채택 기준을 걸지 않는다 — KQ2 동작 그대로
+        res = kp.make_answers([{**c, "original": False}], draft_fn, lambda xs: [{"pass": True, "findings": []} for _ in xs],
+                              lambda xs: [""] * len(xs), history=[], phrases=[], styles=[{"open": 0, "close": 0, "opinion": 0}] * 3)
+        self.assertEqual(res[0][1], body)
 
     def test_special_note_fits(self):
         for t in kh.TOPICS:

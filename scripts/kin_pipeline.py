@@ -232,7 +232,7 @@ def kit_text(rec):
         "",
         "── 질문 제목(참고) ──",
         rec["question_title"],
-        "── 질문 본문(참고 — 검색 API 의 질문 조각만, 답변 조각 제외. PAMS 에 넣지 않는다: 질문자 정보 기재 금지 ⑤) ──",
+        "── 질문 본문(참고 — 사람이 옮긴 질문 원문. PAMS 에 넣지 않는다: 질문자 정보 기재 금지 ⑤) ──",
         rec["question_summary"],
         "",
         "── PAMS 에 붙여 넣을 원고 ──",
@@ -405,6 +405,126 @@ def intent_findings(core, direct, body):
     return out
 
 
+# ── 질문 원문(KQ3 2026-10-19 관제탑) ───────────────────────────
+# 로버트: 「질문자가 치아보험을 물어봤으면 그에 대한 내용을 제대로 답변해야 할 거 아냐… 추상적 답변만 하면 신뢰도 깎이잖아」.
+# 검색 API 조각(1~2줄)만으로는 가입 시기·상품 종류·거절 사유를 몰라 일반론이 된다 → **원문을 못 읽은 질문은 초안을 만들지 않는다.**
+# 🔴 원문은 기계가 가져오지 않는다. kin.naver.com/robots.txt(2026-10-19 실측)가 anthropic-ai·ClaudeBot·Claude-Web·
+#    Claude-SearchBot 을 Disallow: / 로 막고 「BOT ACCESS FOR THE PURPOSES OF AI TRAINING AND RETRIEVAL-AUGMENTED
+#    GENERATION (RAG) IS STRICTLY PROHIBITED」라고 적었다. 질문 페이지를 자동으로 읽어 생성에 넣는 것이 바로 그것이다.
+#    → 사람이 질문 페이지에서 제목·본문(·다른 답변 요약)을 옮긴 파일만 읽는다: QUESTION_DIR\<docId>.txt
+#      제목: <질문 제목>
+#      ── 질문 본문 ──
+#      <질문자가 쓴 본문 전체>
+#      ── 다른 답변 ──            (있으면 — 요약이어도 된다)
+#      <다른 답변이 이미 말한 것>
+#    이 경로(사람이 옮김 → 생성)가 사이트 정책상 괜찮은지는 관제탑 판단 대기다(KQ3 보고).
+QUESTION_DIR = os.path.join(STATE_DIR, "kin_questions")
+ORIG_BODY_MARK = "── 질문 본문 ──"
+ORIG_OTHERS_MARK = "── 다른 답변 ──"
+ORIG_MIN_CHARS = 20   # 이보다 짧으면 원문이 아니라 조각이다
+
+
+def parse_original(text):
+    """사람이 옮긴 질문 원문 파일 → {title, body, others} 또는 None(형식이 다르거나 본문이 조각 수준)."""
+    text = (text or "").replace("\r\n", "\n").lstrip("﻿")
+    if ORIG_BODY_MARK not in text:
+        return None
+    head, _, rest = text.partition(ORIG_BODY_MARK)
+    body, _, others = rest.partition(ORIG_OTHERS_MARK)
+    m = re.search(r"^제목:\s*(.+)$", head, re.M)
+    body = body.strip()
+    if len(re.sub(r"\s+", "", body)) < ORIG_MIN_CHARS:
+        return None
+    return {"title": m.group(1).strip() if m else "", "body": body, "others": others.strip()}
+
+
+def load_original(doc_id, qdir=QUESTION_DIR):
+    try:
+        return parse_original(open(os.path.join(qdir, f"{doc_id}.txt"), encoding="utf-8-sig").read())
+    except (FileNotFoundError, UnicodeDecodeError):
+        return None
+
+
+def attach_originals(cands, load_fn=load_original):
+    """후보 → (원문 붙은 후보, 원문 없는 후보). 원문이 붙으면 summary = 원문 본문 전체(kin_answers.question_body 로 간다)."""
+    have, missing = [], []
+    for c in cands:
+        m = re.search(r"docId=(\d+)", c.get("url") or "")
+        o = load_fn(m.group(1)) if m else None
+        if not o:
+            missing.append(c)
+            continue
+        have.append({**c, "title": o["title"] or c["title"], "summary": o["body"], "others": o["others"], "original": True})
+    return have, missing
+
+
+# ── 채택 기준 게이트(KQ3 2026-10-19) — 질의 적합(KQ2) 확장 ──────────
+# ① 원문에 있는 질문자 상황 사실 최소 ADOPT_FACTS_MIN 개를 본문이 원문 낱말로 직접 다룬다
+#    (모델이 머리 「질문자 상황:」에 적은 사실 중, 그 낱말이 원문에도 본문에도 있는 것만 센다 — 지어낸 상황은 안 센다)
+# ② 첫 두 문장 직접 답 — intent_findings(KQ2)
+# ③ 마지막 문단 = 다음 할 일(서류 + 요청·발급 같은 행동)
+# ④ 다른 답변이 있으면 — 「더한 것」이 본문에 있고, 다른 답변 문장을 베끼지 않는다(SIMILAR_MAX)
+ADOPT_FACTS_MIN = 2
+ACTION_DOC_RE = re.compile(r"청약서|약관|증권|진료\s*기록|진단서|소견서|영수증|진료비\s*(?:세부\s*)?(?:내역|명세)|서류|사본|"
+                           r"확인서|안내문|통지서|거절\s*사유|심사\s*결과|고지\s*문항")
+ACTION_VERB_RE = re.compile(r"요청|발급|받아\s*(?:두|보|놓)|챙겨|준비|신청|확인해\s*(?:보|두)|대조해|물어\s*보|받으시")
+_FACT_TERM_RX = re.compile(r"\d+\s*(?:년|개월|달|주|일|회|차|세|살)|[가-힣A-Za-z]{2,}")
+_FACT_STOP = _INTENT_STOP | {"가입", "있음", "없음", "상태", "시점", "사실", "사항", "내용"}
+
+
+def _fact_terms(fact):
+    out = []
+    for m in _FACT_TERM_RX.finditer(fact or ""):
+        w = re.sub(r"\s+", "", m.group(0))
+        if not w[0].isdigit():
+            w = re.sub(r"(?:으로|에서|에게|까지|부터|이나|이면|은|는|이|가|을|를|에|의|와|과|도|만|로)$", "", w)
+        if len(w) >= 2 and w not in _FACT_STOP and w not in out:
+            out.append(w)
+    return out
+
+
+def covered_facts(facts, question, body):
+    """머리의 상황 사실 중 원문과 본문 양쪽에 같은 낱말이 있는 것. 낱말 하나는 한 사실만 센다."""
+    q, b = re.sub(r"\s+", "", question or ""), re.sub(r"\s+", "", body or "")
+    used, out = set(), []
+    for f in facts or []:
+        hit = next((t for t in _fact_terms(f) if t not in used and t in q and t in b), None)
+        if hit:
+            used.add(hit)
+            out.append(f)
+    return out
+
+
+def last_paragraph(body):
+    paras = [p.strip() for p in re.split(r"\n\s*\n", (body or "").strip()) if p.strip()]
+    return paras[-1] if paras else ""
+
+
+def adoption_findings(question, facts, added, others, body):
+    """[{rule:'adopt', term, reason}] — 비면 합격. question = 원문(제목+본문), body = 유의문구 블록 앞 본문."""
+    out = []
+    got = covered_facts(facts, question, body)
+    if len(got) < ADOPT_FACTS_MIN:
+        out.append({"rule": "adopt", "term": f"질문자 상황 반영 {len(got)}/{ADOPT_FACTS_MIN}({' · '.join(facts or []) or '머리 없음'})",
+                    "reason": "원문에 적힌 질문자 상황(상품 종류·가입 시점·진행 단계·거절 등) 두 가지 이상을 원문 낱말로 본문에서 직접 다룬다"})
+    lp = last_paragraph(body)
+    if not (ACTION_DOC_RE.search(lp) and ACTION_VERB_RE.search(lp)):
+        out.append({"rule": "adopt", "term": "마지막 문단에 다음 할 일 없음",
+                    "reason": "마지막 문단은 질문자가 다음에 할 일 1~2가지(어떤 서류를 어디에 요청·발급하는지)로 끝낸다"})
+    if (others or "").strip():
+        if not added or not any(t in re.sub(r"\s+", "", body) for t in _fact_terms(added)):
+            out.append({"rule": "adopt", "term": "다른 답변보다 더한 것 없음",
+                        "reason": "다른 답변이 말하지 않은 구체적인 한 가지(통상 기준·절차·준비 서류·요청처)를 본문에 더한다"})
+        theirs = sentences(others)
+        for s in sentences(body):
+            o = next((x for x in theirs if similarity(s, x) >= SIMILAR_MAX), None)
+            if o:
+                out.append({"rule": "adopt", "term": f"다른 답변 베낌: {s[:30]}",
+                            "reason": "다른 답변 문장을 되풀이하지 않는다 — 자기 문장으로, 더 구체적으로"})
+                break
+    return out
+
+
 def load_history(env, limit=HISTORY_N):
     """kin_answers 최근 limit 건(답변 초안·생성일 KST). 조회 실패는 빈 목록(같은 실행 안에서만 비교)."""
     try:
@@ -458,7 +578,8 @@ def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, t
         if not pending:
             break
         reqs = [{"id": u, "title": c["title"], "body": c["summary"], **({"feedback": feedback[u]} if u in feedback else {}),
-                 **({"style": style_of[u]} if style_of.get(u) else {})}
+                 **({"style": style_of[u]} if style_of.get(u) else {}),
+                 **({"original": True, "others": c.get("others", "")} if c.get("original") else {})}
                 for u, c in pending.items()]
         drafts = {d["id"]: d for d in draft_fn(reqs)}
         for u in list(pending):
@@ -478,13 +599,17 @@ def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, t
                 findings = variety_findings(a, history, today, phrases)
             d = drafts[u]
             intent = intent_findings(d.get("core", ""), d.get("direct"), body_part(a))
+            c = pending[u]
+            if c.get("original"):   # 채택 기준(KQ3)은 원문이 있을 때만 잴 수 있다 — cmd_run 은 원문 있는 후보만 넘긴다
+                intent += adoption_findings(q[u], d.get("facts") or [], d.get("added", ""), c.get("others", ""),
+                                            body_part(a))
             findings += intent
             if on_round:
                 on_round(rnd, u, a, style_of.get(u), findings)
             if intent:
                 intent_fail[u] = intent_fail.get(u, 0) + 1
                 if intent_fail[u] >= INTENT_TRIES:   # 재생성 1회 뒤에도 질문에 답하지 않으면 후보에서 뺀다
-                    result[u] = (None, "질의 적합 불합격(재생성 1회 후): "
+                    result[u] = (None, "질의 적합 불합격(채택 기준 포함, 재생성 1회 후): "
                                  + "; ".join(f["term"] for f in intent) + f" — 질문 핵심 「{d.get('core', '')}」")
                     pending.pop(u)
                     continue
@@ -688,17 +813,24 @@ def notify_fn(env, dry):
 
 
 def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=STATE_PATH,
-            kit_dir=KIT_DIR, save_row=save_draft_row, now=None, expiring_fn=None, history_fn=None):
+            kit_dir=KIT_DIR, save_row=save_draft_row, now=None, expiring_fn=None, history_fn=None,
+            originals_fn=load_original):
     now = now or datetime.now(kit.KST)
     today = now.date().isoformat()
     state = load_state(state_path)
     res = (harvest_fn or (lambda: kin_harvest.collect(env, now=now)))()
     scoped, off = in_scope(res["candidates"])
-    chosen = pick(scoped, state, today, n)
+    # KQ3 — 원문을 못 읽은 질문은 초안을 만들지 않는다(검색 조각만으로는 일반론이 된다)
+    done_urls = {k["question_url"] for k in state.get("kits", {}).values()}
+    have, missing = attach_originals(scoped, originals_fn)
+    missing = [c for c in missing if c["url"] not in done_urls]
+    chosen = pick(have, state, today, n)
     expiring, exp_line = expiry_check(today, expiring_fn or (lambda d: count_expiring(env, d)))
     lines = [f"지식iN 수집: 질문 {res['seen_total']} · 후보 {len(res['candidates'])} · 제외 {len(res['excluded'])}"
-             + (" · 첫 실행 기준선" if res.get("baseline") else "") + f" · 오늘 만들 것 {len(chosen)}", exp_line]
+             + (" · 첫 실행 기준선" if res.get("baseline") else "")
+             + f" · 원문 있음 {len(have)} · 원문 없음 {len(missing)} · 오늘 만들 것 {len(chosen)}", exp_line]
     lines += [f"⛔ 보험 무관 — {c['title'][:40]} ({why})" for c, why in off]
+    lines += [f"📝 원문 없음 — 초안 안 만듦: [{c['topic']}] {c['title'][:40]} {c['url']}" for c in missing]
     if make_fn is None:
         def make_fn(cs):
             return make_answers(cs, history=(history_fn or (lambda: load_history(env)))(), today=today)
@@ -728,6 +860,10 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
         msgs.append(f"🙋 지식인 심의 접수 대기 {len(made)}건 — PAMS 지식인 심의에 옮긴 뒤 「제출」은 로버트가(저장 금지)\n"
                     + "\n".join(f"· {r['id']} [{r['topic']}] {r['question_title'][:30]}" for r in made)
                     + f"\n키트: {kit_dir}")
+    if missing and not made:
+        msgs.append(f"📝 지식인 원문 필요 {len(missing)}건 — 질문 페이지의 제목·본문(·다른 답변 요약)을 "
+                    f"{QUESTION_DIR}\\<docId>.txt 로 옮기면 다음 실행에 초안을 만듭니다\n"
+                    + "\n".join(f"· [{c['topic']}] {c['title'][:30]} {c['url']}" for c in missing[:5]))
     if expiring:   # 관제탑 결정(SH6) — N>0 이면 텔레그램에도 한 줄(§6.3 만료 = 미심의급 제재)
         msgs.append(f"⏰ {exp_line}")
     if msgs:
