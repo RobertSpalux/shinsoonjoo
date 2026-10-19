@@ -94,8 +94,14 @@ def gates(article, patch):
     cfg = dw.load_topics()
     silson = bool(rx.search(merged["title"] + " " + merged["main_website_markdown"]))
     notices = list(cfg["notices"].get("silsonGeneration", [])) if silson else []
+    # 실손 밖 글(연금 등): 장부 유의문구 중 본진에 원문 그대로 실린 것을 필수로 둔다 — 세금·비과세 검사가 그 원문을 찾는다.
+    #   전에는 notices 가 비어 세금 언급 글은 문구가 있어도 늘 실패했다(MN3 21호, 2026-10-19).
+    for s in [s for v in cfg["notices"].values() for s in v]:
+        if s in merged["main_website_markdown"] and s not in notices:
+            notices.append(s)
+    cat = "연금" if not silson and "연금" in (article.get("category") or "") else "실손"
     fin = dw.finance_gate({"title": merged["title"], "naver_title": "", "main": merged["main_website_markdown"],
-                           "naver": ""}, {"category": "실손"}, notices, preflight.parse_required_notices())
+                           "naver": ""}, {"category": cat}, notices, preflight.parse_required_notices())
     fin = [i for i in fin if "(네이버)" not in i["reason"] and not i["reason"].startswith("네이버 ")]
     out.append(("금소법 게이트(rules_finance_gate)", not fin, " / ".join(f"{i['reason']} → {i['sentence'][:40]}" for i in fin) or "통과"))
     ok, d = preflight.check_banned({"title": merged["title"], "main_website_markdown": merged["main_website_markdown"]})
