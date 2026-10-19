@@ -35,18 +35,17 @@ const nh = splitDraft("머리 없이 바로 본문입니다.");
 ok("머리 없으면 본문 그대로·core 빈칸", nh.text === "머리 없이 바로 본문입니다." && nh.core === "" && nh.direct === null);
 ok("프롬프트에 머리 지시", buildPrompt({ id: "u", title: "t", body: "b" }, "S").includes("질문 핵심"));
 
-// KQ3 — 질문자 상황·더한 것 머리, 원문·다른 답변 프롬프트
-const s3 = splitDraft("질문 핵심: q\n직접 응답: 예\n질문자 상황: 치아보험 · 가입 2년 전 · 고지\n더한 것: 청약서 사본 요청처\n---\n본문입니다.");
-ok("머리 → facts", JSON.stringify(s3.facts) === '["치아보험","가입 2년 전","고지"]');
-ok("머리 → added", s3.added === "청약서 사본 요청처");
-ok("머리 5줄도 본문에서 뗀다", s3.text === "본문입니다.");
-ok("더한 것 「없음」은 빈칸", splitDraft("질문 핵심: q\n직접 응답: 예\n더한 것: 없음\n---\n본문").added === "");
-ok("KQ2 머리만이면 facts 빈 목록", sd.facts.length === 0 && sd.added === "");
-const po = buildPrompt({ id: "u", title: "t", body: "원문", original: true, others: "남의 답변 요약" }, "S");
-ok("원문이면 원문 전체 표지", po.includes("질문자가 쓴 원문 전체") && !po.includes("검색 조각"));
-ok("다른 답변 포함 + 베끼지 않는다", po.includes("남의 답변 요약") && po.includes("베끼지 않는다"));
-ok("다른 답변 없으면 그 칸 없음", !buildPrompt({ id: "u", title: "t", body: "b" }, "S").includes("이미 달린 다른 답변"));
+// KQ4 — 질문 의도(검색 API 제목+조각에서 코드가 뽑음)를 프롬프트에 넘긴다. 원문·다른 답변 칸은 없다
+const po = buildPrompt(
+  { id: "u", title: "치아보험 고지의무사항 위반?", body: "조각", intent: { ask: "치아보험 고지의무사항 위반?", products: ["치아보험"], situations: ["고지", "검사·검진"] } },
+  "S",
+);
+ok("의도 블록", po.includes("- 묻는 것: 치아보험 고지의무사항 위반?") && po.includes("- 상품·담보: 치아보험") && po.includes("- 질문자 상황: 고지 · 검사·검진"));
+ok("검색 조각 표지 유지", po.includes("검색 조각"));
+ok("원문·다른 답변 칸 없음(KQ3 경로 폐기)", !po.includes("원문 전체") && !po.includes("이미 달린 다른 답변"));
+ok("의도 없으면 그 칸 없음", !buildPrompt({ id: "u", title: "t", body: "b" }, "S").includes("질문 의도"));
 ok("다음 할 일 지시", po.includes("다음에 할 일"));
+ok("머리 3줄 지시", po.includes("머리 3줄"));
 
 ok("정상 결과", parseCliResult(JSON.stringify({ type: "result", is_error: false, result: "  본문입니다.  " }), 0).text === "본문입니다.");
 ok("is_error → 오류", !!parseCliResult(JSON.stringify({ is_error: true, result: "Credit balance is too low" }), 1).error);
