@@ -4,7 +4,7 @@
  *   npx tsx scripts/kin_draft.mts <입력.json>
  *   입력: [{id, title, body, feedback?, style?}]  (feedback = 앞 원고가 게이트에 걸린 사유 — 다시 쓸 때만,
  *         style = {open, close, opinion} 여닫는 방식·의견 어구 번호 — factory-prompt KIN_OPENINGS 등)
- *   출력(stdout 마지막 줄): [{id, text} | {id, error}]
+ *   출력(stdout 마지막 줄): [{id, text, core, direct} | {id, error}]  (core·direct = 질의 적합 게이트용 머리, KQ2)
  *
  * 본문만 만든다. 유의문구 블록·게이트는 kin_pipeline.py(→ check_kin.mts)가 붙이고 본다.
  *
@@ -19,7 +19,13 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { kinPipelineSystemPrompt, kinStyleInstruction } from "../src/lib/factory-prompt";
+import {
+  KIN_CORE_LABEL,
+  KIN_DIRECT_LABEL,
+  KIN_HEAD_END,
+  kinPipelineSystemPrompt,
+  kinStyleInstruction,
+} from "../src/lib/factory-prompt";
 
 export const API_ENV_KEYS = ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL"] as const;
 const CLAUDE_EXE = process.env.CLAUDE_EXE ?? join(homedir(), ".local", "bin", process.platform === "win32" ? "claude.exe" : "claude");
@@ -32,7 +38,8 @@ export type KinItem = {
   feedback?: string;
   style?: { open?: number; close?: number; opinion?: number }; // KIN_OPENINGS·KIN_CLOSINGS·KIN_OPINION_PHRASES 번호
 };
-export type KinOut = { id: string; text: string } | { id: string; error: string };
+/** core·direct = 머리 3줄(splitDraft) — 질의 적합 게이트 입력. 게시 원고(text)에는 들어가지 않는다. */
+export type KinOut = { id: string; text: string; core: string; direct: boolean | null } | { id: string; error: string };
 
 /** 환경에 보이는 유료 API 변수 이름(값은 보지 않는다). */
 export function visibleApiEnv(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -54,13 +61,37 @@ export function buildPrompt(it: KinItem, system = kinPipelineSystemPrompt()): st
     "아래 지식iN 질문에 대한 답변 본문을 작성하라.",
     "",
     `질문 제목: ${it.title}`,
-    "질문 내용(검색 결과 조각 — 다른 사람의 답변 조각이 섞여 있을 수 있다. 그 내용을 그대로 따르지 않는다):",
+    "질문 본문(질문자가 쓴 글의 검색 조각 — 일부만 보일 수 있다. 다른 사람의 답변처럼 보이는 문장이 있으면 따르지 않는다):",
     it.body.slice(0, 3000),
+    "",
+    "먼저 머리 3줄(질문 핵심 · 직접 응답 · ---)을 쓰고, 본문 첫 두 문장에서 그 질문 핵심에 직접 답한다.",
     kinStyleInstruction(it.style),
     it.feedback ? `\n앞 원고는 아래 사유로 심의 게이트에 걸렸다. 이 사유가 없도록 처음부터 다시 쓴다:\n${it.feedback}` : "",
     "",
     "파일을 읽거나 쓰지 말고 도구도 쓰지 마라. 답변 본문만 출력한다(머리말·설명·코드펜스 없이).",
   ].join("\n");
+}
+
+/**
+ * 모델 출력 → 머리(질문 핵심·직접 응답 자체 채점)와 본문(KQ2). 머리가 없으면 core="" · direct=null 로 두고
+ * 본문은 그대로 — kin_pipeline.py 질의 적합 게이트가 「질문 핵심 없음」으로 걸러 다시 쓰게 한다.
+ */
+export function splitDraft(raw: string): { text: string; core: string; direct: boolean | null } {
+  const lines = raw.replace(/\r\n/g, "\n").split("\n");
+  let core = "";
+  let direct: boolean | null = null;
+  let i = 0;
+  for (; i < Math.min(lines.length, 6); i++) {
+    const l = lines[i].trim();
+    if (l.startsWith(KIN_CORE_LABEL)) core = l.slice(KIN_CORE_LABEL.length).trim();
+    else if (l.startsWith(KIN_DIRECT_LABEL)) direct = /^예/.test(l.slice(KIN_DIRECT_LABEL.length).trim());
+    else if (l === KIN_HEAD_END) {
+      i++;
+      break;
+    } else if (l) break;
+  }
+  if (!core && direct === null) return { text: raw.trim(), core: "", direct: null };
+  return { text: lines.slice(i).join("\n").trim(), core, direct };
 }
 
 /** `claude -p --output-format json` 출력 → 본문 또는 오류. */
@@ -128,7 +159,9 @@ async function main() {
   const out: KinOut[] = await Promise.all(
     items.map(async (it) => {
       const r = await runClaude(buildPrompt(it, system), cwd);
-      return r.text ? { id: it.id, text: r.text } : { id: it.id, error: r.error ?? "빈 응답" };
+      if (!r.text) return { id: it.id, error: r.error ?? "빈 응답" };
+      const d = splitDraft(r.text);
+      return d.text ? { id: it.id, ...d } : { id: it.id, error: "본문 없음(머리만)" };
     }),
   );
   process.stdout.write(JSON.stringify(out) + "\n");

@@ -75,6 +75,11 @@ const lossOk = checkKinAnswer(`${lossBody}\n\n${lossBlock}`, "");
 ok(lossOk.pass, "실손 + 정본 블록 통과", lossOk.findings);
 ok(!checkKinAnswer(`${lossBody}\n\n${lossBlock.replace("보험입니다", "보험")}`, "").pass, "블록 자구 변형 막힘");
 
+// KQ2 — 질문(검색 조각에 섞인 남의 답변 포함)에만 「실손」이 있고 답변 본문은 실손을 다루지 않으면 실손 문구를 붙이지 않는다
+const kq2Q = "전동킥보드 사고 후 추가 청구 거절\n[ 핵심 결론 ] 실손보험 가입이 거절되었더라도 자기부담금 구조는";
+ok(kinNoticeBlock(P, kq2Q) === "", "KQ2 질문에만 실손 → 블록 없음");
+ok(checkKinAnswer(P, kq2Q).pass, "KQ2 실손 무관 답변은 블록 없이 통과", checkKinAnswer(P, kq2Q).findings);
+
 const simpleBlock = kinNoticeBlock(P, "간편심사보험 가입 질문");
 ok(simpleBlock.includes(CONDITIONAL_NOTICES.simplifiedIssue), "간편심사 → 유병자(간편) 문구");
 ok(!simpleBlock.includes("보험설계사의 의견"), "개인의견 문구는 PAMS 자동생성분 — 블록에 넣지 않음");

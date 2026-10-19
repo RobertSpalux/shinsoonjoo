@@ -111,12 +111,14 @@ const LEGAL_ASSERT: { term: string; re: RegExp }[] = [
  * 🔴 개인의견·약관참조·보험료 상이 문구와 필수안내사항(심의필 자리)은 **PAMS 가 카테고리를 고르면 자동생성**한다
  *    (댓글광고심의 신청매뉴얼 20241024 p5 ⑥). 그래서 REQUIRED_NOTICES 2종은 여기 넣지 않는다 — 넣으면 같은 뜻이
  *    다른 자구로 두 번 나간다. PAMS 자동생성에 없는 소재 문구만 붙인다:
- *    · 실손 주제 → ACTUAL_LOSS_NOTICE(2026-09-23 PAMS 반송 요구 자구, requiredNoticesFor 의 세 번째 줄)
+ *    · 실손 주제(답변 본문 기준) → ACTUAL_LOSS_NOTICE(2026-09-23 PAMS 반송 요구 자구, requiredNoticesFor 의 세 번째 줄)
  *    · 유병자·간편 → CONDITIONAL_NOTICES.simplifiedIssue(2호 네이버 반송 사유) — 「유병자보험」 카테고리
  *      자동생성에 같은 문구가 들어가는지 미실측이라 붙인다(유의문구 과다는 반송 사유 아님, §6.11-4).
  */
 export function kinNoticeBlock(answerBody: string, question = ""): string {
-  const lines = requiredNoticesFor(answerBody, question).slice(2);
+  // 실손 문구는 **답변 본문이 실손을 다룰 때만**(KQ2 2026-10-19) — 질문(특히 검색 조각에 섞인 남의 답변)의 「실손」만으로
+  // 붙이면 실손 무관 답변(4542 휴업손해·4555 중복지급 등)에도 「실손보험은 자기부담금…」이 붙었다.
+  const lines = requiredNoticesFor(answerBody).slice(2);
   if (SIMPLIFIED_RE.test(answerBody + question)) lines.push(CONDITIONAL_NOTICES.simplifiedIssue);
   return lines.length ? [KIN_NOTICE_MARK, ...lines.map((l) => `- ${l}`)].join("\n") : "";
 }

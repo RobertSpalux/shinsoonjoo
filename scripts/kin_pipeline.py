@@ -232,7 +232,7 @@ def kit_text(rec):
         "",
         "── 질문 제목(참고) ──",
         rec["question_title"],
-        "── 질문 요약(참고 — 검색 API 조각. PAMS 에 넣지 않는다: 질문자 정보 기재 금지 ⑤) ──",
+        "── 질문 본문(참고 — 검색 API 의 질문 조각만, 답변 조각 제외. PAMS 에 넣지 않는다: 질문자 정보 기재 금지 ⑤) ──",
         rec["question_summary"],
         "",
         "── PAMS 에 붙여 넣을 원고 ──",
@@ -354,6 +354,57 @@ def variety_findings(answer, history, today, phrases):
     return out
 
 
+# ── 질의 적합 게이트(KQ2 2026-10-19 관제탑) ─────────────────────
+# 10/19 승인 8건 중 3건(4518 치아·4520 양성종양·4532 전동킥보드)이 첫 두 문장을 「판단을 가르는 기준은」
+# 「먼저 보실 것은」「시점으로 나눠 보면」으로만 채워 질문자가 물은 것에 답하지 않았다(로버트: 「질문자 의도에 제대로 대답하냐」).
+# 세 겹으로 본다 — ① 모델이 뽑은 「질문 핵심」이 있다 ② 모델 자체 채점이 「예」 ③ 첫 두 문장이 질문 핵심 낱말을 하나 이상
+# 받고, 답을 미루는 말(INTENT_DEFER_RE)만 있고 직접 답 표지(INTENT_DIRECT_RE)가 없지 않다.
+# 불합격 → 사유를 붙여 1회 다시 쓴다 → 또 불합격이면 후보에서 뺀다(INTENT_TRIES).
+INTENT_TRIES = 2
+INTENT_DEFER_RE = re.compile(r"판단(?:을|이)?\s*가르|걸려\s*있|여러\s*가지|몇\s*가지|기준은|기준이\s*됩니다|먼저\s*보실\s*것|"
+                             r"짚(?:을|어\s*볼)\s*부분|시점으로\s*나눠|헷갈리시는\s*지점|순서(?:로|가)\s*(?:보|중요)")
+INTENT_DIRECT_RE = re.compile(r"통상|일반적으로|보통|대개|대체로|대부분|경우가\s*많습니다|흔합니다|"
+                              r"해당(?:합니다|하지\s*않|될\s*수|되는\s*경우|되지\s*않)|아닙니다|어렵습니다|"
+                              r"볼\s*수\s*있습니다|보기\s*어렵|가능성이\s*(?:높|낮|있)")
+_INTENT_STOP = {"질문", "질문자", "궁금", "문의", "경우", "여부", "어떻게", "무엇", "어떤", "되나요", "인가", "인지", "관련",
+                "대한", "있는지", "없는지", "하는지", "되는지", "보험", "해당", "가능", "한가지"}
+
+
+def _intent_terms(core):
+    """질문 핵심의 내용어 — 2자 이상 한글 어절에서 조사·어미를 한 번 뗀다(kin-terms personalTerms 와 같은 방식)."""
+    out = []
+    for m in re.finditer(r"[가-힣A-Za-z]{2,}", core or ""):
+        w = re.sub(r"(?:으로|에서|에게|까지|부터|이나|이면|인지|인가|이냐|냐|은|는|이|가|을|를|에|의|와|과|도|만|로)$", "", m.group(0))
+        if len(w) >= 2 and w not in _INTENT_STOP and w not in out:
+            out.append(w)
+    return out
+
+
+def first_two(body):
+    first_para = next((p for p in re.split(r"\n\s*\n", (body or "").strip()) if p.strip()), "")
+    return " ".join(sentences(first_para)[:2])
+
+
+def intent_findings(core, direct, body):
+    """[{rule:'intent', term, reason}] — 비면 합격. body = 유의문구 블록 앞 본문."""
+    if not (core or "").strip():
+        return [{"rule": "intent", "term": "질문 핵심 없음",
+                 "reason": "머리 첫 줄 「질문 핵심: …」에 질문자가 실제로 묻는 한 가지를 쓴다"}]
+    out, lead = [], first_two(body)
+    if direct is not True:
+        out.append({"rule": "intent", "term": "자체 채점 「아니오」",
+                    "reason": f"첫 두 문장이 「{core}」에 직접 답하지 않는다 — 통상적인 기준을 구체적으로 먼저 말한다"})
+    terms = _intent_terms(core)
+    # 낱말 앞 2자만 맞아도 받은 것으로 친다(「고지」↔「고지의무」, 「치아보험」↔「치아」)
+    if terms and not any(t in lead or t[:2] in lead for t in terms):
+        out.append({"rule": "intent", "term": f"첫 두 문장에 질문 핵심 낱말 없음({'·'.join(terms[:4])})",
+                    "reason": "첫 두 문장이 질문자가 물은 것을 다루지 않는다"})
+    if INTENT_DEFER_RE.search(lead) and not INTENT_DIRECT_RE.search(lead):
+        out.append({"rule": "intent", "term": f"답을 미루는 서두: {INTENT_DEFER_RE.search(lead).group(0)}",
+                    "reason": "「판단 요소」 나열은 직접 답 뒤 보조로만 — 첫 두 문장에 「통상·일반적으로 ~」 식의 답을 둔다"})
+    return out
+
+
 def load_history(env, limit=HISTORY_N):
     """kin_answers 최근 limit 건(답변 초안·생성일 KST). 조회 실패는 빈 목록(같은 실행 안에서만 비교)."""
     try:
@@ -394,7 +445,7 @@ def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, t
     history = 최근 답변 [{text, day}](kin_answers) — 같은 실행에서 통과한 답변도 차례로 더해 비교한다.
     on_round(회차, 질문url, 답변, 틀, findings) — 회차별 판정 기록용(견본 보고)."""
     pending = {c["url"]: c for c in cands}
-    feedback, result = {}, {}
+    feedback, result, intent_fail = {}, {}, {}
     history = list(history or [])
     today = today or datetime.now(kit.KST).date().isoformat()
     phrases = fixed_phrases() if phrases is None else phrases
@@ -425,8 +476,18 @@ def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, t
             findings = list(v["findings"]) if not v["pass"] else []
             if v["pass"]:
                 findings = variety_findings(a, history, today, phrases)
+            d = drafts[u]
+            intent = intent_findings(d.get("core", ""), d.get("direct"), body_part(a))
+            findings += intent
             if on_round:
                 on_round(rnd, u, a, style_of.get(u), findings)
+            if intent:
+                intent_fail[u] = intent_fail.get(u, 0) + 1
+                if intent_fail[u] >= INTENT_TRIES:   # 재생성 1회 뒤에도 질문에 답하지 않으면 후보에서 뺀다
+                    result[u] = (None, "질의 적합 불합격(재생성 1회 후): "
+                                 + "; ".join(f["term"] for f in intent) + f" — 질문 핵심 「{d.get('core', '')}」")
+                    pending.pop(u)
+                    continue
             if not findings:
                 result[u] = (a, "")
                 history.insert(0, {"text": a, "day": today})
