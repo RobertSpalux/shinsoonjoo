@@ -35,6 +35,18 @@ const nh = splitDraft("머리 없이 바로 본문입니다.");
 ok("머리 없으면 본문 그대로·core 빈칸", nh.text === "머리 없이 바로 본문입니다." && nh.core === "" && nh.direct === null);
 ok("프롬프트에 머리 지시", buildPrompt({ id: "u", title: "t", body: "b" }, "S").includes("질문 핵심"));
 
+// KQ4 — 질문 의도(검색 API 제목+조각에서 코드가 뽑음)를 프롬프트에 넘긴다. 원문·다른 답변 칸은 없다
+const po = buildPrompt(
+  { id: "u", title: "치아보험 고지의무사항 위반?", body: "조각", intent: { ask: "치아보험 고지의무사항 위반?", products: ["치아보험"], situations: ["고지", "검사·검진"] } },
+  "S",
+);
+ok("의도 블록", po.includes("- 묻는 것: 치아보험 고지의무사항 위반?") && po.includes("- 상품·담보: 치아보험") && po.includes("- 질문자 상황: 고지 · 검사·검진"));
+ok("검색 조각 표지 유지", po.includes("검색 조각"));
+ok("원문·다른 답변 칸 없음(KQ3 경로 폐기)", !po.includes("원문 전체") && !po.includes("이미 달린 다른 답변"));
+ok("의도 없으면 그 칸 없음", !buildPrompt({ id: "u", title: "t", body: "b" }, "S").includes("질문 의도"));
+ok("다음 할 일 지시", po.includes("다음에 할 일"));
+ok("머리 3줄 지시", po.includes("머리 3줄"));
+
 ok("정상 결과", parseCliResult(JSON.stringify({ type: "result", is_error: false, result: "  본문입니다.  " }), 0).text === "본문입니다.");
 ok("is_error → 오류", !!parseCliResult(JSON.stringify({ is_error: true, result: "Credit balance is too low" }), 1).error);
 ok("빈 결과 → 빈 응답", parseCliResult(JSON.stringify({ is_error: false, result: "" }), 0).error === "빈 응답");

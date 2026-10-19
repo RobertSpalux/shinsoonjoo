@@ -22,10 +22,15 @@
     → 「질문 본문」은 **질문 조각만** 모은다(question_snippet). 둘 다 지켜야 질문 조각으로 친다:
       ① link 에 answerNo 가 없다 — answerNo 가 붙은 결과는 그 답변에 걸린 검색 결과라 description 이 답변 조각이다.
       ② 조각에 답변 표지(ANSWER_LIKE_RE — 「질문자님」「핵심 결론」「문의해 주시기 바랍니다」 등)가 없다.
+    🔴 KQ4(2026-10-19 실측): 승인 8건을 다시 받으니 **모든 결과에 answerNo 가 붙어 있었고**, description 은 질문 일부 +
+      그 답변 일부가 섞인 조각이었다 → ①만으로는 질문 조각 0건. 그래서 ③ 서로 다른 answerNo 조각에 그대로 겹치는 글
+      (shared_spans — 질문 글은 답변마다 되풀이된다)도 질문 조각으로 친다. answerNo=0 은 질문으로 친다([가설] 1건 관측).
     질문 조각이 하나도 없으면 그 질문은 후보에서 뺀다(「질문 본문 없음」) — 남의 답을 질문 대신 쓰지 않는다.
     「snippets」(전체 조각)는 소재·개인정보·회사명 제외 판정에만 쓰고, 초안·DB 에는 넘기지 않는다.
-  · 질문 상세 페이지 GET 은 하지 않는다 — robots.txt 를 확인하지 못했다(KQ2 2026-10-19 에도 이 세션에서
-    kin.naver.com 조회가 막혔다). 그래서 HTML 선택자가 아니라 검색 API 의 link·description 으로 가른다.
+  · 질문 상세 페이지 GET 은 하지 않는다 — kin.naver.com/robots.txt(KQ3 2026-10-19 실측)가 ClaudeBot·anthropic-ai 등을
+    Disallow: / 로 막고 AI 학습·RAG 목적 봇 접근을 금지한다. 사람이 원문을 옮기는 경로도 쓰지 않는다(KQ4 로버트).
+    그래서 HTML 선택자가 아니라 검색 API 의 link·description 으로 가르고, 질문 의도는 제목 + 질문 조각으로만 잡는다
+    (kin_pipeline.question_intent — 못 잡으면 후보에서 뺀다).
 
 제외: 답변 다수 · 특정 회사·상품 비교/추천 요청 · 개인정보(전화·주민번호·이메일·증권번호)가 보이는 질문.
 """
@@ -186,14 +191,59 @@ def question_url(link):
 
 
 def question_snippet(link, snip):
-    """이 검색 결과의 description 이 **질문자 글** 조각인가(모듈 머리말 KQ2 — answerNo 없음 + 답변 표지 없음)."""
-    return bool(snip) and not ANS_RX.search(link or "") and not ANSWER_LIKE_RE.search(snip)
+    """이 검색 결과의 description 이 **질문자 글** 조각인가(모듈 머리말 KQ2 — answerNo 없음 + 답변 표지 없음).
+    answerNo=0 도 질문으로 친다(KQ4 실측 — 495435597 의 answerNo=0 조각이 질문 본문 그대로였다. [가설] 1건 관측)."""
+    a = ANS_RX.search(link or "")
+    return bool(snip) and (not a or a.group(1) == "0") and not ANSWER_LIKE_RE.search(snip)
+
+
+# ── 여러 답변 조각에 겹치는 글 = 질문 본문(KQ4 2026-10-19 실측) ─────────────
+# 10/19 승인 8건을 검색 API 로 다시 받아 보니 **모든 결과에 answerNo 가 붙어 있었다**(0 포함). description 은
+# 「질문 본문 일부 … 그 답변 일부」가 섞인 조각이라 KQ2 필터(answerNo 없음)만으로는 질문 조각이 0건 → 전 후보가
+# 「질문 본문 없음」으로 빠진다. 그런데 질문 본문은 **답변마다 같은 글로 되풀이**되고, 답변 글은 그 답변에만 있다.
+# → 서로 다른 answerNo 조각 두 개 이상에 SHARED_MIN 자 이상 그대로 겹치는 부분만 질문 본문으로 쓴다.
+#   한 답변에만 있는 글(남의 답변·우리 답변)은 들어오지 않는다. 겹친 글에도 답변 표지가 있으면 버린다.
+SHARED_MIN = 12
+
+
+def shared_spans(descs_by_answer, n=SHARED_MIN):
+    """{answerNo: [description…]} → 서로 다른 답변 조각에 n 자 이상 겹치는 글(나온 순서, 포함 관계 중복 제거)."""
+    from difflib import SequenceMatcher
+    found = []
+    keys = list(descs_by_answer)
+    for x in keys:
+        for d in descs_by_answer[x]:
+            marks = []
+            for y in keys:
+                if y == x:
+                    continue
+                for e in descs_by_answer[y]:
+                    sm = SequenceMatcher(None, d, e, autojunk=False)
+                    marks += [(m.a, m.a + m.size) for m in sm.get_matching_blocks() if m.size >= n]
+            marks.sort()
+            merged = []
+            for s, t in marks:
+                if merged and s <= merged[-1][1]:
+                    merged[-1][1] = max(merged[-1][1], t)
+                else:
+                    merged.append([s, t])
+            for s, t in merged:
+                for piece in re.split(r"\.{2,}|…", d[s:t]):
+                    piece = piece.strip(" .,")
+                    if len(piece) >= n and not ANSWER_LIKE_RE.search(piece):
+                        found.append(piece)
+    out = []
+    for p in sorted(found, key=len, reverse=True):   # 긴 것부터 — 이미 고른 글에 들어 있는 조각은 버린다
+        if not any(p in q for q in out):
+            out.append(p)
+    order = {p: min(i for i, f in enumerate(found) if f == p) for p in out}
+    return sorted(out, key=order.get)
 
 
 def group_items(items_by_topic):
     """{소재: [API item]} → {docId: 질문}. 같은 질문이 여러 답변·여러 소재로 걸려도 하나로 묶는다.
-    snippets = 모든 조각(제외 판정용) · body = 질문 조각만(초안·DB 용, question_snippet)."""
-    out = {}
+    snippets = 모든 조각(제외 판정용) · body = 질문 조각만(초안·DB 용, question_snippet + 답변 조각끼리 겹친 글 shared_spans)."""
+    out, by_answer = {}, {}
     for topic, items in items_by_topic.items():
         for it in items:
             link = it.get("link") or ""
@@ -210,10 +260,18 @@ def group_items(items_by_topic):
                 q["snippets"].append(snip)
             if question_snippet(link, snip) and snip not in q["body"]:
                 q["body"].append(snip)
+            elif a and snip:
+                descs = by_answer.setdefault(doc, {}).setdefault(a.group(1), [])
+                if snip not in descs:
+                    descs.append(snip)
             if topic not in q["topics"]:
                 q["topics"].append(topic)
             if a:
                 q["answers_seen"] = max(q["answers_seen"], int(a.group(1)))
+    for doc, descs in by_answer.items():
+        for s in shared_spans(descs):
+            if not any(s in b for b in out[doc]["body"]):
+                out[doc]["body"].append(s)
     return out
 
 
@@ -297,9 +355,12 @@ def apply_ledger(questions, ledger, now, baseline_if_empty=True):
 
 
 def summarize(q):
-    """질문 본문(질문 조각만 — KQ2). 답변 조각은 넣지 않는다."""
+    """질문 본문(질문 조각만 — KQ2·KQ4). 답변 조각은 넣지 않는다. 400자 — 의도 게이트(묻는 것·상황)가 볼 만큼."""
     s = " / ".join(q.get("body", []))
-    return (s[:200] + "…") if len(s) > 200 else s
+    return (s[:SUMMARY_MAX] + "…") if len(s) > SUMMARY_MAX else s
+
+
+SUMMARY_MAX = 400
 
 
 # ── 수집 ────────────────────────────────────────────────────

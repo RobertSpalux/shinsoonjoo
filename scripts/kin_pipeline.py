@@ -405,6 +405,140 @@ def intent_findings(core, direct, body):
     return out
 
 
+# ── 질문 의도 — 검색 API 의 제목 + 질문 조각만(KQ4 2026-10-19 관제탑) ───────────
+# 로버트(15:15): 「지식인은 니가 질문의 의도를 파악해서 답변을 맞게 제대로 작성해야지, 내가 그걸 왜 붙여넣어」.
+# → 사람이 원문을 옮기는 경로(KQ3 kin_questions\<docId>.txt)는 쓰지 않는다.
+# 🔴 질문 상세 페이지는 여전히 읽지 않는다 — kin.naver.com/robots.txt(KQ3 실측)가 ClaudeBot·anthropic-ai 등을 Disallow: / 로
+#    막고 AI 학습·RAG 목적 봇 접근을 금지한다. 정식 경로 = 네이버 검색 오픈API(지식iN)의 title·description 뿐이고,
+#    description 은 KQ2 필터(answerNo 없음 · 답변 표지 없음)를 통과한 질문 조각만 쓴다(kin_harvest.summarize).
+#
+# 의도 명확도 게이트 — 제목+조각에서 아래 셋이 **모두** 잡혀야 후보다. 못 잡으면 사유를 남기고 뺀다(질보다 양이 아니다).
+#   ① 묻는 것: 물음 표지가 있는 한 문장(제목 우선)
+#   ② 상품·담보 종류: 「치아보험」「실비」「배상책임」「부담보」처럼 무엇에 관한 질문인지(「보험」 단독은 안 친다)
+#   ③ 질문자 상황 사실 1개 이상: 시점·단계·거절·청구 같은 사실(SITUATION_KINDS)
+# 뽑은 것은 초안기에 「질문 의도」로 넘기고(kin_draft.mts), 채택 기준 게이트가 본문이 이것을 다뤘는지 잰다.
+# 물음표 · 물음 어미 · 의문사, 또는 끝이 「~랍니다(들은 말)」「~되면/하면(조건만 던짐)」인 제목
+ASK_RE = re.compile(r"[?？]"
+                    r"|나요|까요|가요|인가|인지|는지|은지|을지|할지|될지|되나|될까|맞나|없나|있나|뭔가요|뭐죠|궁금|알려\s*주세요"
+                    r"|어떻게|어떡|어쩌|왜|언제|얼마나|무엇|뭘|뭐가|가능한지|가능할까|받을\s*수\s*있|(?:게|건|것이)\s*맞"
+                    r"|(?:랍니다|라는데요?|라고\s*하네요|되면|하면)\s*\.{0,3}\s*$")
+PRODUCT_RE = re.compile(
+    r"(?:실손|실비|치아|암|간병인?|치매|운전자|종신|정기|연금|저축|상해|질병|건강|화재|배상\s*책임|일상\s*생활\s*배상|어린이|태아|"
+    r"유병자|간편\s*심사|간편|종합|생명|정액|수술비|입원비?|자동차|여행자|펫|변액|CI|GI)\s*보험|"
+    r"실손|실비|진단비|수술비|입원\s*(?:비|일당)|일당|후유\s*장해|사망\s*보험금|배상\s*책임|휴업\s*손해|부담보|특약|보장성")
+# 질문자 상황 종류 — (이름, 질문에서 잡는 식, 답변 본문이 그 상황을 다뤘다고 보는 식)
+# 본문 식은 일반 낱말이다 — 질문의 구체 사정(검사 이름·다친 경위)을 되받으면 personal 게이트(kin-terms)가 막는다.
+SITUATION_KINDS = [
+    ("가입 시점", re.compile(r"(?:19|20)?\d{2}\s*년\s*(?:\d+\s*월)?|\d+\s*(?:개월|달|년)(?:\s*\d+\s*개월)?\s*(?:이\s*)?(?:전|후|째|만|지나|지났|넘)|"
+                          r"가입\s*(?:전|후|직후|당시|하고|했는데|한\s*지)|보험\s*가입\s*후|작년|재작년|몇\s*년\s*전|오래\s*전"),
+     re.compile(r"가입\s*(?:전|후|직후|당시|시점|한\s*뒤|하신\s*뒤|하기\s*전|하실\s*때|하셨)|시점|\d+\s*(?:년|개월)|기간")),
+    ("가입 예정", re.compile(r"가입\s*(?:하려|하려고|할까|해야|예정|하는\s*게|하는게|할\s*수)|들려고|들어야|들까"),
+     re.compile(r"가입\s*(?:전|하시기\s*전|하실\s*때|하려|을\s*앞두)|청약")),
+    ("청구", re.compile(r"청구|보험금\s*(?:신청|받|지급)|지급\s*(?:요청|신청)"), re.compile(r"청구")),
+    ("거절·부지급", re.compile(r"거절|부지급|지급\s*(?:불가|거부|안\s*(?:된|해|됨))|불가\s*(?:랍니다|하다|통보)|못\s*받"),
+     re.compile(r"거절|부지급|지급(?:하지|되지)\s*않|지급\s*불가")),
+    ("고지", re.compile(r"(?<![사최])고지|알릴\s*의무|알리지"), re.compile(r"(?<![사최])고지|알릴\s*의무|알리")),   # 「사고지만」 제외
+    ("부담보", re.compile(r"부담보"), re.compile(r"부담보")),
+    ("진단·발견", re.compile(r"(?<!무)진단(?!형)|발견|확인\s*되|판정|발병|생겼|생기|양성|종양"), re.compile(r"진단|발견|확인된|확인되")),
+    ("사고", re.compile(r"사고|다쳤|다쳐|부상|넘어|낙상|부딪"), re.compile(r"사고|다치|부상")),
+    ("검사·검진", re.compile(r"검사|검진|재검|엑스레이|촬영"), re.compile(r"검사|검진")),
+    ("치료·수술·입원", re.compile(r"치료|수술|입원|통원|시술"), re.compile(r"치료|수술|입원|통원")),
+    ("해지·갱신", re.compile(r"해지|해약|갱신|만기|실효"), re.compile(r"해지|해약|갱신|만기|실효")),
+    ("여러 계약", re.compile(r"중복|여러\s*(?:개|건|군데)|두\s*(?:개|군데|곳)|겹|각각"), re.compile(r"중복|겹|여러\s*계약|계약마다|각각")),
+    ("사망·수익자", re.compile(r"사망|수익자|상속"), re.compile(r"사망|수익자")),
+    ("서류 발급", re.compile(r"발급|진단서|서류"), re.compile(r"발급|서류|진단서")),
+    ("소득·생계", re.compile(r"생계|소득|월급|일을\s*못|일\s*못|휴업"), re.compile(r"휴업|소득|생계")),
+]
+INTENT_ASK_MAX = 80
+
+
+def _sentences_of(text):
+    return [s.strip() for s in re.split(r"(?<=[.?!？])\s+|\s*/\s*|\n+", text or "") if s.strip()]
+
+
+def question_intent(title, summary):
+    """검색 API 제목 + 질문 조각 → (의도 | None, 제외 사유). 의도 = {ask, products, situations:[이름]}.
+
+    summary 는 kin_harvest.summarize 결과(KQ2 필터 통과 질문 조각만, 「 / 」로 이음)다."""
+    title, summary = (title or "").strip(), (summary or "").strip()
+    text = f"{title} {summary}"
+    # 묻는 것 — 물음 문장 최대 2개(제목 · 조각 속 질문자의 물음). 긴 문장은 물음이 있는 뒷부분을 남긴다
+    asks = [s if len(s) <= INTENT_ASK_MAX else "…" + s[-INTENT_ASK_MAX:]
+            for s in [title] + _sentences_of(summary) if s and ASK_RE.search(s)]
+    ask = " / ".join(asks[:2])
+    products = []
+    for m in PRODUCT_RE.finditer(text):
+        p = re.sub(r"\s+", "", m.group(0))
+        if p not in products:
+            products.append(p)
+    situations = [name for name, q_re, _ in SITUATION_KINDS if q_re.search(text)]
+    missing = [label for label, ok in (("묻는 것", ask), ("상품·담보 종류", products), ("질문자 상황", situations)) if not ok]
+    if missing:
+        return None, "의도 불명확(" + "·".join(missing) + " 못 잡음)"
+    return {"ask": ask, "products": products, "situations": situations}, ""
+
+
+def split_by_intent(cands):
+    """후보 → (의도가 잡힌 후보[intent 붙음], [(뺀 후보, 사유)])."""
+    keep, drop = [], []
+    for c in cands:
+        intent, why = question_intent(c.get("title"), c.get("summary"))
+        (keep.append({**c, "intent": intent}) if intent else drop.append((c, why)))
+    return keep, drop
+
+
+# ── 채택 기준 게이트(KQ3 → KQ4: 근거는 API 텍스트에서 뽑은 의도) — 질의 적합(KQ2) 확장 ──────────
+# ① 상품·담보 + 질문자 상황 사실을 본문이 직접 다룬다 — 상품 1 + 상황 1 이상 = ADOPT_FACTS_MIN 개
+# ② 첫 두 문장 직접 답 — intent_findings(KQ2)
+# ③ 마지막 문단 = 다음 할 일(서류 + 요청·발급 같은 행동)
+ADOPT_FACTS_MIN = 2
+ACTION_DOC_RE = re.compile(r"청약서|약관|증권|진료\s*기록|진단서|소견서|영수증|진료비\s*(?:세부\s*)?(?:내역|명세)|서류|사본|"
+                           r"확인서|안내문|통지서|거절\s*사유|심사\s*결과|고지\s*문항")
+ACTION_VERB_RE = re.compile(r"요청|발급|받아\s*(?:두|보|놓)|챙겨|준비|신청|확인해\s*(?:보|두)|대조해|물어\s*보|받으시")
+# 같은 담보를 가리키는 다른 이름 — 질문이 「실비」면 답의 「실손」도 받은 것으로 친다
+PRODUCT_ALIASES = {"실비": ("실손", "실비"), "실비보험": ("실손", "실비"), "실손보험": ("실손", "실비")}
+
+
+def product_covered(products, body):
+    b = re.sub(r"\s+", "", body or "")
+    for p in products or []:
+        stem = re.sub(r"보험$", "", p)
+        keys = PRODUCT_ALIASES.get(p, ()) + (p, stem if len(stem) >= 2 else p)
+        if any(k in b for k in keys):
+            return p
+    return None
+
+
+def covered_situations(situations, body):
+    kinds = {name: b_re for name, _, b_re in SITUATION_KINDS}
+    return [s for s in situations or [] if s in kinds and kinds[s].search(body or "")]
+
+
+def last_paragraph(body):
+    paras = [p.strip() for p in re.split(r"\n\s*\n", (body or "").strip()) if p.strip()]
+    return paras[-1] if paras else ""
+
+
+def adoption_findings(intent, body):
+    """[{rule:'adopt', term, reason}] — 비면 합격. intent = question_intent 결과, body = 유의문구 블록 앞 본문."""
+    out = []
+    intent = intent or {}
+    prod = product_covered(intent.get("products"), body)
+    sits = covered_situations(intent.get("situations"), body)
+    got = (1 if prod else 0) + len(sits)
+    if not prod or not sits or got < ADOPT_FACTS_MIN:
+        out.append({"rule": "adopt",
+                    "term": f"질문자 상황 반영 {got}/{ADOPT_FACTS_MIN}(상품 {'·'.join(intent.get('products') or []) or '없음'}"
+                            f"{' ✓' if prod else ' ✗'} · 상황 {'·'.join(intent.get('situations') or []) or '없음'}"
+                            f" → 다룸 {'·'.join(sits) or '없음'})",
+                    "reason": "질문 제목·조각에 적힌 상품·담보 종류와 질문자 상황(시점·단계·거절·청구 등)을 본문이 직접 다룬다"})
+    lp = last_paragraph(body)
+    if not (ACTION_DOC_RE.search(lp) and ACTION_VERB_RE.search(lp)):
+        out.append({"rule": "adopt", "term": "마지막 문단에 다음 할 일 없음",
+                    "reason": "마지막 문단은 질문자가 다음에 할 일 1~2가지(어떤 서류를 어디에 요청·발급하는지)로 끝낸다"})
+    return out
+
+
 def load_history(env, limit=HISTORY_N):
     """kin_answers 최근 limit 건(답변 초안·생성일 KST). 조회 실패는 빈 목록(같은 실행 안에서만 비교)."""
     try:
@@ -458,7 +592,8 @@ def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, t
         if not pending:
             break
         reqs = [{"id": u, "title": c["title"], "body": c["summary"], **({"feedback": feedback[u]} if u in feedback else {}),
-                 **({"style": style_of[u]} if style_of.get(u) else {})}
+                 **({"style": style_of[u]} if style_of.get(u) else {}),
+                 **({"intent": c["intent"]} if c.get("intent") else {})}
                 for u, c in pending.items()]
         drafts = {d["id"]: d for d in draft_fn(reqs)}
         for u in list(pending):
@@ -478,13 +613,16 @@ def make_answers(cands, draft_fn=draft, gate_fn=gate, notice_fn=notice_blocks, t
                 findings = variety_findings(a, history, today, phrases)
             d = drafts[u]
             intent = intent_findings(d.get("core", ""), d.get("direct"), body_part(a))
+            c = pending[u]
+            if c.get("intent"):   # 채택 기준(KQ4) — cmd_run 은 의도가 잡힌 후보만 넘긴다
+                intent += adoption_findings(c["intent"], body_part(a))
             findings += intent
             if on_round:
                 on_round(rnd, u, a, style_of.get(u), findings)
             if intent:
                 intent_fail[u] = intent_fail.get(u, 0) + 1
                 if intent_fail[u] >= INTENT_TRIES:   # 재생성 1회 뒤에도 질문에 답하지 않으면 후보에서 뺀다
-                    result[u] = (None, "질의 적합 불합격(재생성 1회 후): "
+                    result[u] = (None, "질의 적합 불합격(채택 기준 포함, 재생성 1회 후): "
                                  + "; ".join(f["term"] for f in intent) + f" — 질문 핵심 「{d.get('core', '')}」")
                     pending.pop(u)
                     continue
@@ -694,11 +832,15 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
     state = load_state(state_path)
     res = (harvest_fn or (lambda: kin_harvest.collect(env, now=now)))()
     scoped, off = in_scope(res["candidates"])
-    chosen = pick(scoped, state, today, n)
+    # KQ4 — 제목+질문 조각으로 묻는 것·상품·상황을 못 잡은 질문은 초안을 만들지 않는다(일반론이 된다)
+    clear, unclear = split_by_intent(scoped)
+    chosen = pick(clear, state, today, n)
     expiring, exp_line = expiry_check(today, expiring_fn or (lambda d: count_expiring(env, d)))
     lines = [f"지식iN 수집: 질문 {res['seen_total']} · 후보 {len(res['candidates'])} · 제외 {len(res['excluded'])}"
-             + (" · 첫 실행 기준선" if res.get("baseline") else "") + f" · 오늘 만들 것 {len(chosen)}", exp_line]
+             + (" · 첫 실행 기준선" if res.get("baseline") else "")
+             + f" · 의도 명확 {len(clear)} · 의도 불명확 {len(unclear)} · 오늘 만들 것 {len(chosen)}", exp_line]
     lines += [f"⛔ 보험 무관 — {c['title'][:40]} ({why})" for c, why in off]
+    lines += [f"🔍 [{c['topic']}] {c['title'][:40]} — {why}" for c, why in unclear]
     if make_fn is None:
         def make_fn(cs):
             return make_answers(cs, history=(history_fn or (lambda: load_history(env)))(), today=today)

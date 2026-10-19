@@ -285,12 +285,12 @@ class Flow(unittest.TestCase):
         self.kits = os.path.join(self.d, "kits")
         self.sent = []
 
-    def harvest(self):
+    def harvest(self):   # 둘 다 의도 명확(KQ4) — 묻는 것·상품·상황이 제목+조각에 있다
         return {"seen_total": 3, "baseline": False, "excluded": [],
                 "candidates": [{"url": "https://kin.naver.com/qna/detail.naver?dirId=1&docId=11", "topic": "부담보",
-                                "title": "부담보 질문", "summary": "요약"},
+                                "title": "부담보 기간 끝나면 보장되나요?", "summary": "가입할 때 부담보 조건이 붙었습니다"},
                                {"url": "https://kin.naver.com/qna/detail.naver?dirId=1&docId=12", "topic": "간병",
-                                "title": "간병보험 질문", "summary": "요약"}]}
+                                "title": "간병보험 가입하려는데 고지해야 하나요?", "summary": "작년에 입원한 적이 있습니다"}]}
 
     def test_run_approve_posted_weekly(self):
         now = datetime(2026, 10, 9, 9, tzinfo=KST)
@@ -546,6 +546,161 @@ class Flow(unittest.TestCase):
         self.assertIn("질의 적합 불합격", res[0][2])
         self.assertEqual(len(calls), 2)
         self.assertIn("intent: 답을 미루는 서두", calls[1][0]["feedback"])
+
+    # ── KQ4 — 질문 의도는 검색 API 제목 + 질문 조각으로만 · 채택 기준 게이트 ─────────────────
+    KQ4_TITLE = "치아보험 고지의무사항 위반?"
+    KQ4_SNIP = "치아보험 가입 2년 전에 치과 검진에서 치료 권유를 받았는데 치료는 안 받았습니다"
+    KQ4_GOOD = ("치아보험 청약서는 통상 최근 일정 기간 안에 치료를 받았거나 치료가 필요하다는 소견을 들은 적이 있는지를 묻습니다. "
+                "가입 전 일이라도 문항이 묻는 기간 안에 들어가면, 실제 치료를 받지 않았더라도 그 소견은 알리는 쪽으로 보는 경우가 많습니다."
+                "\n\n제 의견으로는 검진 기록의 날짜가 가장 중요합니다."
+                "\n\n가입한 보험사에 청약서 사본을 요청하고, 그때 다닌 치과에 진료 기록 사본을 요청해 날짜를 확인해 두시면 됩니다.")
+    KQ4_ABSTRACT = ("이 사안의 판단을 가르는 기준은 문항이 어느 기간까지, 어떤 내용을 묻고 있는지입니다. "
+                    "알릴 의무는 보험회사가 질문한 범위 안에서 사실대로 답하는 의무입니다."
+                    "\n\n결국 약관 문구에 따라 결론이 달라질 수 있습니다.")
+
+    def test_kq4_question_intent(self):
+        i, why = kp.question_intent(self.KQ4_TITLE, self.KQ4_SNIP)
+        self.assertEqual(why, "")
+        self.assertEqual(i["ask"], self.KQ4_TITLE)                  # 묻는 것 — 제목 우선
+        self.assertIn("치아보험", i["products"])
+        self.assertIn("가입 시점", i["situations"])
+        self.assertIn("고지", i["situations"])
+        # 묻는 것이 조각에만 있어도 잡는다(조각은 「 / 」로 이어져 온다 — kin_harvest.summarize)
+        i, _ = kp.question_intent("배상책임보험중 생계비", "치료 중이라 일을 못 하고 있습니다 / 생계비도 받을 수 있나요")
+        self.assertEqual(i["ask"], "생계비도 받을 수 있나요")
+        self.assertIn("소득·생계", i["situations"])
+        # 「~랍니다」로 끝나는 제목(들은 결과를 옮김)도 묻는 것으로 친다
+        i, _ = kp.question_intent("전동퀵보드사고 실비보험 보험금지급불가랍니다", "")
+        self.assertTrue(i and "거절·부지급" in i["situations"] and "사고" in i["situations"])
+
+    def test_kq4_question_intent_rejects(self):
+        """셋 중 하나라도 못 잡으면 후보에서 뺀다 — 사유에 무엇을 못 잡았는지 남긴다."""
+        self.assertEqual(kp.question_intent("보험 질문", "")[1], "의도 불명확(묻는 것·상품·담보 종류·질문자 상황 못 잡음)")
+        _, why = kp.question_intent("보험 가입할 때 뭘 봐야 하나요?", "")     # 「보험」 단독은 상품 종류가 아니다
+        self.assertIn("상품·담보 종류", why)
+        _, why = kp.question_intent("치아보험 좋은가요?", "")               # 질문자 상황 사실이 없다
+        self.assertIn("질문자 상황", why)
+        _, why = kp.question_intent("실비 청구 서류", "작년에 입원했습니다")  # 묻는 문장이 없다
+        self.assertIn("묻는 것", why)
+        keep, drop = kp.split_by_intent([{"title": self.KQ4_TITLE, "summary": self.KQ4_SNIP},
+                                         {"title": "보험 질문", "summary": ""}])
+        self.assertEqual(len(keep), 1)
+        self.assertIn("intent", keep[0])
+        self.assertEqual(len(drop), 1)
+
+    def test_kq4_run_skips_unclear(self):
+        """의도 불명확 후보는 초안을 만들지 않고 사유 줄만 남긴다. 사람에게 원문을 달라는 알림은 없다(KQ4)."""
+        d = tempfile.mkdtemp()
+        sent = []
+
+        def harvest():
+            return {"seen_total": 2, "baseline": False, "excluded": [],
+                    "candidates": [{"url": "https://kin.naver.com/qna/detail.naver?dirId=4010302&docId=21", "topic": "부담보",
+                                    "title": "부담보 질문", "summary": "요약"}]}
+        lines, made = kp.cmd_run({}, 3, True, harvest_fn=harvest, make_fn=lambda cs: self.fail("의도 불명확은 초안 금지"),
+                                 notify=sent.append, state_path=os.path.join(d, "s.json"), kit_dir=os.path.join(d, "k"),
+                                 now=datetime(2026, 10, 19, 9, tzinfo=KST), expiring_fn=lambda x: 0)
+        self.assertEqual(made, [])
+        self.assertIn("의도 불명확 1", lines[0])
+        self.assertTrue(any(l.startswith("🔍 [부담보] 부담보 질문 — 의도 불명확(") for l in lines), lines)
+        self.assertEqual(sent, [])
+        self.assertFalse(hasattr(kp, "QUESTION_DIR"))   # 사람이 원문을 옮기는 경로는 없다
+
+    def test_kq4_adoption_findings(self):
+        i, _ = kp.question_intent(self.KQ4_TITLE, self.KQ4_SNIP)
+        self.assertEqual(kp.adoption_findings(i, self.KQ4_GOOD), [])
+        terms = [f["term"] for f in kp.adoption_findings(i, self.KQ4_ABSTRACT)]
+        self.assertTrue(any(t.startswith("질문자 상황 반영") and "✗" in t for t in terms), terms)   # 「치아보험」을 안 다룸
+        self.assertIn("마지막 문단에 다음 할 일 없음", terms)
+        # 상품은 다뤘지만 상황을 하나도 안 다루면 불합격
+        only_product = "치아보험은 상품마다 다릅니다. 통상 그렇습니다.\n\n보험사에 약관 사본을 요청해 두시면 됩니다."
+        self.assertTrue(any(f["term"].startswith("질문자 상황 반영 1/2") for f in kp.adoption_findings(i, only_product)))
+        # 「실비」로 물었으면 답의 「실손」도 받은 것으로 친다
+        j, _ = kp.question_intent("실비 청구 거절됐는데 어떻게 하나요?", "")
+        body = "실손은 통상 거절 사유가 서면으로 옵니다. 보통 그렇습니다.\n\n보험사에 거절 사유를 서면으로 요청해 두시면 됩니다."
+        self.assertEqual(kp.adoption_findings(j, body), [])
+
+    def test_kq4_make_answers_drops_abstract(self):
+        """의도 후보 — 상황을 안 다루고 할 일 없이 끝나면 1회 재생성, 또 그러면 후보 제외. 초안기에 의도가 간다."""
+        calls = []
+
+        def draft_fn(reqs):
+            calls.append(reqs)
+            return [{"id": r["id"], "text": self.KQ4_ABSTRACT, "core": "문항이 묻는 기간이 고지 대상인가", "direct": True}
+                    for r in reqs]
+        i, _ = kp.question_intent(self.KQ4_TITLE, self.KQ4_SNIP)
+        c = {"url": "u", "title": self.KQ4_TITLE, "summary": self.KQ4_SNIP, "intent": i}
+        res = kp.make_answers([c], draft_fn, lambda xs: [{"pass": True, "findings": []} for _ in xs],
+                              lambda xs: [""] * len(xs), history=[], phrases=[], styles=[{"open": 0, "close": 0, "opinion": 0}] * 3)
+        self.assertIsNone(res[0][1])
+        self.assertIn("질의 적합 불합격", res[0][2])
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][0]["intent"]["products"], ["치아보험"])
+        self.assertIn("adopt: 마지막 문단에 다음 할 일 없음", calls[1][0]["feedback"])
+        # 좋은 답은 한 번에 통과
+        good = lambda reqs: [{"id": r["id"], "text": self.KQ4_GOOD, "core": "치아보험 고지 대상인가", "direct": True}  # noqa: E731
+                             for r in reqs]
+        res = kp.make_answers([c], good, lambda xs: [{"pass": True, "findings": []} for _ in xs],
+                              lambda xs: [""] * len(xs), history=[], phrases=[], styles=[{"open": 0, "close": 0, "opinion": 0}] * 3)
+        self.assertEqual(res[0][1], self.KQ4_GOOD)
+
+    # KQ4 실측(2026-10-19 검색 API) — 승인 8건 모든 결과에 answerNo 가 붙어 있었다. description = 질문 일부 + 그 답변 일부.
+    KQ4_DESCS = {   # 495581358(4532) 실제 조각 축약 — 질문 글은 답변마다 되풀이되고, 답변 글은 한 번씩만 나온다
+        "1": ["가지않아 전동퀵보드 사고지만 보험금지급이 된 사례도 제출을하였습니다... 그리고는 보험금 지급불가 라고 하는상황이구요"
+              " 이과정에서 76만원에 대한건... 가입한 보험이 실비보험(치료비를 보상받는 보험)인지 상해보험인지"],
+        "3": ["가지않아 전동퀵보드 사고지만 보험금지급이 된 사례도 제출을하였습니다 그렇지만 여전히 보험금지급이 어렵다..."
+              " 현재 상황에서 보험금 지급이 무조건 불가능하다고 단정할 사안은 아닙니다."],
+        "4": ["사고로 슬개골골절이 발생하여 수술을하고 치료를 받고있습니다 보험사는... 그리고는 보험금 지급불가 라고 하는상황이구요"],
+    }
+
+    def test_kq4_shared_spans_are_question_text(self):
+        spans = kh.shared_spans(self.KQ4_DESCS)
+        joined = " / ".join(spans)
+        self.assertIn("전동퀵보드 사고지만 보험금지급이 된 사례도 제출을하였습니다", joined)
+        self.assertIn("보험금 지급불가 라고 하는상황이구요", joined)
+        for answer_only in ("실비보험(치료비를", "무조건 불가능하다고", "슬개골골절"):   # 한 답변에만 있는 글은 안 들어온다
+            self.assertNotIn(answer_only, joined)
+        # group_items — answerNo 결과뿐이어도 답변끼리 겹친 글이 질문 본문이 된다. 답변 하나뿐이면 질문 본문 없음(종전대로)
+        items = [item(9, ans=a, desc=d) for a, ds in self.KQ4_DESCS.items() for d in ds]
+        self.assertTrue(kh.group_items({"실손청구": items})["9"]["body"])
+        self.assertEqual(kh.group_items({"실손청구": items[:1]})["9"]["body"], [])
+        # answerNo=0 조각은 질문 글(495435597 실측)
+        self.assertTrue(kh.question_snippet(item(1, ans=None)["link"] + "&answerNo=0", "치아보험 고지 의무 해당사항인가요?"))
+
+    # 같은 날 API 로 다시 받은 승인 8건 — 제목 + 질문 본문(KQ2 필터 + 겹친 글). 의도가 잡히는 4건만 후보가 된다.
+    KQ4_APPROVED = [
+        ("4518", "치아보험 고지의무사항 위반?",
+         "보통 치아보험 무진단형으로 가입하면 최근1년충치치료 최근5년 잇몸수술 틀니착용하냐 고지의무사항있던데 2년6개월이 넘었는데 "
+         "저도 고지 의무 해당사항인가요? 틀니도없고 기간도 해당안되는거 같은데.. 그리고 치아보험...", True),
+        ("4520", "2017년 5월 2일 보험가입 후 2018년 양성종양",
+         "2017년 5월 2일 보험가입 후 2018년 양성종양 수술 2026년 9월 암진단 진단비 받을 수 있을까요? 특정부위,질병 부담보 특약에 "
+         "가입되어 있어요. 면책기간 보험전기간으로.", True),
+        ("4532", "전동퀵보드사고 실비보험 보험금지급불가랍니다",
+         "가지않아 전동퀵보드 사고지만 보험금지급이 된 사례도 제출을하였습니다 / 그리고는 보험금 지급불가 라고 하는상황이구요", True),
+        ("4542", "배상책임보험중 생계비", "", False),            # 답변 하나 + 우리 답변 — 겹친 글 없음
+        ("4550", "엑스레이검사시 다른질병 확인되면",
+         "그러면 내과소견이지만 정형외과 선생님이 판단을 내릴수있나요 그야물론 질병확인은 좋은검사이지만 보험도 영향이 있을것 같아서요", False),
+        ("4554", "사망진단서 발급과 보험금", "", False),
+        ("4555", "교보라플 질문", "1. 건강 보험. 2.입원비보험 2 수술비보험. 3가지. 중복으로 들어 가게되잖아요 중복 가입 과. 중복지급이 되는건가요", True),
+        ("4548", "가입 거절 당한 실손 보험 .. 없이 종합보험만 가입하는게 맞....",
+         "보험이 없어서 종합보험+실손 가입 문의 요청했으나 거절당했습니다", True),
+    ]
+
+    def test_kq4_approved_regression(self):
+        for no, title, summary, clear in self.KQ4_APPROVED:
+            i, why = kp.question_intent(title, summary)
+            self.assertEqual(bool(i), clear, f"{no} {why}")
+        i, _ = kp.question_intent(*self.KQ4_APPROVED[2][1:3])
+        self.assertNotIn("고지", i["situations"])          # 「사고지만」은 고지가 아니다
+        self.assertIn("거절·부지급", i["situations"])
+        i, _ = kp.question_intent(*self.KQ4_APPROVED[0][1:3])
+        self.assertIn("해당사항인가요?", i["ask"])            # 조각 속 질문자의 물음까지 넘긴다
+        self.assertNotIn("진단·발견", i["situations"])       # 「무진단형」은 진단이 아니다
+
+    def test_kq4_closings_end_with_next_step(self):
+        """닫는 방식 9종이 모두 다음 할 일(서류·요청처)로 끝나게 지시한다 — 채택 기준 ③과 충돌하지 않게."""
+        for c in kp._ts_array("KIN_CLOSINGS"):
+            self.assertRegex(c, r"할 일|서류|요청|발급|받아 두|사본", c)
 
     def test_special_note_fits(self):
         for t in kh.TOPICS:
