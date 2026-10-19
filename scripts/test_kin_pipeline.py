@@ -132,6 +132,47 @@ class Harvest(unittest.TestCase):
         self.assertEqual([c["title"] for c, _ in off], ["부동산 중개인 고지의무위반"])
         self.assertEqual(len(keep), 8)
 
+    # KQ2 — kin_answers.question_body 에 들어간 남의 답변 조각(관제탑 10/19 대조, inbox 원문)
+    KQ2_ANSWER_SNIPS = [
+        "[ 핵심 결론 ] 질문자님의 2년 6개월 전 검진 결과는",
+        "손해사정서 작성까지 도와드릴 수 있으니 상담 문의해 주시기 바랍니다",
+        "[ 핵심 결론 ] 실손보험 가입이 거절되었더라도",
+        "오토바이 부담보 특약 부가 등 계약 변경을 점검해 두셔야 합니다.",
+    ]
+    KQ2_QUESTION_SNIPS = [
+        "노안 늦추는 안약이나 레이저 치료받으면 제가 개인적으로 든 실손 의료비(실비) 보험으로 청구 가능한가요?",
+        "1세대 실비이고 최종납입월이 24년06월이고 납입횟수 180회(총 180회)라고 되어 있습니다.",
+        "치아보험 가입하려는데 2년 반 전에 받은 검진도 알려야 하나요?",
+    ]
+
+    def test_kq2_question_body_only(self):
+        q_link = "https://kin.naver.com/qna/detail.naver?dirId=4010302&docId=495435597"
+        for s in self.KQ2_ANSWER_SNIPS:
+            self.assertFalse(kh.question_snippet(q_link, s), s)           # 답변 표지 → 질문 본문 아님
+        for s in self.KQ2_QUESTION_SNIPS:
+            self.assertTrue(kh.question_snippet(q_link, s), s)
+            self.assertFalse(kh.question_snippet(q_link + "&answerNo=1", s), s)   # answerNo 결과 = 답변 조각
+        g = kh.group_items({"고지의무": [item(7, ans=1, desc=self.KQ2_QUESTION_SNIPS[2]),
+                                       item(7, desc=self.KQ2_ANSWER_SNIPS[0]),
+                                       item(8, desc=self.KQ2_QUESTION_SNIPS[2])]})
+        self.assertEqual(g["7"]["body"], [])                    # 질문 조각이 하나도 없다
+        self.assertEqual(len(g["7"]["snippets"]), 2)            # 제외 판정용 전체 조각은 남긴다
+        self.assertEqual(g["8"]["body"], [self.KQ2_QUESTION_SNIPS[2]])
+        self.assertEqual(kh.summarize(g["7"]), "")
+        self.assertNotIn("핵심 결론", kh.summarize({**g["7"], "body": g["8"]["body"]}))
+        base = {"title": "치아보험 고지 문의", "answers_seen": 0, "dirId": "4010302"}
+        self.assertEqual(kh.exclusion({**base, **{k: g["7"][k] for k in ("snippets", "body")}}),
+                         "질문 본문 없음(검색 조각이 답변뿐)")
+        self.assertIsNone(kh.exclusion({**base, **{k: g["8"][k] for k in ("snippets", "body")}}))
+        # collect 행의 summary(→ kin_answers.question_body)에 답변 조각이 들어가지 않는다
+        with tempfile.TemporaryDirectory() as d:
+            res = kh.collect({}, search_fn=lambda q: [item(7, title="치아보험 고지 문의", ans=1, desc=self.KQ2_ANSWER_SNIPS[0]),
+                                                     item(8, title="치아보험 고지 문의", desc=self.KQ2_QUESTION_SNIPS[2])],
+                             ledger_path=os.path.join(d, "seen.json"), baseline_if_empty=False)
+            self.assertEqual([c["docId"] for c in res["candidates"]], ["8"])
+            self.assertEqual(res["candidates"][0]["summary"], self.KQ2_QUESTION_SNIPS[2])
+            self.assertIn("질문 본문 없음", next(x["excluded"] for x in res["excluded"] if x["docId"] == "7"))
+
     def test_ledger_baseline_then_fresh_then_stale(self):
         led, now = {}, datetime(2026, 10, 9, 9, tzinfo=KST)
         q1 = {"1": {"docId": "1", "title": "t", "snippets": [], "topics": ["부담보"], "answers_seen": 0, "url": "u1"}}
@@ -379,7 +420,8 @@ class Flow(unittest.TestCase):
 
         def draft_fn(reqs):
             calls.append(reqs)
-            return [{"id": r["id"], "text": "좋은 본문" if r.get("feedback") else "나쁜 본문"} for r in reqs]
+            return [{"id": r["id"], "text": "좋은 본문" if r.get("feedback") else "나쁜 본문", "core": "본문 기준", "direct": True}
+                    for r in reqs]
 
         def gate_fn(items):
             return [{"pass": it["answer"] == "좋은 본문", "findings": [] if it["answer"] == "좋은 본문"
@@ -424,12 +466,13 @@ class Flow(unittest.TestCase):
     def test_make_answers_rewrites_on_repeat_with_new_style(self):
         """같은 실행 안에서 앞 답변과 첫 문장이 겹치면 다른 틀로 다시 쓴다."""
         calls = []
-        a1 = "판단을 가르는 기준은 문항의 기간입니다. 가운데입니다. 약관 문구에서 갈립니다."
-        a2 = "먼저 볼 것은 가입 시점입니다. 가운데입니다. 다음 순서는 청약서 사본입니다."
+        a1 = "통상 문항의 기간이 기준입니다. 가운데입니다. 약관 문구에서 갈립니다."
+        a2 = "보통 가입 시점을 먼저 봅니다. 가운데입니다. 다음 순서는 청약서 사본입니다."
 
         def draft_fn(reqs):
             calls.append(reqs)
-            return [{"id": r["id"], "text": a2 if r.get("feedback") else a1} for r in reqs]
+            return [{"id": r["id"], "text": a2 if r.get("feedback") else a1, "core": "문항 시점", "direct": True}
+                    for r in reqs]
 
         def gate_fn(items):
             return [{"pass": True, "findings": []} for _ in items]
@@ -444,6 +487,65 @@ class Flow(unittest.TestCase):
         self.assertEqual(calls[1][0]["style"]["open"], 2)          # 겹친 뒤엔 아직 안 쓴 틀
         self.assertIn("repeat: 첫 문장", calls[1][0]["feedback"])
         self.assertEqual([(r[0], r[1]) for r in log], [(1, "u1"), (1, "u2"), (2, "u2")])
+
+    # KQ2 회귀 — 2026-10-19 승인 8건의 첫 두 문장(승인본 그대로, 고치지 않는다) · 질문 핵심은 승인본·관제탑 대조로 추정.
+    # 관제탑 판정: 4518·4520·4532 사실상 무응답. 기계 판정(낱말·미루는 서두)만 본다 — 자체 채점은 승인본에 없다.
+    KQ2_APPROVED = [
+        ("4518", "몇 년 전 구강 검진 이력이 치아보험 가입 때 고지 대상인가",
+         "이 사안의 판단을 가르는 기준은 청약서의 고지 문항이 어느 기간까지, 어떤 내용을 묻고 있는지입니다. "
+         "계약 전 알릴 의무는 보험회사가 질문한 범위 안에서 사실대로 답하는 의무입니다.", False),
+        ("4520", "부담보 조건이 있는 계약에서 그 뒤 확정된 진단이 보장되는가",
+         "가장 먼저 보실 것은 증권에 적힌 부담보 조건의 범위입니다. "
+         "그다음은 가입 당시 고지 문항의 문구이고, 마지막은 진단이 확정된 시점과 그 진단의 분류입니다.", False),
+        ("4532", "가입 뒤 생긴 이동수단 사고가 계약 후 알릴 의무 위반이 되는가",
+         "지금 상황을 시점으로 나눠 보면 이렇습니다. "
+         "가입은 이미 끝났고, 사고 뒤 처음 낸 청구는 처리되었으며, 그 뒤에 추가로 낸 청구에서 거절 통보를 받으신 단계입니다.", False),
+        ("4542", "치료 기간 생계비를 배상책임보험에서 받을 수 있는가",
+         "휴업손해는 다친 뒤 일을 하지 못한 기간 동안 벌지 못한 소득을 손해로 보고 계산하는 항목입니다. "
+         "배상책임보험에서는 생계비가 대개 이 항목으로 다뤄집니다.", True),
+        ("4550", "검사 중 발견된 다른 질환이 보장되는가",
+         "검사 중에 다른 질환이 확인되었을 때 보장 여부를 가르는 첫 기준은 그 질환이 언제 시작된 것으로 보느냐, "
+         "즉 보험 가입 시점과 발병 시점 중 어느 쪽이 먼저냐입니다. 검사에서 우연히 발견되었다는 사실보다, "
+         "가입 전에 이미 관련 증상이나 진료 이력이 있었는지가 더 무겁게 다뤄지는 경우가 많습니다.", True),
+        ("4554", "사망 서류를 발급받는 사람이 보험금도 받을 수 있는가",
+         "이 질문에서 많이 헷갈리시는 지점은 사망을 증명하는 서류를 누가 발급받느냐와 보험금을 누가 받느냐를 같은 문제로 보시는 부분입니다. "
+         "두 가지는 따로 움직이는 경우가 많습니다.", True),
+        ("4555", "여러 계약에 겹친 보장이 중복 지급되는가",
+         "보험은 계약마다 따로 가입하고 따로 관리하는 구조라서, 이름이 다른 계약을 여러 개 들다 보면 같은 성격의 보장이 여러 곳에 겹쳐 담기는 일이 자연스럽게 생깁니다. "
+         "증권에는 그 계약 하나만 보이고 다른 계약과 무엇이 겹치는지는 표시되지 않습니다.", True),
+        ("4548", "실손 가입이 거절된 뒤 다른 보장성 계약을 어떻게 가입하나",
+         "지금은 실손 가입 심사에서 거절 결과를 받았고, 다른 보장성 계약은 아직 가입 전인 시점으로 보입니다. "
+         "이 시점에서는 무엇을 먼저 가입할지보다 거절이 어떤 사유로 나왔는지를 먼저 정리해 두셔야 합니다.", True),
+    ]
+
+    def test_kq2_intent_regression(self):
+        for no, core, lead, ok in self.KQ2_APPROVED:
+            f = kp.intent_findings(core, True, lead + "\n\n둘째 문단입니다.")
+            self.assertEqual(not f, ok, f"{no} {f}")
+
+    def test_intent_findings(self):
+        good = ("치아보험 청약서는 보통 최근 일정 기간 안의 치료·검사 소견을 묻습니다. 상품마다 묻는 기간이 다르니 본인 청약서 문항이 기준입니다."
+                "\n\n판단 요소는 이렇습니다.")
+        self.assertEqual(kp.intent_findings("검진 이력이 치아보험 고지 대상인가", True, good), [])
+        self.assertEqual([x["term"] for x in kp.intent_findings("", True, good)], ["질문 핵심 없음"])
+        self.assertIn("자체 채점 「아니오」", [x["term"] for x in kp.intent_findings("치아보험 고지", False, good)])
+        self.assertTrue(any("핵심 낱말 없음" in x["term"] for x in kp.intent_findings("수익자 변경 절차", True, good)))
+
+    def test_make_answers_drops_after_intent_retry(self):
+        """질의 적합 불합격 → 사유를 붙여 1회 다시 → 또 불합격이면 후보에서 뺀다(3회차 없음)."""
+        calls = []
+        lead = "이 사안의 판단을 가르는 기준은 문항의 기간입니다. 둘째 문장입니다."
+
+        def draft_fn(reqs):
+            calls.append(reqs)
+            return [{"id": r["id"], "text": lead, "core": "문항 기간이 고지 대상인가", "direct": True} for r in reqs]
+        res = kp.make_answers([{"url": "u", "title": "t", "summary": "s"}], draft_fn,
+                              lambda xs: [{"pass": True, "findings": []} for _ in xs], lambda xs: [""] * len(xs),
+                              history=[], phrases=[], styles=[{"open": 0, "close": 0, "opinion": 0}] * 3)
+        self.assertIsNone(res[0][1])
+        self.assertIn("질의 적합 불합격", res[0][2])
+        self.assertEqual(len(calls), 2)
+        self.assertIn("intent: 답을 미루는 서두", calls[1][0]["feedback"])
 
     def test_special_note_fits(self):
         for t in kh.TOPICS:

@@ -16,8 +16,16 @@
   · **채택·마감 여부가 없다.** → 「마감」 칸은 늘 「미확인(API 미제공)」. 게시 직전 로버트가 화면에서 본다.
   · **답변 수가 없다.** 대신 link 의 answerNo(검색에 걸린 답변 번호)의 최댓값을 하한으로 쓴다.
     answerNo ≥ ANSWERS_MAX 면 「답변 다수」로 뺀다.
-  · 질문 본문 전문이 없다. description 은 질문 또는 **남의 답변** 조각이다 → 「요약」은 그 조각을 그대로 둔다.
-  · 질문 상세 페이지 GET 은 하지 않는다 — robots.txt 를 이 세션에서 확인하지 못했다(보고서 참조).
+  · 질문 본문 전문이 없다. description 은 질문 또는 **남의 답변** 조각이다.
+    🔴 KQ2(2026-10-19): 조각을 그대로 「요약」에 넣었더니 kin_answers.question_body 에 남의 답변
+    (「[ 핵심 결론 ] 질문자님의…」「…상담 문의해 주시기 바랍니다」)이 들어가 초안이 질문이 아니라 남의 답을 보고 써졌다.
+    → 「질문 본문」은 **질문 조각만** 모은다(question_snippet). 둘 다 지켜야 질문 조각으로 친다:
+      ① link 에 answerNo 가 없다 — answerNo 가 붙은 결과는 그 답변에 걸린 검색 결과라 description 이 답변 조각이다.
+      ② 조각에 답변 표지(ANSWER_LIKE_RE — 「질문자님」「핵심 결론」「문의해 주시기 바랍니다」 등)가 없다.
+    질문 조각이 하나도 없으면 그 질문은 후보에서 뺀다(「질문 본문 없음」) — 남의 답을 질문 대신 쓰지 않는다.
+    「snippets」(전체 조각)는 소재·개인정보·회사명 제외 판정에만 쓰고, 초안·DB 에는 넘기지 않는다.
+  · 질문 상세 페이지 GET 은 하지 않는다 — robots.txt 를 확인하지 못했다(KQ2 2026-10-19 에도 이 세션에서
+    kin.naver.com 조회가 막혔다). 그래서 HTML 선택자가 아니라 검색 API 의 link·description 으로 가른다.
 
 제외: 답변 다수 · 특정 회사·상품 비교/추천 요청 · 개인정보(전화·주민번호·이메일·증권번호)가 보이는 질문.
 """
@@ -96,6 +104,16 @@ LEGAL_RE = re.compile(r"상속|후견|소송|고소|고발|합의금|이혼|양�
 # 보험 분류로 들어왔어도 제목·본문 조각 어디에도 보험 신호어가 없으면 뺀다. 조각의 「실비」 단독은 「실제 비용」 뜻이 많아
 # 신호로 치지 않는다(제목의 「실비」는 INSURANCE_TITLE_RE 가 신호로 본다).
 SIGNAL_RE = re.compile(r"보험|실손|부담보(?!증)|고지|알릴\s*의무|보장|담보|특약|유병자|간편\s*심사|보험금|청구")
+# 답변 조각 표지 — 질문자는 자기 글에 이렇게 쓰지 않는다. KQ2 실측(kin_answers.question_body 에 들어간 남의 답변):
+# 495435597 「[ 핵심 결론 ] 질문자님의 2년 6개월 전 검진 결과는…」 · 495514489 「…손해사정서 작성… 상담 문의해 주시기 바랍니다」
+# 495555117 「[ 핵심 결론 ] 실손보험 가입이 거절되었더라도…」 · KQ1 회귀표 「…점검해 두셔야 합니다」.
+# 표지가 없는 답변 조각(KQ1 「…냉혹한 구조를 모르고 가입 직후 병원에」)은 이 정규식으로 못 가린다 — ① answerNo 가 막는다.
+ANSWER_LIKE_RE = re.compile(
+    r"질문\s*자\s*(?:님|분)|핵심\s*결론|\[\s*(?:결론|답변|요약|정리)|결론부터|답변\s*드(?:립|리)|말씀\s*드리(?:면|자면)|"
+    r"(?:문의|연락|상담)\s*(?:해\s*)?주시(?:기|면)|상담\s*(?:문의|신청|가능)|손해\s*사정\s*(?:사|서)|설계사\s*입니다|"
+    r"도움이\s*되(?:셨|시길|었으면)|채택|참고\s*하시(?:기|면)|하셔야\s*합니다|두셔야\s*합니다|보셔야\s*합니다|"
+    r"권해\s*드립|추천\s*드립|드리겠습니다|안녕하세요[^.?!]{0,30}(?:입니다|설계사|손해사정|전문)"
+)
 DOC_RX = re.compile(r"docId=(\d+)")
 DIR_RX = re.compile(r"dirId=(\d+)")
 ANS_RX = re.compile(r"answerNo=(\d+)")
@@ -167,8 +185,14 @@ def question_url(link):
     return base + (f"dirId={r.group(1)}&" if r else "") + f"docId={d.group(1)}"
 
 
+def question_snippet(link, snip):
+    """이 검색 결과의 description 이 **질문자 글** 조각인가(모듈 머리말 KQ2 — answerNo 없음 + 답변 표지 없음)."""
+    return bool(snip) and not ANS_RX.search(link or "") and not ANSWER_LIKE_RE.search(snip)
+
+
 def group_items(items_by_topic):
-    """{소재: [API item]} → {docId: 질문}. 같은 질문이 여러 답변·여러 소재로 걸려도 하나로 묶는다."""
+    """{소재: [API item]} → {docId: 질문}. 같은 질문이 여러 답변·여러 소재로 걸려도 하나로 묶는다.
+    snippets = 모든 조각(제외 판정용) · body = 질문 조각만(초안·DB 용, question_snippet)."""
     out = {}
     for topic, items in items_by_topic.items():
         for it in items:
@@ -179,10 +203,13 @@ def group_items(items_by_topic):
             doc = d.group(1)
             a, r = ANS_RX.search(link), DIR_RX.search(link)
             q = out.setdefault(doc, {"docId": doc, "dirId": r.group(1) if r else "", "url": question_url(link),
-                                     "title": clean(it.get("title")), "snippets": [], "topics": [], "answers_seen": 0})
+                                     "title": clean(it.get("title")), "snippets": [], "body": [], "topics": [],
+                                     "answers_seen": 0})
             snip = clean(it.get("description"))
             if snip and snip not in q["snippets"]:
                 q["snippets"].append(snip)
+            if question_snippet(link, snip) and snip not in q["body"]:
+                q["body"].append(snip)
             if topic not in q["topics"]:
                 q["topics"].append(topic)
             if a:
@@ -236,6 +263,8 @@ def exclusion(q, insurers=(), dicts=None):
         return f"특정 회사 언급({hit})"
     if PII_RE.search(text):
         return "개인정보 노출"
+    if "body" in q and not q["body"]:   # KQ2 — 검색 조각이 남의 답변뿐이면 질문자가 무엇을 물었는지 모른다
+        return "질문 본문 없음(검색 조각이 답변뿐)"
     return None
 
 
@@ -268,7 +297,8 @@ def apply_ledger(questions, ledger, now, baseline_if_empty=True):
 
 
 def summarize(q):
-    s = " / ".join(q["snippets"])
+    """질문 본문(질문 조각만 — KQ2). 답변 조각은 넣지 않는다."""
+    s = " / ".join(q.get("body", []))
     return (s[:200] + "…") if len(s) > 200 else s
 
 
