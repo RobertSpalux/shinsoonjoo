@@ -63,7 +63,7 @@ export default function FunnelForm() {
     }
     setState("success");
     // 전환 이벤트 — 개인정보는 싣지 않는다
-    gaEvent("lead_created", { form: "funnel_v1", source: utm("utm_source") ?? "direct" });
+    gaEvent("generate_lead", { form: "funnel_v1", source: utm("utm_source") ?? "direct" });
   }
 
   if (state === "success") {

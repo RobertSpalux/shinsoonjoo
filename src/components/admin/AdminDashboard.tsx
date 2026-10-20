@@ -10,6 +10,8 @@ import type { CheckResult } from "@/lib/compliance/banned-terms";
 import { classifyBasis } from "@/lib/evidence-gate";
 import ComplianceModal from "@/components/admin/ComplianceModal";
 import KinTab, { type KinAnswer } from "@/components/admin/KinTab";
+import ContentIndexTab from "@/components/admin/ContentIndexTab";
+import type { IndexRow } from "@/lib/content-index";
 import {
   AdReviewPanel,
   ExpiringDashboard,
@@ -169,6 +171,8 @@ export default function AdminDashboard({
   expiring,
   previewToken,
   compliance: initialCompliance,
+  contentIndex,
+  contentIndexError,
 }: {
   leads: Lead[];
   consultations: Consultation[];
@@ -178,8 +182,10 @@ export default function AdminDashboard({
   expiring: ExpiringReview[];
   previewToken: string;
   compliance: Record<string, CheckResult>;
+  contentIndex: IndexRow[];
+  contentIndexError: string | null;
 }) {
-  const [tab, setTab] = useState<"leads" | "consults" | "articles" | "kin">("articles");
+  const [tab, setTab] = useState<"leads" | "consults" | "articles" | "kin" | "index">("articles");
   const [leads, setLeads] = useState(initialLeads);
   const [consults, setConsults] = useState(initialConsults);
   const [articles, setArticles] = useState(initialArticles);
@@ -600,6 +606,7 @@ export default function AdminDashboard({
               ["leads", `진단 리드 ${leads.length}`],
               ["consults", `상담 신청 ${consults.length}`],
               ["kin", `지식iN ${kinAnswers.length}`],
+              ["index", "유입 지수"],
             ] as const).map(([key, label]) => (
               <button key={key} onClick={() => setTab(key)} className={chipBtn(tab === key)}>
                 {label}
@@ -1153,6 +1160,15 @@ export default function AdminDashboard({
             onToast={showToast}
             selectCls={selectCls}
             chipBtn={chipBtn}
+          />
+        )}
+
+        {/* ─── 유입 지수 탭(IX1) — 글 × 주차 읽기 전용. 측정은 로컬 크론 ─── */}
+        {tab === "index" && (
+          <ContentIndexTab
+            rows={contentIndex}
+            error={contentIndexError}
+            labels={Object.fromEntries(articles.map((a) => [a.slug, a.title.split(/\s+[—–-]\s+/)[0]]))}
           />
         )}
 
