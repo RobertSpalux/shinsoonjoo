@@ -306,9 +306,28 @@ def db_docs(env):
 
 
 # ── 생성 (구독 `claude -p`) ───────────────────────────────────
+SOURCES_JSON = os.path.join(ROOT, "configs", "sources.json")
+
+
+def source_lines(path=SOURCES_JSON, note_max=320):
+    """검증된 출처 장부(configs/sources.json — 자료명 정본·증빙 파일 있음) → 프롬프트 줄. 순수에 가깝다(파일 읽기만).
+    SUP1(2026-10-20): 장부 없이 생성한 3편이 전부 근거 칸에 [확인: ___] 을 남겨 매일 공급이 「투입 보류」로 끝났다."""
+    try:
+        rows = json.load(open(path, encoding="utf-8")).get("sources", [])
+    except (OSError, json.JSONDecodeError):
+        return []
+    out = []
+    for s in rows:
+        pub = s.get("published") or ""
+        note = re.sub(r"\s+", " ", s.get("note") or "")[:note_max]
+        out.append(f"- {s.get('org')}, {s.get('title')}, {pub[:4]}, {pub} — {note}")
+    return out
+
+
 def build_prompt(topic, cfg, rules_text):
     notices = notice_texts(cfg, topic)
     links = cfg["internal_links"]
+    sources = source_lines()
     return f"""너는 23년 차 보험 전문가 신순주의 블로그 원고를 쓰는 작가다. 아래 규칙을 어기면 심의에서 반송된다.
 
 # 금소법 게이트 규칙 (원문)
@@ -349,6 +368,12 @@ def build_prompt(topic, cfg, rules_text):
 # 근거(verify_claims)
 - 본문에서 제도·법령을 설명한 문장마다 하나. basis 는 「작성기관명, 자료명(원문 제목 그대로), 기준년도, 발표·개정연도」를 모두 적는다(예: 국가법령정보센터, 소득세법 제59조의4(특별세액공제), 2025.12.23 개정).
 - 기사·지식백과·블로그는 근거가 아니다. 원문을 모르면 그 문장을 본문에서 빼거나 [확인: ___] 로 남긴다.
+- **아래 「검증된 출처 장부」의 자료를 먼저 쓴다** — 자료명·발표일을 장부 글자 그대로(축약 금지), 쪽·조항은 장부 설명에 있는 것만.
+  장부로 뒷받침되지 않는 제도 설명은 본문에서 빼는 쪽을 택한다([확인: ___] 이 남은 원고는 투입되지 않는다).
+  · 표준약관 = 보험업감독업무시행세칙 [별표 15], 표준 계약전알릴의무사항 = [별표 14] 표준사업방법서 <부표 1>.
+
+# 검증된 출처 장부 (configs/sources.json — 증빙 원문 보유)
+{chr(10).join(sources) if sources else '(장부 없음)'}
 
 # 네이버 사진 5장(naver_images) — 본문 [이미지①~⑤] 자리에 순서대로 들어간다
 - ① 썸네일 ② 비교표 ③ 두 칸 대비 ④ 흐름 ⑤ 요점+안내. 사진에도 금액·수익률·보험사명·상담 유인 문구를 쓰지 않는다.

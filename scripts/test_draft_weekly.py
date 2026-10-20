@@ -242,6 +242,13 @@ class ImageConfigTest(unittest.TestCase):
         c = dw.image_config({k: v for k, v in self.RAW.items() if k != "flow"}, "x")
         self.assertIn("빠진 칸", " ".join(dw.image_issues(c)))
 
+    def test_prompt_carries_source_ledger(self):
+        """근거는 검증된 출처 장부에서 고르게 한다 — 장부 자료명이 글자 그대로 프롬프트에 들어간다."""
+        p = dw.build_prompt(WL, CFG, "")
+        self.assertIn("검증된 출처 장부", p)
+        self.assertIn("보험업감독업무시행세칙 [별표 15] 표준약관(제5-13조제1항관련)", p)
+        self.assertEqual(dw.source_lines(os.path.join(tempfile.gettempdir(), "없는-파일.json")), [])
+
     def test_prompt_asks_for_image_keys(self):
         p = dw.build_prompt(WL, CFG, "")
         self.assertIn('"naver_images"', p)
