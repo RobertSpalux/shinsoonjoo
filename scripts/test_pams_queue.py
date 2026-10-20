@@ -130,6 +130,74 @@ class Message(unittest.TestCase):
         self.assertTrue(line.startswith("9호 본진 ✓ → 8호 본진 → 7호 본진 → 7호 스레드 → 7호 네이버 (본진 승인 대기)"), line)
 
 
+class HeldKits(unittest.TestCase):
+    """SK2 — 칸이 다 찬 동안 보류한 키트 알림은, 칸이 비는 순간 「다음 접수」 한 통에 실린다."""
+    HELD = {f"{C}|main": {"label": "장기요양 (7호) 본진", "zip": r"D:\PAMS접수\1020_7호_본진.zip"},
+            "corp|main": {"label": "법인 계약 (corp) 본진", "why": "본문에서 configs/sources.json 의 자료명을 찾지 못했습니다"}}
+    FULL = [{"slug": s, "channel": "main", "status": "submitted"} for s in ("a", "b", "c")]
+
+    def test_full_sends_nothing(self):
+        p = q.plan(ORDER, self.FULL, KITS)
+        self.assertEqual(q.should_notify(p, {"held_kits": self.HELD})[0], False, "칸이 다 찼으면 보류한 키트도 보내지 않는다")
+
+    def test_free_slot_sends_one_message_with_locations(self):
+        p = q.plan(ORDER, [OTHER_THREADS], KITS)
+        st = {"held_kits": dict(self.HELD)}
+        _, sig = q.should_notify(p, {})
+        st["queue_notified"] = sig
+        self.assertTrue(q.should_notify(p, st)[0], "같은 다음 항목이라도 보류한 키트가 있으면 보낸다")
+        m = q.held_message(p, st, file_exists=lambda z: True)
+        lines = m.split("\n")
+        self.assertTrue(lines[0].startswith("다음 접수: 9호 본진"), lines[0])
+        self.assertIn(r"준비된 키트: 장기요양 (7호) 본진 — D:\PAMS접수\1020_7호_본진.zip", lines)
+        self.assertIn("키트 없음 — 법인 계약 (corp) 본진: 본문에서 configs/sources.json 의 자료명을 찾지 못했습니다", lines)
+        self.assertEqual(len(lines), 3)
+
+    def test_missing_file_reported(self):
+        lines = q.held_lines({"k": {"label": "L", "zip": "gone.zip"}}, file_exists=lambda z: False)
+        self.assertEqual(lines, ["키트 없음 — L: 만들었던 키트 파일이 없어졌습니다"])
+
+    def test_free_slot_without_next_still_sends_held(self):
+        p = q.plan([], [], {})
+        self.assertTrue(q.should_notify(p, {"held_kits": self.HELD})[0])
+        self.assertFalse(q.should_notify(p, {})[0])
+        self.assertTrue(q.held_message(p, {"held_kits": self.HELD}).startswith("다음 접수: 운영표에 준비된 항목 없음 (빈 칸 3/3)"))
+
+    def test_notify_next_clears_held_after_send(self):
+        orig = q.current, q.fetch_titles
+        q.current = lambda env: (ORDER, q.plan(ORDER, [OTHER_THREADS], KITS))
+        q.fetch_titles = lambda env: {}
+        sent = []
+        try:
+            st = {"held_kits": dict(self.HELD)}
+            q.notify_next({}, st, notify=lambda t: sent.append(t) or True, log=lambda *_: None)
+            self.assertEqual(len(sent), 1)
+            self.assertIn("키트 없음 — 법인 계약", sent[0])
+            self.assertEqual(st["held_kits"], {})
+            self.assertIsNone(q.notify_next({}, st, notify=lambda t: sent.append(t) or True, log=lambda *_: None),
+                              "보낸 뒤 같은 상태면 다시 안 보낸다")
+            st2 = {"held_kits": dict(self.HELD)}
+            q.notify_next({}, st2, notify=lambda t: False, log=lambda *_: None)
+            self.assertEqual(st2["held_kits"], self.HELD, "보내기 실패면 보류 목록을 남겨 다음 바퀴에 다시")
+        finally:
+            q.current, q.fetch_titles = orig
+
+    def test_held_line_without_held_is_unchanged(self):
+        p = q.plan(ORDER, [OTHER_THREADS], KITS)
+        self.assertEqual(q.held_message(p, {}), q.message(p))
+
+    def test_slots_full_counts_active_only(self):
+        orig = q.load_queue, q.fetch_reviews
+        q.load_queue = lambda path=None: (3, ORDER)
+        try:
+            q.fetch_reviews = lambda env: self.FULL
+            self.assertTrue(q.slots_full({}))
+            q.fetch_reviews = lambda env: self.FULL[:2] + [{"slug": "c", "channel": "main", "status": "approved"}]
+            self.assertFalse(q.slots_full({}))
+        finally:
+            q.load_queue, q.fetch_reviews = orig
+
+
 class Config(unittest.TestCase):
     def test_config_main_first(self):
         limit, order = q.load_queue()

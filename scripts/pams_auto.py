@@ -269,9 +269,13 @@ def scan_zips(kit_dir, state, notify, now=None, days=3):
 
 
 def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, server_factory=None,
-             file_exists=os.path.exists):
-    """테스트를 위해 DB·빌드·알림·서버를 주입받는다. 만든 키트 목록을 돌려준다."""
+             file_exists=os.path.exists, hold_alerts=False):
+    """테스트를 위해 DB·빌드·알림·서버를 주입받는다. 만든 키트 목록을 돌려준다.
+    hold_alerts — 업무광고 칸 3개가 모두 심사중이면 True. 키트는 만들되 「준비됨」·「실패」 알림은 보내지 않고
+    state["held_kits"] 에 적어 둔다 → 칸이 비면 접수 순서 알림(pams_queue)의 「다음 접수」 한 통에 실린다.
+    (SK2, 2026-10-20 로버트 「업무광고 세 건 모두 심사중인데 키트가 차서 내가 눌러도 어차피 접수가 안돼」)"""
     made = []
+    held = state.setdefault("held_kits", {})
     jobs = []  # (article, channel, capture)
 
     main_drafts = fetch_drafts("main")
@@ -325,7 +329,12 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
                     fk = fail_key(a, ch)
                     failed = state.setdefault("failed", {})
                     if failed.get(key) != fk:   # 같은 키의 실패는 한 번만 알린다(원고·sources.json 이 바뀌면 다시)
-                        notify(f"[PAMS 키트] {kit.title_label(a.get('title'), a['slug'])} {kit.CH_LABEL[ch]} — 만들지 못했습니다: {e}")
+                        who = f"{kit.title_label(a.get('title'), a['slug'])} {kit.CH_LABEL[ch]}"
+                        if hold_alerts:
+                            held[key] = {"label": who, "why": str(e)[:200]}
+                        else:
+                            notify(f"[PAMS 키트] {who} — 만들지 못했습니다: {e}")
+                            held.pop(key, None)
                     failed[key] = fk
                     if cap:   # 같은 캡처로 바퀴마다 같은 알림이 오지 않게(고쳐서 새로 저장하면 다시 본다)
                         state["captures"][os.path.basename(cap)] = {"status": "bad", "slug": a["slug"],
@@ -345,6 +354,13 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
                 os.makedirs(done, exist_ok=True)
                 shutil.move(cap, os.path.join(done, os.path.basename(cap)))
                 state["captures"][os.path.basename(cap)] = {"status": "done", "slug": a["slug"], "zip": k["zip"]}
+            if hold_alerts:   # 칸이 다 찼다 — 지금 알려도 접수할 수 없다. 칸이 비면 「다음 접수」에 싣는다.
+                held[key] = {"label": f"{kit.title_label(k.get('article_title') or k.get('title'), a['slug'])} "
+                                      f"{kit.CH_LABEL[ch]}", "zip": k["zip"]}
+                log(f"  완료(알림 보류 — 칸 다 참): {k['zip']}")
+                made.append(k)
+                continue
+            held.pop(key, None)
             # 원고가 바뀌어 다시 만든 키트는 앞에 표시 — 같은 글 알림이 두 번 와도 헷갈리지 않게
             notify(("🔁 원고 변경 — 키트 다시 만듦 · " if why == "원고 변경" else "") + ready_message(k))
             log(f"  완료: {k['zip']}")
@@ -465,8 +481,14 @@ def main():
     try:
         env = kit.load_env()
         state = load_state()
+        try:
+            import pams_queue
+            full = pams_queue.slots_full(env)
+        except Exception as e:   # 칸 수를 못 읽으면 종전대로 바로 알린다(알림이 사라지는 쪽보다 낫다)
+            log(f"칸 수 조회 실패 — 키트 알림 그대로 보냄: {e}")
+            full = False
         made = run_once(
-            env, state,
+            env, state, hold_alerts=full,
             fetch_drafts=lambda ch: kit.fetch_drafts(env, ch),
             build=lambda *x, **kw: kit.build_kit(*x, **kw, log=log),
             notify=lambda t: telegram(env, t),
