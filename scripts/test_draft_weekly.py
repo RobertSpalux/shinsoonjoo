@@ -47,9 +47,28 @@ def reasons(issues):
     return " | ".join(i["reason"] for i in issues)
 
 
+DEMAND = [t for t in CFG["topics"] if t.get("basis")]
+LEGACY = [t for t in CFG["topics"] if not t.get("basis")]
+
+
 class LedgerTest(unittest.TestCase):
+    def test_demand_topics_first(self):
+        """SUP1 — 수요 근거(basis) 주제가 맨 위, 그 아래에 SH13 순환. 섞이지 않는다."""
+        n = len(DEMAND)
+        self.assertGreaterEqual(n, 15)
+        self.assertTrue(all(t.get("basis") for t in CFG["topics"][:n]))
+        self.assertFalse(any(t.get("basis") for t in CFG["topics"][n:]))
+
+    def test_demand_topics_have_fields(self):
+        for t in DEMAND:
+            with self.subTest(t["slug"]):
+                for k in ("keyword", "angle", "notices", "basis", "existing"):
+                    self.assertIn(k, t)
+                self.assertTrue(t["keyword"] and t["angle"])
+                self.assertRegex(t["basis"], r"TR3|IX1")
+
     def test_rotation_order(self):
-        cats = [t["category"] for t in CFG["topics"]]
+        cats = [t["category"] for t in LEGACY]
         self.assertEqual(cats[:4], ["연금", "종신", "법인", "절세"])
         self.assertEqual(cats, (["연금", "종신", "법인", "절세"] * 3)[:len(cats)])
 
@@ -71,10 +90,13 @@ class LedgerTest(unittest.TestCase):
                 self.assertIn(s, rules, f"{key}: {s}")
 
     def test_pick_skips_used_and_takes_three(self):
+        slugs = [t["slug"] for t in CFG["topics"]]
         picked = dw.pick_topics(CFG, set(), 3)
-        self.assertEqual([t["category"] for t in picked], ["연금", "종신", "법인"])
-        picked = dw.pick_topics(CFG, {p["slug"] for p in picked}, 3)
-        self.assertEqual([t["category"] for t in picked], ["절세", "연금", "종신"])
+        self.assertEqual([t["slug"] for t in picked], slugs[:3])
+        picked = dw.pick_topics(CFG, {p["slug"] for p in picked} | {slugs[4]}, 3)
+        self.assertEqual([t["slug"] for t in picked], [slugs[3], slugs[5], slugs[6]])
+        rest = dw.pick_topics(CFG, {t["slug"] for t in DEMAND}, 3)
+        self.assertEqual([t["category"] for t in rest], ["연금", "종신", "법인"])
 
     def test_used_slugs_from_pass_and_reject_dirs(self):
         d = tempfile.mkdtemp()
@@ -194,6 +216,37 @@ class TsVerdictTest(unittest.TestCase):
     def test_banned_or_style_blocks(self):
         self.assertFalse(dw.ts_verdict({**self.ev("[확인: 연도]"), "banned": {"level": "block"}}))
         self.assertFalse(dw.ts_verdict({**self.ev("[확인: 연도]"), "style": {"pass": False}}))
+
+
+class ImageConfigTest(unittest.TestCase):
+    """SUP1 — 생성 결과 naver_images → 사진 설정. slug·cta_url 은 코드가 채우고, 금액·금소법 표현은 막는다."""
+    RAW = {"overline": "종신보험 사망보험금", "title": "사망보험금은\n숫자 하나가\n아닙니다", "subtitle": "원인별 합계",
+           "table_title": "원인별 보장", "col_before": "질병", "col_after": "사고",
+           "table_rows": [["일반사망", "더해짐", "더해짐"]], "table_note": "계약별 증권과 약관 기준",
+           "contrast_title": "두 기간", "contrast": [["납입기간", "보험료를 내는 기간"], ["보험기간", "보장 기간"]],
+           "contrast_note": "계약별 약관 기준", "flow_title": "보는 순서", "flow": [["보장 구분", "나누기"]],
+           "flow_note": "계약별 약관 기준", "points_title": "세 가지", "points": ["하나", "둘", "셋"],
+           "cta_line": "내 사망보장", "cta_sub": "전 계약 점검", "slug": "모델이-쓴-값", "cta_url": "example.com"}
+
+    def test_code_fills_slug_and_url(self):
+        c = dw.image_config(self.RAW, "whole-life-x")
+        self.assertEqual(c["slug"], "whole-life-x")
+        self.assertEqual(c["cta_url"], dw.CTA_URL)
+        self.assertEqual(dw.image_issues(c), [])
+
+    def test_blocks_money_banned_and_missing(self):
+        c = dw.image_config({**self.RAW, "subtitle": "사망보험금 1억원 기준"}, "x")
+        self.assertIn("금액", " ".join(dw.image_issues(c)))
+        c = dw.image_config({**self.RAW, "cta_sub": "카톡으로 상담 신청"}, "x")
+        self.assertIn("상담 유인", " ".join(dw.image_issues(c)))
+        c = dw.image_config({k: v for k, v in self.RAW.items() if k != "flow"}, "x")
+        self.assertIn("빠진 칸", " ".join(dw.image_issues(c)))
+
+    def test_prompt_asks_for_image_keys(self):
+        p = dw.build_prompt(WL, CFG, "")
+        self.assertIn('"naver_images"', p)
+        for k in dw.IMAGE_KEYS:
+            self.assertIn(f'"{k}"', p)
 
 
 class JudgeTest(unittest.TestCase):
