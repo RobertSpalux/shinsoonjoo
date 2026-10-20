@@ -38,6 +38,8 @@ class Harness:
     def __init__(self, main=None, naver=None, gate_blocked=()):
         self.drafts = {"main": main or [], "naver": naver if naver is not None else (main or [])}
         self.gate_blocked = set(gate_blocked)
+        self.fail = None  # 게이트 아닌 실패 문구(자료명 못 찾음 등)
+        self.tries = 0
         self.built, self.notes = [], []
         self.dir = tempfile.mkdtemp()
         self.state = {"kits": {}, "gate_blocked": {}, "captures": {}}
@@ -48,6 +50,9 @@ class Harness:
     def build(self, env, a, ch, capture=None, server=None, out_dir=None):
         if a["slug"] in self.gate_blocked:
             raise kit.KitError("확인 미완료", gate=True)
+        self.tries += 1
+        if self.fail:
+            raise kit.KitError(self.fail)
         name = kit.kit_basename(a["slug"], ch, datetime(2026, 9, 29, tzinfo=kit.KST))
         z = os.path.join(out_dir, name + ".zip")
         for path, body in ((z, "zip"), (z[:-4] + ".txt", "txt")):
@@ -116,6 +121,31 @@ class MainKitTest(unittest.TestCase):
         self.assertFalse(need, "원고·확인 이력이 그대로면 서버를 다시 띄우지 않는다")
         need, _ = auto.needs_main_kit(art(acks=[{"field": "x", "term": "15%", "offset": 1}]), h.state)
         self.assertTrue(need, "확인 이력이 바뀌면 다시 시도한다")
+
+    def test_same_non_gate_failure_alerts_once_and_retries_when_sources_change(self):
+        """SK1 — 자료명 못 찾음 같은 게이트 아닌 실패가 10분마다 같은 알림을 보냈다(2026-10-20 법인편)."""
+        d = tempfile.mkdtemp()
+        src = os.path.join(d, "sources.json")
+        open(src, "w", encoding="utf-8").write('{"sources": []}')
+        saved = kit.SOURCES_JSON
+        kit.SOURCES_JSON = src
+        try:
+            h = Harness(main=[art()])
+            h.fail = "본문에서 configs/sources.json 의 자료명을 찾지 못했습니다"
+            h.run()
+            h.run()
+            self.assertEqual(h.tries, 1, "같은 원고·같은 sources.json 이면 다시 시도하지 않는다")
+            self.assertEqual(len(h.notes), 1, "같은 실패는 한 번만 알린다")
+            h.drafts["main"] = [art(body="v2")]
+            h.run()
+            self.assertEqual(h.tries, 2, "원고가 바뀌면 다시 시도한다")
+            self.assertEqual(len(h.notes), 2)
+            open(src, "w", encoding="utf-8").write('{"sources": [{"title": "새 자료"}]}')
+            h.fail = None
+            self.assertEqual(len(h.run()), 1, "sources.json 이 바뀌면 다시 시도한다")
+            self.assertNotIn("ltc-grade-home-care-rider-check|main", h.state.get("failed", {}), "성공하면 실패 기록을 지운다")
+        finally:
+            kit.SOURCES_JSON = saved
 
     def test_ack_then_build(self):
         h = Harness(main=[art()], gate_blocked={"ltc-grade-home-care-rider-check"})
