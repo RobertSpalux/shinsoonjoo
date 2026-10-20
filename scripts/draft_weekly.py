@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-주 3편 심의용 원고 초안 공급기 — 연금·종신·법인·절세 순환 (SH13, 2026-10-12).
+심의용 원고 초안 공급기 — 수요 근거 대기열 + 연금·종신·법인·절세 순환 (SH13 2026-10-12 · SUP1 2026-10-20).
+매일 1편 자동 공급은 scripts/draft_daily.py(작업 스케줄러 SHIN_draft_daily 06:30)가 이 모듈의 generate_one 을 부른다.
 
     python scripts/draft_weekly.py --plan                       # 이번 주에 쓸 주제만 보여 준다(생성 없음)
     python scripts/draft_weekly.py                              # 3편 생성 → 게이트 → 통과분 drafts / 반려분 _rejected
@@ -58,7 +59,16 @@ CLAUDE_EXE = os.environ.get("CLAUDE_EXE", os.path.join(os.path.expanduser("~"), 
 API_ENV_KEYS = ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_BASE_URL")
 WEEKLY = 3
 CLAUDE_TIMEOUT = 20 * 60
-DB_CATEGORY = {"연금": "연금·노후·세테크", "절세": "연금·노후·세테크", "종신": "보험 리모델링", "법인": "보험 리모델링"}
+DB_CATEGORY = {"연금": "연금·노후·세테크", "절세": "연금·노후·세테크", "종신": "보험 리모델링", "법인": "보험 리모델링",
+               # SUP1(2026-10-20) 수요 근거 주제 — DB premium_articles.category 의 기존 값만 쓴다
+               "실손": "실손·보장성 가이드", "보장": "실손·보장성 가이드", "고지": "실손·보장성 가이드",
+               "배상": "배상책임", "리모델링": "보험 리모델링"}
+# 네이버 사진 5장 설정(naver_images.py · naver_images_more.py 틀) — 생성 결과의 선택 키 naver_images.
+#   slug·cta_url 은 코드가 채운다(모델이 쓰지 않는다).
+IMAGE_KEYS = ["overline", "title", "subtitle", "table_title", "col_before", "col_after", "table_rows", "table_note",
+              "contrast_title", "contrast", "contrast_note", "flow_title", "flow", "flow_note",
+              "points_title", "points", "cta_line", "cta_sub"]
+CTA_URL = "goodfinance.kr/diagnosis"
 
 # ── 금소법 게이트 규칙 (rules_finance_gate.md 2단·17항에서 기계로 잴 수 있는 것만) ──────────────
 CHECK_MARK = re.compile(r"\[확인:[^\]]*\]")
@@ -225,6 +235,7 @@ def build_corpus(docs, k=SHINGLE):
 
 
 SOURCE_HEAD = re.compile(r"^출처$")
+SOURCE_LINE = re.compile(r"^(?:>\s*)?출처\s*[:：]")   # 한 줄 출처(「출처: 기관, 「자료명」, 연도, 발표일」) — SUP1
 
 
 def canonical_lines(text):
@@ -233,6 +244,8 @@ def canonical_lines(text):
     2026-10-14 SH18: 같은 블로그 URL 의 숫자 조각, 같은 자료명 출처 줄이 서로 「베낀 문장」으로 잡혔다(본문 문장은 그대로 잰다)."""
     rows = [ln.strip() for ln in (text or "").split("\n")]
     out = list(naver_rules.INTERNAL_URL.findall(text or ""))
+    # ③ 한 줄 출처 — 2026-10-20 SUP1: 같은 자료를 인용한 「출처: …」 줄만으로 반려됐다(본문 겹침 0)
+    out += [ln for ln in rows if SOURCE_LINE.match(ln)]
     for i, ln in enumerate(rows):
         if SOURCE_HEAD.match(ln):
             out += [r for r in rows[i + 1:] if r]
@@ -296,9 +309,28 @@ def db_docs(env):
 
 
 # ── 생성 (구독 `claude -p`) ───────────────────────────────────
+SOURCES_JSON = os.path.join(ROOT, "configs", "sources.json")
+
+
+def source_lines(path=SOURCES_JSON, note_max=320):
+    """검증된 출처 장부(configs/sources.json — 자료명 정본·증빙 파일 있음) → 프롬프트 줄. 순수에 가깝다(파일 읽기만).
+    SUP1(2026-10-20): 장부 없이 생성한 3편이 전부 근거 칸에 [확인: ___] 을 남겨 매일 공급이 「투입 보류」로 끝났다."""
+    try:
+        rows = json.load(open(path, encoding="utf-8")).get("sources", [])
+    except (OSError, json.JSONDecodeError):
+        return []
+    out = []
+    for s in rows:
+        pub = s.get("published") or ""
+        note = re.sub(r"\s+", " ", s.get("note") or "")[:note_max]
+        out.append(f"- {s.get('org')}, {s.get('title')}, {pub[:4]}, {pub} — {note}")
+    return out
+
+
 def build_prompt(topic, cfg, rules_text):
     notices = notice_texts(cfg, topic)
     links = cfg["internal_links"]
+    sources = source_lines()
     return f"""너는 23년 차 보험 전문가 신순주의 블로그 원고를 쓰는 작가다. 아래 규칙을 어기면 심의에서 반송된다.
 
 # 금소법 게이트 규칙 (원문)
@@ -339,11 +371,24 @@ def build_prompt(topic, cfg, rules_text):
 # 근거(verify_claims)
 - 본문에서 제도·법령을 설명한 문장마다 하나. basis 는 「작성기관명, 자료명(원문 제목 그대로), 기준년도, 발표·개정연도」를 모두 적는다(예: 국가법령정보센터, 소득세법 제59조의4(특별세액공제), 2025.12.23 개정).
 - 기사·지식백과·블로그는 근거가 아니다. 원문을 모르면 그 문장을 본문에서 빼거나 [확인: ___] 로 남긴다.
+- **아래 「검증된 출처 장부」의 자료를 먼저 쓴다** — 자료명·발표일을 장부 글자 그대로(축약 금지), 쪽·조항은 장부 설명에 있는 것만.
+  장부로 뒷받침되지 않는 제도 설명은 본문에서 빼는 쪽을 택한다([확인: ___] 이 남은 원고는 투입되지 않는다).
+  · 표준약관 = 보험업감독업무시행세칙 [별표 15], 표준 계약전알릴의무사항 = [별표 14] 표준사업방법서 <부표 1>.
+
+# 검증된 출처 장부 (configs/sources.json — 증빙 원문 보유)
+{chr(10).join(sources) if sources else '(장부 없음)'}
+
+# 네이버 사진 5장(naver_images) — 본문 [이미지①~⑤] 자리에 순서대로 들어간다
+- ① 썸네일 ② 비교표 ③ 두 칸 대비 ④ 흐름 ⑤ 요점+안내. 사진에도 금액·수익률·보험사명·상담 유인 문구를 쓰지 않는다.
+- 사진 글자는 본문에 있는 내용만 줄여 쓴다. 출처 줄(table_note·contrast_note·flow_note)은 verify_claims 의 근거 자료명·날짜만, 없으면 「계약별 증권과 약관 기준」.
+- 글자 수(넘치면 사진이 만들어지지 않는다): title 은 줄바꿈(\\n)으로 3줄·한 줄 7자 이내, subtitle 22자, table_rows 는 [항목, col_before 칸, col_after 칸] 3줄·칸마다 12자,
+  contrast 는 [[머리, 본문], [머리, 본문]]·머리 10자·본문 40자, flow 는 [[머리, 설명]] 4개·머리 8자·설명 22자, points 3개·18자, 노트는 한 줄 30자로 2줄 이내, cta_line 18자, cta_sub 14자.
 
 # 출력
 JSON 객체 하나만 출력한다(코드펜스·설명 금지). 키:
 {{"title": 본진 제목, "naver_title": 네이버 제목, "summary": 2문장, "tags": [5개], "key_points": [4개], "faq_json": [{{"question","answer"}} 3개],
-  "verify_claims": [{{"claim","basis","confidence"}}], "naver": 네이버판 본문, "main": 본진판 마크다운}}
+  "verify_claims": [{{"claim","basis","confidence"}}], "naver": 네이버판 본문, "main": 본진판 마크다운,
+  "naver_images": {{{", ".join(f'"{k}"' for k in IMAGE_KEYS)}}}}}
 """
 
 
@@ -514,10 +559,68 @@ def save(out_dir, topic, draft, result, today, when):
         with open(os.path.join(out_dir, "_rejected.md"), "a", encoding="utf-8", newline="\n") as fp:
             fp.write(rejected_entry(when, topic, draft, result))
     write_files(d, meta, draft, result)
+    if isinstance(draft.get("naver_images"), dict):
+        with open(os.path.join(d, "naver_images.json"), "w", encoding="utf-8", newline="\n") as fp:
+            json.dump(image_config(draft["naver_images"], topic["slug"]), fp, ensure_ascii=False, indent=2)
+            fp.write("\n")
     return d
 
 
+def image_config(raw, slug):
+    """생성 결과 naver_images → naver_images.py 설정(slug·cta_url 은 코드가 채운다). 순수 함수."""
+    cfg = {"slug": slug}
+    cfg.update({k: raw.get(k) for k in IMAGE_KEYS})
+    cfg["cta_url"] = CTA_URL
+    return cfg
+
+
+def image_issues(cfg):
+    """사진 설정 검사 → 이슈 목록(비면 통과). 빠진 칸 · 금액·수익률 · 금소법 표현(본문과 같은 정규식). 순수 함수."""
+    miss = [k for k in IMAGE_KEYS if not cfg.get(k)]
+    if miss:
+        return [f"사진 설정 빠진 칸: {', '.join(miss)}"]
+
+    def flat(v):
+        if isinstance(v, (list, tuple)):
+            return " ".join(flat(x) for x in v)
+        return str(v)
+    text = flat([cfg[k] for k in IMAGE_KEYS])
+    out = []
+    if MONEY.search(text):
+        out.append(f"사진에 금액 「{MONEY.search(text).group(0)}」")
+    if PERCENT.search(text) and RATE_WORD.search(text):
+        out.append("사진에 수익률·이율 수치")
+    for name, rx in ALWAYS_BANNED:
+        m = rx.search(text)
+        if m:
+            out.append(f"사진에 {name} 「{m.group(0)}」")
+    return out
+
+
 # ── 실행 ────────────────────────────────────────────────────
+def generate_one(t, cfg, out_dir, env, rules_text, use_ts=True, from_json=None, today=None):
+    """주제 하나: 생성(또는 JSON) → 판정 → 저장. → (저장 폴더, 원고, 판정) · 생성·판정 실패면 (None, None, 사유).
+    생성 실패(시간 초과·JSON 깨짐)는 _rejected.md 에만 적고 폴더를 만들지 않는다 — 일시 오류로 주제를 버리지 않게(다음 실행에 다시 고른다)."""
+    today = today or datetime.now().strftime("%Y%m%d")
+    work = os.path.join(out_dir, "_work")
+    when = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        if from_json:
+            draft = parse_draft(open(from_json, encoding="utf-8").read())
+        else:
+            t0 = time.time()
+            draft = parse_draft(run_claude(build_prompt(t, cfg, rules_text), os.path.join(work, "cli"), t["slug"]))
+            print(f"  생성 {t['slug']} {time.time() - t0:.0f}초")
+        docs = local_docs(out_dir, skip_slug=t["slug"]) + ([] if env is None else db_docs(env))
+        result = judge(draft, t, cfg, build_corpus(docs), env, use_ts, os.path.join(work, t["slug"]), today)
+    except (kit.KitError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:
+        print(f"  ✗ {t['slug']} 생성·판정 실패 — {e}")
+        with open(os.path.join(out_dir, "_rejected.md"), "a", encoding="utf-8", newline="\n") as fp:
+            fp.write(f"\n## {when} — [{t['category']}] {t['slug']}\n생성·판정 실패: {e}\n---\n")
+        return None, None, str(e)
+    return save(out_dir, t, draft, result, today, when), draft, result
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--plan", action="store_true")
@@ -551,27 +654,12 @@ def main():
     if not rules_text and not a.from_json:
         print(f"규칙 파일이 없다: {RULES_MD} — 생성하지 않는다")
         sys.exit(2)
-    today = datetime.now().strftime("%Y%m%d")
-    work = os.path.join(a.out, "_work")
     passed = failed = 0
     for t in topics:
-        when = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-        try:
-            if a.from_json:
-                draft = parse_draft(open(a.from_json, encoding="utf-8").read())
-            else:
-                t0 = time.time()
-                draft = parse_draft(run_claude(build_prompt(t, cfg, rules_text), os.path.join(work, "cli"), t["slug"]))
-                print(f"  생성 {t['slug']} {time.time() - t0:.0f}초")
-            docs = local_docs(a.out, skip_slug=t["slug"]) + ([] if env is None else db_docs(env))
-            result = judge(draft, t, cfg, build_corpus(docs), env, not a.skip_ts_gate, os.path.join(work, t["slug"]), today)
-        except (kit.KitError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:
+        d, draft, result = generate_one(t, cfg, a.out, env, rules_text, use_ts=not a.skip_ts_gate, from_json=a.from_json)
+        if d is None:
             failed += 1
-            print(f"  ✗ {t['slug']} 생성·판정 실패 — {e}")
-            with open(os.path.join(a.out, "_rejected.md"), "a", encoding="utf-8", newline="\n") as fp:
-                fp.write(f"\n## {when} — [{t['category']}] {t['slug']}\n생성·판정 실패: {e}\n---\n")
             continue
-        d = save(a.out, t, draft, result, today, when)
         mark = "통과" if result["pass"] else "반려"
         passed += result["pass"]
         failed += not result["pass"]

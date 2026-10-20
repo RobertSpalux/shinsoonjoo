@@ -47,9 +47,28 @@ def reasons(issues):
     return " | ".join(i["reason"] for i in issues)
 
 
+DEMAND = [t for t in CFG["topics"] if t.get("basis")]
+LEGACY = [t for t in CFG["topics"] if not t.get("basis")]
+
+
 class LedgerTest(unittest.TestCase):
+    def test_demand_topics_first(self):
+        """SUP1 — 수요 근거(basis) 주제가 맨 위, 그 아래에 SH13 순환. 섞이지 않는다."""
+        n = len(DEMAND)
+        self.assertGreaterEqual(n, 15)
+        self.assertTrue(all(t.get("basis") for t in CFG["topics"][:n]))
+        self.assertFalse(any(t.get("basis") for t in CFG["topics"][n:]))
+
+    def test_demand_topics_have_fields(self):
+        for t in DEMAND:
+            with self.subTest(t["slug"]):
+                for k in ("keyword", "angle", "notices", "basis", "existing"):
+                    self.assertIn(k, t)
+                self.assertTrue(t["keyword"] and t["angle"])
+                self.assertRegex(t["basis"], r"TR3|IX1")
+
     def test_rotation_order(self):
-        cats = [t["category"] for t in CFG["topics"]]
+        cats = [t["category"] for t in LEGACY]
         self.assertEqual(cats[:4], ["연금", "종신", "법인", "절세"])
         self.assertEqual(cats, (["연금", "종신", "법인", "절세"] * 3)[:len(cats)])
 
@@ -71,10 +90,13 @@ class LedgerTest(unittest.TestCase):
                 self.assertIn(s, rules, f"{key}: {s}")
 
     def test_pick_skips_used_and_takes_three(self):
+        slugs = [t["slug"] for t in CFG["topics"]]
         picked = dw.pick_topics(CFG, set(), 3)
-        self.assertEqual([t["category"] for t in picked], ["연금", "종신", "법인"])
-        picked = dw.pick_topics(CFG, {p["slug"] for p in picked}, 3)
-        self.assertEqual([t["category"] for t in picked], ["절세", "연금", "종신"])
+        self.assertEqual([t["slug"] for t in picked], slugs[:3])
+        picked = dw.pick_topics(CFG, {p["slug"] for p in picked} | {slugs[4]}, 3)
+        self.assertEqual([t["slug"] for t in picked], [slugs[3], slugs[5], slugs[6]])
+        rest = dw.pick_topics(CFG, {t["slug"] for t in DEMAND}, 3)
+        self.assertEqual([t["category"] for t in rest], ["연금", "종신", "법인"])
 
     def test_used_slugs_from_pass_and_reject_dirs(self):
         d = tempfile.mkdtemp()
@@ -172,6 +194,15 @@ class OverlapTest(unittest.TestCase):
         self.assertTrue(dw.overlap(new, c))                                   # 예외 없이 재면 잡힌다(종전 동작)
         self.assertEqual(dw.overlap(new, c, exempt=dw.canonical_lines(new)), [])
 
+    def test_inline_source_line_not_overlap(self):
+        """SUP1 — 「출처: …」 한 줄(인용 블록 > 포함)은 정본 자료명이라 겹침에서 뺀다. 본문 문장은 그대로 잰다."""
+        src = "출처: 금융감독원, 「최근 민원사례로 알아보는 실손의료보험 관련 소비자 유의사항」, 2026, 2026.5.19"
+        c = dw.build_corpus([("DB z naver", "앞 글 본문입니다.\n" + src)])
+        new = "새 글 본문입니다.\n" + src + "\n> " + src
+        self.assertTrue(dw.overlap(new, c))
+        self.assertEqual(dw.overlap(new, c, exempt=dw.canonical_lines(new)), [])
+        self.assertNotIn("새 글 본문입니다.", dw.canonical_lines(new))
+
     def test_body_copy_still_blocks_with_canonical_exempt(self):
         c = dw.build_corpus([("DB x naver", self.PUBLISHED)])
         new = "부담보 기간이 끝났는데도 해제 신청을 하지 않아 그대로 남아 있는 경우가 있습니다.\n\n출처\n1. 가, 나, 2026, 2026.1.1"
@@ -194,6 +225,44 @@ class TsVerdictTest(unittest.TestCase):
     def test_banned_or_style_blocks(self):
         self.assertFalse(dw.ts_verdict({**self.ev("[확인: 연도]"), "banned": {"level": "block"}}))
         self.assertFalse(dw.ts_verdict({**self.ev("[확인: 연도]"), "style": {"pass": False}}))
+
+
+class ImageConfigTest(unittest.TestCase):
+    """SUP1 — 생성 결과 naver_images → 사진 설정. slug·cta_url 은 코드가 채우고, 금액·금소법 표현은 막는다."""
+    RAW = {"overline": "종신보험 사망보험금", "title": "사망보험금은\n숫자 하나가\n아닙니다", "subtitle": "원인별 합계",
+           "table_title": "원인별 보장", "col_before": "질병", "col_after": "사고",
+           "table_rows": [["일반사망", "더해짐", "더해짐"]], "table_note": "계약별 증권과 약관 기준",
+           "contrast_title": "두 기간", "contrast": [["납입기간", "보험료를 내는 기간"], ["보험기간", "보장 기간"]],
+           "contrast_note": "계약별 약관 기준", "flow_title": "보는 순서", "flow": [["보장 구분", "나누기"]],
+           "flow_note": "계약별 약관 기준", "points_title": "세 가지", "points": ["하나", "둘", "셋"],
+           "cta_line": "내 사망보장", "cta_sub": "전 계약 점검", "slug": "모델이-쓴-값", "cta_url": "example.com"}
+
+    def test_code_fills_slug_and_url(self):
+        c = dw.image_config(self.RAW, "whole-life-x")
+        self.assertEqual(c["slug"], "whole-life-x")
+        self.assertEqual(c["cta_url"], dw.CTA_URL)
+        self.assertEqual(dw.image_issues(c), [])
+
+    def test_blocks_money_banned_and_missing(self):
+        c = dw.image_config({**self.RAW, "subtitle": "사망보험금 1억원 기준"}, "x")
+        self.assertIn("금액", " ".join(dw.image_issues(c)))
+        c = dw.image_config({**self.RAW, "cta_sub": "카톡으로 상담 신청"}, "x")
+        self.assertIn("상담 유인", " ".join(dw.image_issues(c)))
+        c = dw.image_config({k: v for k, v in self.RAW.items() if k != "flow"}, "x")
+        self.assertIn("빠진 칸", " ".join(dw.image_issues(c)))
+
+    def test_prompt_carries_source_ledger(self):
+        """근거는 검증된 출처 장부에서 고르게 한다 — 장부 자료명이 글자 그대로 프롬프트에 들어간다."""
+        p = dw.build_prompt(WL, CFG, "")
+        self.assertIn("검증된 출처 장부", p)
+        self.assertIn("보험업감독업무시행세칙 [별표 15] 표준약관(제5-13조제1항관련)", p)
+        self.assertEqual(dw.source_lines(os.path.join(tempfile.gettempdir(), "없는-파일.json")), [])
+
+    def test_prompt_asks_for_image_keys(self):
+        p = dw.build_prompt(WL, CFG, "")
+        self.assertIn('"naver_images"', p)
+        for k in dw.IMAGE_KEYS:
+            self.assertIn(f'"{k}"', p)
 
 
 class JudgeTest(unittest.TestCase):
