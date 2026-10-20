@@ -31,6 +31,11 @@
       "existing": "annuity-start-age-payout-type-check",
       "reason": "SUP1 — 같은 날 투입한 10/12 초안 둘. 종신보험 사망보장 원인별 합산 vs 연금보험 개시 나이·수령 방식이라 상품·담보가 다르다. 겹친 말은 「점검해야」 일반 동사 한 낱말"
     },
+    {
+      "new": "annuity-start-age-payout-type-check",
+      "existing": "whole-life-death-benefit-sum-by-cause",
+      "reason": "SK2 — 위 짝의 반대 방향(짝은 방향이 있다 — topic_guard.check 는 (새, 기존) 그대로 본다). 2026-10-20 16:59 pams_auto 가 연금편 본진 키트를 이 겹침(「점검해야」)으로 막았다"
+    },
     {"new": "health-checkup-retest-recommendation-disclosure", "existing": "health-checkup-retest-disclosure-scope",
      "reason": "SUP1 대기열 #1(TR3 #1·IX1 갱신) — 4호는 재검사 고지 범위 분조위 결론, 새 글은 알릴 의무 질문 문구가 「재검 권유 사실」을 묻는지 읽는 각도. 4호 승인본은 고치지 않는다(새 글)"},
     {"new": "health-checkup-retest-recommendation-disclosure", "existing": "pre-existing-condition-disclosure-exclusion-guide",
