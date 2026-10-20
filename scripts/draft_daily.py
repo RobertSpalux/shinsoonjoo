@@ -28,6 +28,7 @@
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -62,10 +63,20 @@ def log(out_dir, msg):
         pass
 
 
+# 모델이 근거 칸에 스스로 남긴 「아직 원문을 못 봤다」 표시 — 2026-10-20 SUP1: 「대조 필요」라 적힌 원고가
+#   게이트를 전부 통과했는데 원문(금감원 2026.5.19 4쪽)과 사실이 달랐다(3개월 예외 누락). 게이트는 사실을 재지 못한다.
+SELF_FLAG = re.compile(r"대조\s*필요|확인\s*필요|미확보|원문\s*확인|추정")
+
+
 # ── 순수 함수(시험 대상) ──────────────────────────────────────
 def ready(result):
     """투입해도 되는 원고인가 — 게이트 통과 + [확인: ___] 0 + 미실행 게이트 0."""
     return bool(result and result.get("pass") and not result.get("placeholders") and not result.get("unrun"))
+
+
+def self_flagged(meta):
+    """근거 칸에 모델이 「대조 필요」 류를 남긴 claim → [basis]. 비면 통과."""
+    return [c.get("basis", "") for c in (meta.get("verify_claims") or []) if SELF_FLAG.search(c.get("basis") or "")]
 
 
 def next_topics(cfg, used, tries=TRIES):
@@ -76,7 +87,7 @@ def message(ok, title=None, base=None, n_images=0, reasons=()):
     if ok:
         where = f"Downloads\\PAMS접수\\_네이버비공개\\{base}.txt" if base else "네이버 파일 생성 실패 — 로그 확인"
         tail = "" if n_images else " (사진 없음)"
-        return f"오늘 원고: {title} · 네이버 파일: {where}{tail}"
+        return f"오늘 원고: {title} · 네이버 파일: {where}{tail} — ⚠ 근거 원문 대조 전(게시 전 대조)"
     return "오늘 원고 없음 — " + " / ".join(reasons)[:600]
 
 
@@ -199,6 +210,11 @@ def run(out_dir=dw.OUT_DIR, do_send=True):
             why = (("반려 " + ", ".join(bad)) if bad else "") + (f" 확인 필요 {len(result['placeholders'])}건" if result.get("placeholders") else "")
             reasons.append(f"{t['slug']} {why.strip()}")
             log(out_dir, f"  → 투입 안 함: {why.strip()} ({d})")
+            continue
+        flagged = self_flagged(json.load(open(os.path.join(d, "meta.json"), encoding="utf-8")))
+        if flagged:
+            reasons.append(f"{t['slug']} 근거 대조 필요 {len(flagged)}건")
+            log(out_dir, f"  → 투입 안 함: 근거 칸 자기 표시 {len(flagged)}건 ({d})")
             continue
         try:
             row, kw = insert(env, d)

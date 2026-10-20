@@ -235,6 +235,7 @@ def build_corpus(docs, k=SHINGLE):
 
 
 SOURCE_HEAD = re.compile(r"^출처$")
+SOURCE_LINE = re.compile(r"^(?:>\s*)?출처\s*[:：]")   # 한 줄 출처(「출처: 기관, 「자료명」, 연도, 발표일」) — SUP1
 
 
 def canonical_lines(text):
@@ -243,6 +244,8 @@ def canonical_lines(text):
     2026-10-14 SH18: 같은 블로그 URL 의 숫자 조각, 같은 자료명 출처 줄이 서로 「베낀 문장」으로 잡혔다(본문 문장은 그대로 잰다)."""
     rows = [ln.strip() for ln in (text or "").split("\n")]
     out = list(naver_rules.INTERNAL_URL.findall(text or ""))
+    # ③ 한 줄 출처 — 2026-10-20 SUP1: 같은 자료를 인용한 「출처: …」 줄만으로 반려됐다(본문 겹침 0)
+    out += [ln for ln in rows if SOURCE_LINE.match(ln)]
     for i, ln in enumerate(rows):
         if SOURCE_HEAD.match(ln):
             out += [r for r in rows[i + 1:] if r]

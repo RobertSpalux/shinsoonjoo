@@ -35,9 +35,16 @@ class PureTest(unittest.TestCase):
 
     def test_message(self):
         m = dd.message(True, "제목입니다", "1021_x_네이버비공개", 5)
-        self.assertEqual(m, "오늘 원고: 제목입니다 · 네이버 파일: Downloads\\PAMS접수\\_네이버비공개\\1021_x_네이버비공개.txt")
+        self.assertTrue(m.startswith("오늘 원고: 제목입니다 · 네이버 파일: Downloads\\PAMS접수\\_네이버비공개\\1021_x_네이버비공개.txt"))
+        self.assertIn("근거 원문 대조 전", m)
         self.assertIn("(사진 없음)", dd.message(True, "제목", "b", 0))
         self.assertTrue(dd.message(False, reasons=["a 반려", "b 반려"]).startswith("오늘 원고 없음 — a 반려 / b 반려"))
+
+    def test_self_flagged(self):
+        meta = {"verify_claims": [{"basis": "금융감독원, 자료, 2026, 2026.5.19 — 4쪽"},
+                                  {"basis": "금융감독원, 자료, 2026, 2026.5.19 (원문 문장 대조 필요)"}]}
+        self.assertEqual(len(dd.self_flagged(meta)), 1)
+        self.assertEqual(dd.self_flagged({"verify_claims": []}), [])
 
     def test_pending_keyword_ledger(self):
         d = tempfile.mkdtemp()
@@ -99,6 +106,8 @@ class RunTest(unittest.TestCase):
                 return None, None, "시간 초과"
             d = os.path.join(out_dir, ("" if r["pass"] else "_rejected/") + f"20261021_{t['slug']}")
             os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, "meta.json"), "w", encoding="utf-8") as fp:
+                json.dump({"verify_claims": r.get("_claims", [])}, fp)
             return d, {}, r
         dw.generate_one = fake
 
@@ -124,6 +133,13 @@ class RunTest(unittest.TestCase):
         self.assertEqual(last[0], "send")
         self.assertIn("오늘 원고 없음", last[1])
         self.assertIn("확인 필요 1건", last[1])
+
+    def test_self_flagged_basis_holds_and_retries(self):
+        flagged = {**OK, "_claims": [{"basis": "금융감독원, 자료, 2026, 2026.5.19 (원문 문장 대조 필요)"}]}
+        self.gen([flagged, OK])
+        self.assertEqual(dd.run(self.out), 0)
+        self.assertEqual([c[1] for c in self.calls if c[0] == "gen"], ["a-topic", "b-topic"])
+        self.assertEqual(len([c for c in self.calls if c[0] == "insert"]), 1)
 
     def test_no_send(self):
         self.gen([OK])

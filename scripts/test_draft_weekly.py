@@ -194,6 +194,15 @@ class OverlapTest(unittest.TestCase):
         self.assertTrue(dw.overlap(new, c))                                   # 예외 없이 재면 잡힌다(종전 동작)
         self.assertEqual(dw.overlap(new, c, exempt=dw.canonical_lines(new)), [])
 
+    def test_inline_source_line_not_overlap(self):
+        """SUP1 — 「출처: …」 한 줄(인용 블록 > 포함)은 정본 자료명이라 겹침에서 뺀다. 본문 문장은 그대로 잰다."""
+        src = "출처: 금융감독원, 「최근 민원사례로 알아보는 실손의료보험 관련 소비자 유의사항」, 2026, 2026.5.19"
+        c = dw.build_corpus([("DB z naver", "앞 글 본문입니다.\n" + src)])
+        new = "새 글 본문입니다.\n" + src + "\n> " + src
+        self.assertTrue(dw.overlap(new, c))
+        self.assertEqual(dw.overlap(new, c, exempt=dw.canonical_lines(new)), [])
+        self.assertNotIn("새 글 본문입니다.", dw.canonical_lines(new))
+
     def test_body_copy_still_blocks_with_canonical_exempt(self):
         c = dw.build_corpus([("DB x naver", self.PUBLISHED)])
         new = "부담보 기간이 끝났는데도 해제 신청을 하지 않아 그대로 남아 있는 경우가 있습니다.\n\n출처\n1. 가, 나, 2026, 2026.1.1"
