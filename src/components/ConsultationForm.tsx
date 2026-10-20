@@ -64,7 +64,8 @@ export default function ConsultationForm() {
 
     setFormState("success");
     // 상담 접수 전환 — 개인정보는 싣지 않는다(분류·접수 페이지만)
-    gaEvent("lead_created", { form: "consultation", category, page: window.location.pathname });
+    // IX1: GA4 권장 이름 generate_lead 로 통일(종전 lead_created — 읽는 리포트 없음). page_path·article_slug 는 gaEvent 가 붙인다.
+    gaEvent("generate_lead", { form: "consultation", category });
     setName("");
     setPhone("");
     setCategory("");

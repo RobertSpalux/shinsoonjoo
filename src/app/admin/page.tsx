@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase-admin";
 import { checkBannedTerms, type CheckResult, type ComplianceAck } from "@/lib/compliance/banned-terms";
 import AdminLogin from "@/components/admin/AdminLogin";
 import AdminDashboard from "@/components/admin/AdminDashboard";
+import type { IndexRow } from "@/lib/content-index";
 
 export const metadata: Metadata = {
   title: "관리자",
@@ -18,7 +19,7 @@ export default async function AdminPage() {
   }
 
   const supabase = createAdminClient();
-  const [leads, consultations, articles, kinAnswers, adReviews, expiring] = await Promise.all([
+  const [leads, consultations, articles, kinAnswers, adReviews, expiring, contentIndex] = await Promise.all([
     supabase
       .from("lead_consultings")
       .select("id, name, phone, quiz_responses, quiz_score, lead_source, status, memo, created_at")
@@ -58,6 +59,14 @@ export default async function AdminPage() {
       .from("ad_reviews_expiring")
       .select("id, article_id, title, slug, channel, review_no, review_from, review_to, days_left, posted_url, url_registered_at")
       .neq("channel", "kin"),
+    // 주간 유입 지수(IX1, sql/009) — 최근 주차부터. 글 30여 편 × 8주 ≈ 250행. 표가 아직 없으면 error 로 탭에 안내.
+    supabase
+      .from("content_index_weekly")
+      .select(
+        "week_start, slug, keyword, keyword_source, naver_blog_rank, naver_blog_n, naver_post_matched, naver_integ_blog, naver_integ_main, gsc_impressions, gsc_clicks, gsc_position, gsc_top_queries, ga_sessions, conv_events, verdicts, errors"
+      )
+      .order("week_start", { ascending: false })
+      .limit(600),
   ]);
 
   // 심의 프리뷰 토큰 — 서버에서만 읽어 인증된 관리자에게만 전달(NEXT_PUBLIC_ 아님, 번들 미노출).
@@ -92,6 +101,8 @@ export default async function AdminPage() {
       expiring={expiring.data ?? []}
       previewToken={previewToken}
       compliance={compliance}
+      contentIndex={(contentIndex.data ?? []) as IndexRow[]}
+      contentIndexError={contentIndex.error?.message ?? null}
     />
   );
 }

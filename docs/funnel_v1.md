@@ -118,7 +118,7 @@
 | 예산 | 일 2~3만원 × 14일 = **28~42만원** |
 | 소재 | 3종 × 이미지 1장(영상 제외). 각 1건 심의 |
 | 타깃 | 전국 · 35~59세 · 관심사 최소(메타 학습에 맡김). 지역 타깃 금지(§2 전국구) |
-| 측정 | utm_content = 소재 ID. GA `lead_created`(form=funnel_v1) + DB events |
+| 측정 | utm_content = 소재 ID. GA `generate_lead`(form=funnel_v1 · 2026-10-20 IX1 에서 `lead_created` 에서 개명) + DB events |
 
 소재 3종 각도 [가설 — 심의 전 초안]
 - **A 합산** 「보험 10개, 암 진단비는 합쳐서 얼마일까요」 — 각성 포인트(§2)
