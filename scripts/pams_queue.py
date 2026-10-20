@@ -12,6 +12,8 @@ PAMS 접수 순서(운영표) — 칸이 비면 로버트에게 「다음 접수
   · 네이버 = 같은 글 본진이 **승인된 뒤**에만 다음 접수가 된다(본진 먼저 원칙). 예외는 운영표 항목의 before_main_ok: true,
     그리고 네이버 단독 글(본진판 비어 있음 = kit.naver_only, SH16) — 운영표에 손으로 적지 않아도 자동 예외(SH17).
   · 알림 = 빈 칸이 있고 (다음 항목, 빈 칸 수)가 지난번과 다를 때만 1통. 같은 상태로 10분마다 보내지 않는다.
+  · 칸이 다 찬 동안 pams_auto 는 키트 「준비됨」·「실패」 알림을 보류한다(state["held_kits"]). 칸이 비는 순간
+    이 한 통 아래에 키트 파일 위치 / 「키트 없음 — 사유」 줄을 붙여 보내고 보류 목록을 비운다(SK2).
 """
 import glob
 from datetime import datetime
@@ -94,11 +96,41 @@ def message(p, titles=None):
 
 
 def should_notify(p, state):
-    """빈 칸이 있고 (다음 항목, 빈 칸 수)가 지난번과 다를 때만."""
-    if not p["next"] or p["free"] <= 0:
+    """빈 칸이 있고 (다음 항목, 빈 칸 수)가 지난번과 다를 때만.
+    칸이 다 찼을 때 알림을 보류한 키트(state["held_kits"])가 있으면 빈 칸이 생긴 순간 보낸다(SK2)."""
+    if p["free"] <= 0:
         return False, None
+    if not p["next"]:
+        return bool(state.get("held_kits")), None
     sig = f"{p['next']['slug']}|{p['next']['channel']}|{p['free']}"
-    return sig != state.get("queue_notified"), sig
+    return sig != state.get("queue_notified") or bool(state.get("held_kits")), sig
+
+
+def held_lines(held, file_exists=os.path.exists):
+    """칸이 다 찼을 때 보류한 키트 알림 → 줄 목록. 만든 키트는 파일 위치, 못 만든 키트는 「키트 없음 — 사유」 한 줄."""
+    out = []
+    for k in sorted(held):
+        h = held[k]
+        if h.get("zip") and file_exists(h["zip"]):
+            out.append(f"준비된 키트: {h['label']} — {h['zip']}")
+        elif h.get("zip"):
+            out.append(f"키트 없음 — {h['label']}: 만들었던 키트 파일이 없어졌습니다")
+        else:
+            out.append(f"키트 없음 — {h['label']}: {h.get('why') or '사유 미상'}")
+    return out
+
+
+def held_message(p, state, titles=None, file_exists=os.path.exists):
+    """빈 칸이 생긴 순간의 한 통 — 「다음 접수」 한 줄 + 보류했던 키트 줄."""
+    head = message(p, titles) or f"다음 접수: 운영표에 준비된 항목 없음 (빈 칸 {p['free']}/{p['limit']})"
+    lines = held_lines(state.get("held_kits") or {}, file_exists)
+    return "\n".join([head] + lines)
+
+
+def slots_full(env):
+    """업무광고 칸(심사중, 지식인 제외 — plan 과 같은 셈)이 모두 찼는가."""
+    limit, _ = load_queue()
+    return sum(1 for r in fetch_reviews(env) if r.get("status") in ACTIVE) >= limit
 
 
 def order_line(order, p=None):
@@ -158,9 +190,11 @@ def notify_next(env, state, notify, log=print):
             titles = fetch_titles(env)
         except Exception:   # 제목을 못 읽어도 알림은 보낸다(호수만)
             titles = None
-        msg = message(p, titles)
+        msg = held_message(p, state, titles)
         if notify(msg):
-            state["queue_notified"] = sig
+            if sig:
+                state["queue_notified"] = sig
+            state["held_kits"] = {}
         log(f"큐 알림: {msg}")
         return msg
     return None

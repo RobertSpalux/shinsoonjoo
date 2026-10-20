@@ -147,6 +147,47 @@ class MainKitTest(unittest.TestCase):
         finally:
             kit.SOURCES_JSON = saved
 
+    def test_slots_full_holds_ready_and_fail_alerts(self):
+        """SK2 — 업무광고 칸 3개가 다 심사중이면 키트는 만들되 「준비됨」·「실패」 알림은 보류한다(2026-10-20 로버트)."""
+        h = Harness(main=[art()])
+        made = auto.run_once({}, h.state, h.fetch, h.build, h.notes.append, kit_dir=h.dir, hold_alerts=True)
+        self.assertEqual(len(made), 1, "키트는 미리 만들어 둔다")
+        self.assertEqual(h.notes, [], "칸이 다 찼으면 준비됨 알림을 보내지 않는다")
+        held = h.state["held_kits"]["ltc-grade-home-care-rider-check|main"]
+        self.assertEqual(held["zip"], made[0]["zip"])
+        self.assertIn("(7호) 본진", held["label"])
+        self.assertEqual(auto.run_once({}, h.state, h.fetch, h.build, h.notes.append, kit_dir=h.dir, hold_alerts=True), [],
+                         "다음 바퀴에 다시 만들지 않는다")
+
+        d = tempfile.mkdtemp()
+        src = os.path.join(d, "sources.json")
+        open(src, "w", encoding="utf-8").write('{"sources": []}')
+        saved, kit.SOURCES_JSON = kit.SOURCES_JSON, src
+        try:
+            f = Harness(main=[art()])
+            f.fail = "본문에서 configs/sources.json 의 자료명을 찾지 못했습니다"
+            for _ in range(2):
+                auto.run_once({}, f.state, f.fetch, f.build, f.notes.append, kit_dir=f.dir, hold_alerts=True)
+            self.assertEqual(f.notes, [], "칸이 다 찼으면 실패 알림도 보내지 않는다")
+            self.assertEqual(f.tries, 1, "같은 실패는 다시 시도하지 않는다")
+            self.assertIn("자료명을 찾지 못했습니다", f.state["held_kits"]["ltc-grade-home-care-rider-check|main"]["why"])
+        finally:
+            kit.SOURCES_JSON = saved
+
+    def test_not_full_sends_as_before_and_clears_held(self):
+        h = Harness(main=[art()])
+        h.state["held_kits"] = {"ltc-grade-home-care-rider-check|main": {"label": "x", "why": "옛 실패"}}
+        h.run()
+        self.assertEqual(len(h.notes), 1, "칸이 있으면 종전대로 바로 알린다")
+        self.assertEqual(h.state["held_kits"], {}, "바로 알렸으면 보류 목록에서 뺀다")
+
+    def test_main_checks_slots_before_run_once(self):
+        src = open(os.path.join(HERE, "pams_auto.py"), encoding="utf-8").read()
+        i = src.index("pams_queue.slots_full(env)")
+        self.assertLess(i, src.index("made = run_once("))
+        self.assertIn("full = False", src[i:i + 300], "칸 수를 못 읽으면 알림을 보류하지 않는다")
+        self.assertIn("hold_alerts=full", src)
+
     def test_ack_then_build(self):
         h = Harness(main=[art()], gate_blocked={"ltc-grade-home-care-rider-check"})
         h.run()
