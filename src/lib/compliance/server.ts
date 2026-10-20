@@ -8,7 +8,7 @@ import { checkBannedTerms, type CheckableArticle, type CheckResult, type Complia
 
 // 검사에 필요한 전 필드 + 확인 이력.
 export const COMPLIANCE_COLUMNS =
-  "id, title, naver_title, blogspot_title, summary, instagram_caption, main_website_markdown, naver_blog_content, blogspot_content, key_points, faq_json, threads_json, verify_claims, compliance_acks";
+  "id, title, naver_title, blogspot_title, summary, instagram_caption, main_website_markdown, naver_blog_content, blogspot_content, key_points, faq_json, threads_json, verify_claims, compliance_acks, ad_reviews(channel, status)";
 
 type Row = Record<string, unknown> & { compliance_acks?: ComplianceAck[] };
 

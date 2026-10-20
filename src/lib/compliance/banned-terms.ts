@@ -56,6 +56,27 @@ export interface CheckableArticle {
   faq_json?: { question?: string; answer?: string }[] | null;
   threads_json?: { body?: string; replies?: string[] }[] | null;
   verify_claims?: { claim?: string; basis?: string; confidence?: string }[] | null;
+  /** 심의 이력 — 접수·승인된 채널의 칸은 원안 수정 불가라 판정에서 뺀다(lockedFields). */
+  ad_reviews?: { channel?: string | null; status?: string | null }[] | null;
+}
+
+/**
+ * 접수·승인되면 잠기는 채널의 칸 — preflight.frozen_channels 「승인된 네이버 칸 검사 생략」과 같은 규칙.
+ * 잠긴 칸의 A등급이 남으면 고칠 수 없는 것 때문에 아직 안 낸 채널(본진)의 키트까지 막힌다(MN8, 21호 naver_title).
+ * 본진 칸(title·summary·key_points·faq_json)은 네이버 단독 글에서 나중에 채우므로 여기 넣지 않는다.
+ */
+const CHANNEL_FIELDS: Record<string, string[]> = {
+  naver: ["naver_title", "naver_blog_content"],
+  threads: ["threads_json"],
+};
+
+/** ad_reviews 에서 submitted/approved 행이 있는 채널의 칸 이름. */
+export function lockedFields(reviews: CheckableArticle["ad_reviews"]): Set<string> {
+  const out = new Set<string>();
+  for (const r of reviews ?? [])
+    if (r.status === "submitted" || r.status === "approved")
+      for (const f of CHANNEL_FIELDS[r.channel ?? ""] ?? []) out.add(f);
+  return out;
 }
 
 const RULE = {
@@ -191,7 +212,9 @@ const TITLE_FIELDS = new Set(["title", "naver_title", "blogspot_title"]);
 /** 아티클을 (field, text, isTitle) 평문 단위로 펼친다. */
 function fieldTexts(a: CheckableArticle): { field: string; text: string; isTitle: boolean }[] {
   const out: { field: string; text: string; isTitle: boolean }[] = [];
+  const locked = lockedFields(a.ad_reviews);
   const push = (field: string, text: string | null | undefined, isTitle = false) => {
+    if (locked.has(field)) return;
     if (text && String(text).trim()) out.push({ field, text: String(text), isTitle });
   };
   push("title", a.title, true);
