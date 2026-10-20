@@ -117,6 +117,21 @@ def gate_key(article, channel):
     return kit.content_hash(article, channel) + ":" + hashlib.sha256(acks.encode("utf-8")).hexdigest()[:16]
 
 
+def fail_key(article, channel):
+    """게이트 아닌 실패(자료명 못 찾음·증빙 파일 없음) 재시도 판정 키 — gate_key + sources.json + 증빙 폴더 목록.
+    셋 다 같으면 결과도 같다. 🔴 이 키 없이 실패를 잊으면 10분마다 같은 알림이 온다(SK1, 2026-10-20 법인편)."""
+    h = hashlib.sha256()
+    try:
+        h.update(open(kit.SOURCES_JSON, "rb").read())
+    except OSError:
+        h.update(b"-")
+    try:
+        h.update("\n".join(sorted(os.listdir(kit.EVIDENCE_DIR))).encode("utf-8"))
+    except OSError:
+        h.update(b"-")
+    return gate_key(article, channel) + ":" + h.hexdigest()[:16]
+
+
 def ready_message(k):
     # 글 제목이 앞, 호수는 괄호(키트 파일명은 그대로 뒤에).
     who = kit.title_label(k.get("article_title") or k.get("title"), k["slug"]) if k.get("slug") else k["title"]
@@ -142,6 +157,8 @@ def needs_main_kit(article, state, file_exists=os.path.exists, is_stale=kit.kit_
         return False, "키트 있음(원고 같음)"
     if state["gate_blocked"].get(key) == gate_key(article, "main"):
         return False, "게이트 막힘(원고·확인 이력 그대로)"
+    if (state.get("failed") or {}).get(key) == fail_key(article, "main"):
+        return False, "같은 실패(원고·sources.json·증빙 그대로)"
     return True, ("원고 변경" if prev else "새 초안")
 
 
@@ -305,13 +322,18 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
                     log(f"  건너뜀(게이트): {e}")
                 else:
                     log(f"  실패: {e}")
-                    notify(f"[PAMS 키트] {kit.title_label(a.get('title'), a['slug'])} {kit.CH_LABEL[ch]} — 만들지 못했습니다: {e}")
+                    fk = fail_key(a, ch)
+                    failed = state.setdefault("failed", {})
+                    if failed.get(key) != fk:   # 같은 키의 실패는 한 번만 알린다(원고·sources.json 이 바뀌면 다시)
+                        notify(f"[PAMS 키트] {kit.title_label(a.get('title'), a['slug'])} {kit.CH_LABEL[ch]} — 만들지 못했습니다: {e}")
+                    failed[key] = fk
                     if cap:   # 같은 캡처로 바퀴마다 같은 알림이 오지 않게(고쳐서 새로 저장하면 다시 본다)
                         state["captures"][os.path.basename(cap)] = {"status": "bad", "slug": a["slug"],
                                                                     "sig": file_sig(cap), "why": str(e)[:300]}
                 continue
             state["gate_blocked"].pop(key, None)
-            prev = state["kits"].get(key)
+            state.setdefault("failed", {}).pop(key, None)
+            prev =state["kits"].get(key)
             if prev and prev.get("zip") and os.path.normcase(prev["zip"]) != os.path.normcase(k["zip"]):
                 for old in (prev["zip"], prev.get("txt", "")):
                     if old and os.path.exists(old):
