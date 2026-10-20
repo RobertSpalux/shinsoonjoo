@@ -88,5 +88,21 @@ ok("기준에 미친다 → clean(동사 제외)", levelOf({ main_website_markdo
 ok("죽어도 → warn", levelOf({ main_website_markdown: "죽어도 안 나오는 경우가 있습니다." }) === "warn");
 ok("돈 날린다 → warn", levelOf({ main_website_markdown: "돈 날린다는 말이 있습니다." }) === "warn");
 
+console.log("[잠긴 채널 칸 — 접수·승인분은 판정 밖(MN8)]");
+{
+  const base = { naver_title: "비과세 연금보험 해지 전 볼 것", naver_blog_content: "무료 상담." };
+  ok("미접수 네이버 칸 A → block", levelOf(base) === "block");
+  ok("승인 네이버 칸 A → clean", levelOf({ ...base, ad_reviews: [{ channel: "naver", status: "approved" }] }) === "clean");
+  ok("접수 네이버 칸 A → clean", levelOf({ ...base, ad_reviews: [{ channel: "naver", status: "submitted" }] }) === "clean");
+  ok("반송 네이버 칸 A → block", levelOf({ ...base, ad_reviews: [{ channel: "naver", status: "rejected" }] }) === "block");
+  ok("네이버 승인이어도 본진 FAQ A → block",
+    levelOf({ ...base, faq_json: [{ question: "비과세 연금보험은?", answer: "x" }],
+      ad_reviews: [{ channel: "naver", status: "approved" }] }) === "block");
+  ok("본진 승인은 본진 칸을 빼지 않음",
+    levelOf({ title: "무료 진단", ad_reviews: [{ channel: "main", status: "approved" }] }) === "block");
+  ok("승인 스레드 칸 A → clean",
+    levelOf({ threads_json: [{ body: "무료 상담" }], ad_reviews: [{ channel: "threads", status: "approved" }] }) === "clean");
+}
+
 console.log(`\n결과: ${pass} pass / ${fail} fail`);
 if (fail > 0) process.exit(1);

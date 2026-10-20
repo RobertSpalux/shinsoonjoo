@@ -65,10 +65,21 @@ export default async function AdminPage() {
 
   // §6.10 금지 표현 검사 — 서버에서 기사별 판정(심의 신청 전 게이트의 단일 기준).
   const articleRows = articles.data ?? [];
+  // 접수·승인된 채널 칸은 판정에서 빠진다(lockedFields) — 그래서 글별 심의 이력을 함께 넘긴다.
+  const reviewsByArticle = new Map<string, { channel: string; status: string }[]>();
+  for (const r of adReviews.data ?? []) {
+    if (!r.article_id) continue;
+    const list = reviewsByArticle.get(r.article_id) ?? [];
+    list.push({ channel: r.channel, status: r.status });
+    reviewsByArticle.set(r.article_id, list);
+  }
   const compliance: Record<string, CheckResult> = {};
   for (const a of articleRows) {
     const row = a as { id: string; compliance_acks?: ComplianceAck[] };
-    compliance[row.id] = checkBannedTerms(a, row.compliance_acks ?? []);
+    compliance[row.id] = checkBannedTerms(
+      { ...a, ad_reviews: reviewsByArticle.get(row.id) ?? [] },
+      row.compliance_acks ?? []
+    );
   }
 
   return (
