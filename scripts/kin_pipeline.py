@@ -1002,7 +1002,7 @@ def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=recor
 
 
 def main():
-    ap =argparse.ArgumentParser(description="지식iN 답변 파이프라인")
+    ap = argparse.ArgumentParser(description="지식iN 답변 파이프라인")
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
     r.add_argument("--n", type=int, default=3)
