@@ -235,18 +235,22 @@ class ImageConfigTest(unittest.TestCase):
            "contrast_title": "두 기간", "contrast": [["납입기간", "보험료를 내는 기간"], ["보험기간", "보장 기간"]],
            "contrast_note": "계약별 약관 기준", "flow_title": "보는 순서", "flow": [["보장 구분", "나누기"]],
            "flow_note": "계약별 약관 기준", "points_title": "세 가지", "points": ["하나", "둘", "셋"],
-           "cta_line": "내 사망보장", "cta_sub": "전 계약 점검", "slug": "모델이-쓴-값", "cta_url": "example.com"}
+           "cta_line": "모델이 쓴 줄", "cta_sub": "모델이 쓴 줄", "slug": "모델이-쓴-값", "cta_url": "example.com"}
 
     def test_code_fills_slug_and_url(self):
         c = dw.image_config(self.RAW, "whole-life-x")
         self.assertEqual(c["slug"], "whole-life-x")
         self.assertEqual(c["cta_url"], dw.CTA_URL)
+        # KC1 — CTA 는 카톡 채널 고정, 모델이 쓴 값은 덮어쓴다. 「무료」 없음.
+        self.assertEqual((c["cta_line"], c["cta_sub"]), (dw.CTA_LINE, dw.CTA_SUB))
+        self.assertIn("pf.kakao.com/_xoxdBwX", c["cta_url"])
+        self.assertNotIn("무료", c["cta_line"] + c["cta_sub"])
         self.assertEqual(dw.image_issues(c), [])
 
     def test_blocks_money_banned_and_missing(self):
         c = dw.image_config({**self.RAW, "subtitle": "사망보험금 1억원 기준"}, "x")
         self.assertIn("금액", " ".join(dw.image_issues(c)))
-        c = dw.image_config({**self.RAW, "cta_sub": "카톡으로 상담 신청"}, "x")
+        c = dw.image_config({**self.RAW, "subtitle": "카톡으로 상담 신청"}, "x")
         self.assertIn("상담 유인", " ".join(dw.image_issues(c)))
         c = dw.image_config({k: v for k, v in self.RAW.items() if k != "flow"}, "x")
         self.assertIn("빠진 칸", " ".join(dw.image_issues(c)))

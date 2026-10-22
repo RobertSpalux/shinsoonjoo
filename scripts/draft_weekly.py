@@ -67,8 +67,12 @@ DB_CATEGORY = {"연금": "연금·노후·세테크", "절세": "연금·노후�
 #   slug·cta_url 은 코드가 채운다(모델이 쓰지 않는다).
 IMAGE_KEYS = ["overline", "title", "subtitle", "table_title", "col_before", "col_after", "table_rows", "table_note",
               "contrast_title", "contrast", "contrast_note", "flow_title", "flow", "flow_note",
-              "points_title", "points", "cta_line", "cta_sub"]
-CTA_URL = "goodfinance.kr/diagnosis"
+              "points_title", "points"]
+# KC1(2026-10-23) 상담 출구 = 카카오톡 채널 하나. CTA 문구·주소는 코드가 고정으로 채운다(모델이 쓰지 않는다).
+#   「무료」 금지 · 이미 심의 승인된 글의 사진은 건드리지 않는다(새 원고부터).
+CTA_LINE = "내 증권을 보내 보장분석 상담받기"
+CTA_SUB = "카카오톡 채널 신순주의선한금융"
+CTA_URL = "pf.kakao.com/_xoxdBwX"
 
 # ── 금소법 게이트 규칙 (rules_finance_gate.md 2단·17항에서 기계로 잴 수 있는 것만) ──────────────
 CHECK_MARK = re.compile(r"\[확인:[^\]]*\]")
@@ -382,7 +386,7 @@ def build_prompt(topic, cfg, rules_text):
 - ① 썸네일 ② 비교표 ③ 두 칸 대비 ④ 흐름 ⑤ 요점+안내. 사진에도 금액·수익률·보험사명·상담 유인 문구를 쓰지 않는다.
 - 사진 글자는 본문에 있는 내용만 줄여 쓴다. 출처 줄(table_note·contrast_note·flow_note)은 verify_claims 의 근거 자료명·날짜만, 없으면 「계약별 증권과 약관 기준」.
 - 글자 수(넘치면 사진이 만들어지지 않는다): title 은 줄바꿈(\\n)으로 3줄·한 줄 7자 이내, subtitle 22자, table_rows 는 [항목, col_before 칸, col_after 칸] 3줄·칸마다 12자,
-  contrast 는 [[머리, 본문], [머리, 본문]]·머리 10자·본문 40자, flow 는 [[머리, 설명]] 4개·머리 8자·설명 22자, points 3개·18자, 노트는 한 줄 30자로 2줄 이내, cta_line 18자, cta_sub 14자.
+  contrast 는 [[머리, 본문], [머리, 본문]]·머리 10자·본문 40자, flow 는 [[머리, 설명]] 4개·머리 8자·설명 22자, points 3개·18자, 노트는 한 줄 30자로 2줄 이내.
 
 # 출력
 JSON 객체 하나만 출력한다(코드펜스·설명 금지). 키:
@@ -570,7 +574,7 @@ def image_config(raw, slug):
     """생성 결과 naver_images → naver_images.py 설정(slug·cta_url 은 코드가 채운다). 순수 함수."""
     cfg = {"slug": slug}
     cfg.update({k: raw.get(k) for k in IMAGE_KEYS})
-    cfg["cta_url"] = CTA_URL
+    cfg["cta_line"], cfg["cta_sub"], cfg["cta_url"] = CTA_LINE, CTA_SUB, CTA_URL
     return cfg
 
 

@@ -1,4 +1,4 @@
-import { ACTUAL_LOSS_NOTICE, CONDITIONAL_NOTICES, REQUIRED_NOTICES } from "./brand";
+import { ACTUAL_LOSS_NOTICE, BRAND, CONDITIONAL_NOTICES, REQUIRED_NOTICES } from "./brand";
 import NAVER_FORMAT from "../../configs/naver-format.json";
 
 /**
@@ -143,7 +143,15 @@ function lines(ls: string[], out: string[]) {
 export interface NaverRichOptions {
   /** 본문에 넣을 사진(데이터 URI 권장). 없으면 사진 없이 만든다 — 자리를 지어내지 않는다. */
   images?: string[];
+  /**
+   * CTA 사진(마지막 자리)의 링크. 기본 = 진단 페이지(naver-format.json cta_url, 승인된 글 그대로).
+   * KC1: 새 원고는 `NAVER_KAKAO_CTA_URL`(카톡 채널)을 넘긴다.
+   */
+  ctaUrl?: string;
 }
+
+/** KC1 — 새 원고의 CTA 링크. 단일 출처 BRAND.social.kakao. */
+export const NAVER_KAKAO_CTA_URL = BRAND.social.kakao;
 
 /**
  * osmu toNaverText 출력 → 네이버 붙여넣기용 HTML.
@@ -189,7 +197,7 @@ export function toNaverRichHtml(text: string, opts: NaverRichOptions = {}): stri
         if (b.length > 1) lines(b.slice(1), out);
         return;
       }
-      out.push(img(src, i === lastMarker ? CTA_URL : undefined));
+      out.push(img(src, i === lastMarker ? (opts.ctaUrl ?? CTA_URL) : undefined));
       if (b.length > 1) out.push(caption(b.slice(1).map(esc).join("<br>")));
       out.push(gap());
       return;
