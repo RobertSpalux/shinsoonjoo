@@ -729,6 +729,41 @@ class SyncWatcher(unittest.TestCase):
             self.assertEqual(recs, ["2026-10-5017"])      # 재실행해도 새 행 0
             self.assertTrue(all("기록 2026" not in l for l in again))
 
+    def test_sync_fills_posted_on_existing_row(self):
+        """AR2 — 이미 있는 행이 url_registered_at 비었고 감시기가 게시위치등록됨 이면 한 번 채우고, 재실행엔 변화 0."""
+        with tempfile.TemporaryDirectory() as d:
+            st, wp = os.path.join(d, "s.json"), os.path.join(d, "w.json")
+            kits = {k: {"id": k, "kin_answer_id": "u" + k, "status": "승인", "question_url": "https://kin.naver.com/q/" + k}
+                    for k in ("a", "b", "c")}
+            json.dump({"kits": kits}, open(st, "w", encoding="utf-8"))
+            rows = [{"심의번호": "2026-10-6031", "게시위치등록됨": True, "키트id": "a"},    # 비어 있음 → 채움
+                    {"심의번호": "2026-10-6032", "게시위치등록됨": True, "키트id": "b"},    # 이미 채워짐 → 손대지 않음
+                    {"심의번호": "2026-10-6033", "게시위치등록됨": False, "키트id": "c"}]  # 게시 전 → 손대지 않음
+            json.dump({"행": rows}, open(wp, "w", encoding="utf-8"))
+            have = {"2026-10-6031", "2026-10-6032", "2026-10-6033"}
+            pending = {"2026-10-6031": "ida", "2026-10-6033": "idc"}   # DB 에서 url_registered_at 이 빈 행
+            regs, posted = [], []
+
+            def reg(e, i, u):
+                regs.append((i, u))
+                for k in [k for k, v in pending.items() if v == i]:
+                    del pending[k]   # DB 가 채워지면 다음 조회에서 빠진다
+                return True
+
+            def no_new_row(*a):
+                self.fail("새 행을 만들면 안 된다")
+
+            kw = dict(path=wp, state_path=st, record=no_new_row, existing_fn=lambda: have,
+                      mark_posted=lambda e, i: posted.append(i), pending_fn=lambda: dict(pending), register_url=reg)
+            out = kp.cmd_sync_watcher({}, **kw)
+            self.assertEqual(regs, [("ida", "https://kin.naver.com/q/a")])
+            self.assertEqual(posted, ["ua"])
+            self.assertEqual(kp.load_state(st)["kits"]["a"]["status"], "게시")
+            self.assertTrue(any("게시 반영 2026-10-6031" in l for l in out))
+            again = kp.cmd_sync_watcher({}, **kw)
+            self.assertEqual(regs, [("ida", "https://kin.naver.com/q/a")])   # 재실행 변화 0
+            self.assertEqual(again, ["새 승인 없음"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)
