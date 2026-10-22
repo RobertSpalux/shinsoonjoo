@@ -707,5 +707,28 @@ class Flow(unittest.TestCase):
             self.assertLessEqual(len(kp.special_note(t).encode("utf-8")), kp.NOTE_MAX_BYTES)
 
 
+class SyncWatcher(unittest.TestCase):
+    def test_sync_no_duplicates(self):
+        with tempfile.TemporaryDirectory() as d:
+            st, wp = os.path.join(d, "s.json"), os.path.join(d, "w.json")
+            kits = {k: {"id": k, "kin_answer_id": "u" + k, "status": "심의대기"} for k in ("a", "b", "c")}
+            json.dump({"kits": kits}, open(st, "w", encoding="utf-8"))
+            rows = [{"심의번호": "2026-10-5017", "심의필일자": "2026-10-20", "유효기간": "2027-10-19", "게시위치등록됨": True, "키트id": "a"},
+                    {"심의번호": "2026-10-4548", "심의필일자": "2026-10-19", "유효기간": "2027-10-18", "게시위치등록됨": True, "키트id": "b"},
+                    {"심의번호": "", "키트id": "c"}, {"심의번호": "2026-10-4555", "키트id": "zz"}]
+            json.dump({"행": rows}, open(wp, "w", encoding="utf-8"))
+            recs, posted = [], []
+            rec_fn = lambda e, r, n, f, t: recs.append(n) or ("id" + n, "ok")  # noqa: E731
+            kp.cmd_sync_watcher({}, path=wp, state_path=st, record=rec_fn,
+                                existing_fn=lambda: {"2026-10-4548"}, mark_posted=lambda e, i: posted.append(i))
+            self.assertEqual(recs, ["2026-10-5017"])      # 4548 은 이미 있어 건너뜀, 빈 번호·키트 없음도 건너뜀
+            self.assertEqual(posted, ["ua"])
+            self.assertEqual(kp.load_state(st)["kits"]["a"]["status"], "게시")
+            again = kp.cmd_sync_watcher({}, path=wp, state_path=st, record=rec_fn,
+                                        existing_fn=lambda: {"2026-10-4548", "2026-10-5017"}, mark_posted=lambda e, i: None)
+            self.assertEqual(recs, ["2026-10-5017"])      # 재실행해도 새 행 0
+            self.assertTrue(all("기록 2026" not in l for l in again))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
