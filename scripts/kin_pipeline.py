@@ -951,6 +951,25 @@ def existing_review_nos(env):
     return {x["review_no"] for x in r.json() if x.get("review_no")}
 
 
+def unregistered_review_ids(env):
+    """ad_reviews channel=kin 중 url_registered_at 이 빈 행 {review_no: ad_reviews.id} — 게시 반영 대상."""
+    url, h = _rest(env, "ad_reviews")
+    r = requests.get(url, params=[("select", "id,review_no"), ("channel", "eq.kin"), ("url_registered_at", "is.null")],
+                     headers=h, timeout=30)
+    if r.status_code >= 300:
+        raise KinError(f"ad_reviews 조회 실패 HTTP {r.status_code}")
+    return {x["review_no"]: x["id"] for x in r.json() if x.get("review_no")}
+
+
+def register_posted_url(env, ad_review_id, posted_url):
+    """기존 ad_reviews 행에 posted_url·url_registered_at 채움. 비어 있을 때만(is.null 조건) 갱신한다."""
+    url, h = _rest(env, "ad_reviews")
+    r = requests.patch(url, params={"id": f"eq.{ad_review_id}", "url_registered_at": "is.null"},
+                       json={"posted_url": posted_url, "url_registered_at": datetime.now(kit.KST).isoformat()},
+                       headers={**h, "Content-Type": "application/json", "Prefer": "return=minimal"}, timeout=30)
+    return r.status_code < 300
+
+
 def mark_answer_posted(env, kin_answer_id):
     """kin_answers.status 허용값은 초안·게시완료·채택됨·폐기 뿐(kin_answers_status_check) — 승인은 올릴 값이 없고 게시만 올린다."""
     url, h = _rest(env, "kin_answers")
@@ -961,14 +980,17 @@ def mark_answer_posted(env, kin_answer_id):
 
 
 def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=record_review, existing_fn=None,
-                     mark_posted=mark_answer_posted, dry=False):
-    """감시기(robert-os pams_지식인행.json) 승인 행 → ad_reviews(kin) 자동 기록. review_no 가 이미 있으면 건너뛴다(중복 0).
-    게시위치등록됨 이면 kin_answers 를 게시완료로. 사람이 approvals/approve 를 돌릴 필요가 없다."""
+                     mark_posted=mark_answer_posted, dry=False, pending_fn=None, register_url=register_posted_url):
+    """감시기(robert-os pams_지식인행.json) 승인 행 → ad_reviews(kin) 자동 기록. review_no 가 이미 있으면 새 행은 안 만든다(중복 0).
+    게시위치등록됨 이면 kin_answers 를 게시완료로. 사람이 approvals/approve 를 돌릴 필요가 없다.
+    이미 있는 행이라도 게시위치등록됨=True 인데 url_registered_at 이 비었으면 posted_url(질문 URL)·url_registered_at 을
+    채우고 kin_answers 게시완료로(AR2). 이미 채워진 행은 건드리지 않는다."""
     if not os.path.exists(path):
         return ["감시기 파일 없음"]
     rows = (json.load(open(path, encoding="utf-8")) or {}).get("행", [])
     state = load_state(state_path)
     have = (existing_fn or (lambda: existing_review_nos(env)))()
+    pending = None   # {review_no: ad_reviews.id} — url_registered_at 이 빈 기존 행. 필요할 때 한 번만 조회
     out, changed = [], False
     for row in rows:
         no = normalize_review_no(row.get("심의번호") or "")
@@ -977,6 +999,25 @@ def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=recor
         kid = row.get("키트id") or row.get("키트")
         rec = state["kits"].get(kid)
         if no in have:
+            if not (row.get("게시위치등록됨") and rec and rec.get("question_url")):
+                continue
+            if pending is None:
+                pending = (pending_fn or (lambda: unregistered_review_ids(env)))()
+            ad_id = pending.get(no)
+            if not ad_id:
+                continue   # 이미 채워진 행
+            if dry:
+                out.append(f"[dry-run] 게시 반영 예정 {no} ← {kid}")
+                continue
+            if not register_url(env, ad_id, rec["question_url"]):
+                out.append(f"게시 반영 실패 {no} ← {kid}")
+                continue
+            del pending[no]
+            if rec.get("kin_answer_id"):
+                mark_posted(env, rec["kin_answer_id"])
+            rec.update({"status": "게시", "posted_url": rec["question_url"], "ad_review_id": ad_id})
+            changed = True
+            out.append(f"게시 반영 {no} ← {kid}")
             continue
         if not rec:
             out.append(f"건너뜀 {no}: 키트 {kid} 가 상태 파일에 없다")
