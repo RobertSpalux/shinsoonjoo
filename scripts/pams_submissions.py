@@ -24,7 +24,17 @@ import pams_kit as kit
 
 APPLY_JSON = r"D:\robert-os\finance\state\pams_apply_대기.json"
 CHANNELS = {"본진": "main", "네이버": "naver"}
-KEY_RX = re.compile(r"^\d{4}_(\d+)호_(본진|네이버)$")
+# 키 중간은 「N호」(10/20 까지) 또는 글 slug(10/21 부터 키트 파일명이 MMDD_<slug>_채널 로 바뀜)
+KEY_RX = re.compile(r"^\d{4}_(.+)_(본진|네이버)$")
+ISSUE_RX = re.compile(r"^(\d+)호$")
+SLUG_RX = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+
+def key_slug(mid, issue_slugs):
+    m = ISSUE_RX.match(mid)
+    if m:
+        return issue_slugs.get(int(m.group(1)))
+    return mid if SLUG_RX.match(mid) else None
 SEQ_RX = re.compile(r"seq=(\d+)")
 ACTIVE = ("submitted", "under_review", "approved")
 
@@ -46,7 +56,7 @@ def pending(apply_map, reviews, issue_slugs, now, days=3):
         j = (e or {}).get("접수") or {}
         if not m or j.get("진행사항") != "심사중":
             continue
-        slug, ch = issue_slugs.get(int(m.group(1))), CHANNELS[m.group(2)]
+        slug, ch = key_slug(m.group(1), issue_slugs), CHANNELS[m.group(2)]
         seq = entry_seq(e)
         if not slug or not seq:
             continue
@@ -101,7 +111,11 @@ def sync(env, state, notify, log=print, apply_path=APPLY_JSON, server_factory=No
     made = []
     with (server_factory() if server_factory else kit.LocalServer(port=3945, log=log)) as srv:
         for p in todo:
-            art = kit.fetch_article(env, p["slug"])
+            try:
+                art = kit.fetch_article(env, p["slug"])
+            except Exception as e:  # 키 중간이 slug 가 아닌 글이면 이 건만 건너뛴다(나머지 행은 계속 만든다)
+                log(f"접수 행 건너뜀 — {p['slug']} 글 조회 실패: {e}")
+                continue
             title = p["게시명"] or kit.posting_title(art, p["channel"])[0]
             kit_rec = (state.get("kits") or {}).get(f"{p['slug']}|{p['channel']}")
             r = pa.admin_post(srv, env, "/api/admin/ad-review", {
