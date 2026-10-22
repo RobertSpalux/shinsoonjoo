@@ -522,6 +522,14 @@ def main():
             log(f"접수 행 생성 실패: {e}")
             alert_once(env, state, f"submissions:{type(e).__name__}",
                        f"⚠️ PAMS 접수 → ad_reviews 행 자동 생성이 멈췄습니다 — {type(e).__name__}: {str(e)[:120]}")
+        # 지식iN 승인 행(감시기) → ad_reviews(kin) 자동 기록. 실패해도 바퀴는 계속, 「기록」 줄이 있을 때만 1통.
+        try:
+            import kin_pipeline
+            kin_lines = [x for x in kin_pipeline.cmd_sync_watcher(env) if x.startswith("기록 ")]
+            if kin_lines:
+                telegram(env, "📝 지식iN 승인 기록\n" + "\n".join(kin_lines))
+        except Exception as e:
+            log(f"지식iN 승인 기록 실패: {e}")
         save_state(state)
         upload_submitted_threads(env, notify=lambda t: telegram(env, t))
         # 심의 승인 → 게시(본진 자동 공개·posted_url, 네이버 공개 전환 안내·RSS URL, 배포 체크, 만료 알림).

@@ -6,6 +6,7 @@
     python scripts/kin_pipeline.py run [--n 3] [--dry-run]     # 수집 + 초안 + 키트(하루 상한 5건)
     python scripts/kin_pipeline.py approvals --xls <jidatexcel.xls>  # PAMS 「지식인&댓글 엑셀변환」으로 승인 수거
     python scripts/kin_pipeline.py approvals                    # (robert-os 감시기 승인 파일이 생기면) 그것으로
+    python scripts/kin_pipeline.py sync-watcher [--dry-run]     # 감시기 승인 행 → ad_reviews(kin) 자동(review_no 중복 0)
     python scripts/kin_pipeline.py approve <키트id> --review-no 2026-10-1234 --from 2026-10-09 --to 2027-10-08 \\
                                            --notice-file <「심의내용」 돋보기 화면 복사본.txt>
     python scripts/kin_pipeline.py posted <키트id> --url <지식iN 답변 URL>
@@ -48,6 +49,7 @@ ROOT = kit.ROOT
 STATE_DIR = kin_harvest.STATE_DIR
 STATE_PATH = os.path.join(STATE_DIR, "kin_state.json")
 KIT_DIR = os.path.join(kit.KIT_DIR, "_지식인")
+WATCHER_JSON = os.environ.get("KIN_WATCHER", r"D:\robert-os\finance\state\pams_지식인행.json")
 APPROVALS_JSON = os.environ.get("KIN_APPROVALS", r"D:\robert-os\finance\state\pams_kin_승인.json")
 DAILY_MAX = 5
 NOTE_MAX_BYTES = 100      # 특이사항(TB_GUMCHECK_LIST.CHSAYU) — 넘으면 ORA-12899 로 접수 실패(§6.4 스레드 주의 7)
@@ -940,6 +942,65 @@ def cmd_approvals(env, xls=None, path=APPROVALS_JSON, state_path=STATE_PATH, not
     return out or ["새 승인 없음"]
 
 
+def existing_review_nos(env):
+    """ad_reviews channel=kin 에 이미 있는 review_no 집합 — 중복 삽입 방지의 기준."""
+    url, h = _rest(env, "ad_reviews")
+    r = requests.get(url, params=[("select", "review_no"), ("channel", "eq.kin")], headers=h, timeout=30)
+    if r.status_code >= 300:
+        raise KinError(f"ad_reviews 조회 실패 HTTP {r.status_code}")
+    return {x["review_no"] for x in r.json() if x.get("review_no")}
+
+
+def mark_answer_posted(env, kin_answer_id):
+    """kin_answers.status 허용값은 초안·게시완료·채택됨·폐기 뿐(kin_answers_status_check) — 승인은 올릴 값이 없고 게시만 올린다."""
+    url, h = _rest(env, "kin_answers")
+    r = requests.patch(url, params={"id": f"eq.{kin_answer_id}"},
+                       json={"status": "게시완료", "posted_at": datetime.now(kit.KST).isoformat()},
+                       headers={**h, "Content-Type": "application/json", "Prefer": "return=minimal"}, timeout=30)
+    return r.status_code < 300
+
+
+def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=record_review, existing_fn=None,
+                     mark_posted=mark_answer_posted, dry=False):
+    """감시기(robert-os pams_지식인행.json) 승인 행 → ad_reviews(kin) 자동 기록. review_no 가 이미 있으면 건너뛴다(중복 0).
+    게시위치등록됨 이면 kin_answers 를 게시완료로. 사람이 approvals/approve 를 돌릴 필요가 없다."""
+    if not os.path.exists(path):
+        return ["감시기 파일 없음"]
+    rows = (json.load(open(path, encoding="utf-8")) or {}).get("행", [])
+    state = load_state(state_path)
+    have = (existing_fn or (lambda: existing_review_nos(env)))()
+    out, changed = [], False
+    for row in rows:
+        no = normalize_review_no(row.get("심의번호") or "")
+        if not no:
+            continue   # 심사중·반송
+        kid = row.get("키트id") or row.get("키트")
+        rec = state["kits"].get(kid)
+        if no in have:
+            continue
+        if not rec:
+            out.append(f"건너뜀 {no}: 키트 {kid} 가 상태 파일에 없다")
+            continue
+        f, t = _date(row.get("심의필일자")), _date(row.get("유효기간"))
+        if dry:
+            out.append(f"[dry-run] 기록 예정 {no} ← {kid}")
+            continue
+        ad_id, msg = record(env, rec, no, f, t)
+        if not ad_id:
+            out.append(f"기록 실패 {no} ← {kid}: {msg}")
+            continue
+        have.add(no)
+        rec.update({"review_no": no, "review_from": f, "review_to": t, "ad_review_id": ad_id,
+                    "status": "게시" if row.get("게시위치등록됨") else "승인"})
+        if row.get("게시위치등록됨") and rec.get("kin_answer_id"):
+            mark_posted(env, rec["kin_answer_id"])
+        changed = True
+        out.append(f"기록 {no} ← {kid} ({rec['status']})")
+    if changed:
+        save_state(state, state_path)
+    return out or ["새 승인 없음"]
+
+
 def main():
     ap = argparse.ArgumentParser(description="지식iN 답변 파이프라인")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -955,6 +1016,8 @@ def main():
     a.add_argument("--dry-run", action="store_true")
     ap_ = sub.add_parser("approvals")
     ap_.add_argument("--xls", help="PAMS 「지식인&댓글 엑셀변환」 내려받은 파일")
+    sw = sub.add_parser("sync-watcher")
+    sw.add_argument("--dry-run", action="store_true")
     p = sub.add_parser("posted")
     p.add_argument("kit")
     p.add_argument("--url", required=True)
@@ -973,6 +1036,8 @@ def main():
             print(rec.get("final_path") or rec["final"])
         elif args.cmd == "approvals":
             print("\n".join(cmd_approvals(env, xls=args.xls)))
+        elif args.cmd == "sync-watcher":
+            print("\n".join(cmd_sync_watcher(env, dry=args.dry_run)))
         elif args.cmd == "posted":
             print("\n".join(cmd_posted(env, args.kit, args.url)))
         elif args.cmd == "weekly":

@@ -50,6 +50,32 @@ class Pending(unittest.TestCase):
         rv = [{"slug": "corn", "channel": "main", "status": "rejected", "notes": "PAMS seq 600000"}]
         self.assertIn("corn", [p["slug"] for p in ps.pending(APPLY, rv, SLUGS, NOW)])
 
+    def test_slug_keys_from_1021(self):
+        """10/21 부터 키가 MMDD_<slug>_채널 — AR1: N호 만 받던 KEY_RX 가 4건을 놓쳤다."""
+        ap = {
+            "1020_corporate-policy-owner-beneficiary-check_본진": {"게시명": "법인", "접수": {
+                "시각": "2026-10-21T10:13:29+09:00", "진행사항": "심사중", "신청일시": "2026-10-21 10:12",
+                "사람조작": "x | https://pams.kr/fc/gumsocheck/jumgumpyosave.jsp?nowdt=0&srcgbn=0&seq=669989 | 키트 1020_corporate-policy-owne"}},
+            "1020_health-checkup-retest-recommendation-disclosure_본진": {"접수": {
+                "시각": "2026-10-21T11:15:22+09:00", "seq": "670243", "진행사항": "심사중", "신청일시": "2026-10-21 11:14"}},
+            "1021_annuity-start-age-payout-type-check_본진": {"접수": {
+                "시각": "2026-10-22T10:45:50+09:00", "seq": "671383", "진행사항": "심사중", "신청일시": "2026-10-22 10:45"}},
+            "1021_존재하지 않는 slug_본진": {"접수": {"시각": "2026-10-22T10:45:50+09:00", "seq": "1", "진행사항": "심사중"}},
+        }
+        now = datetime(2026, 10, 22, 12, 0, tzinfo=kit.KST)
+        got = {(p["slug"], p["seq"]) for p in ps.pending(ap, [], SLUGS, now)}
+        self.assertEqual(got, {("corporate-policy-owner-beneficiary-check", "669989"),
+                               ("health-checkup-retest-recommendation-disclosure", "670243"),
+                               ("annuity-start-age-payout-type-check", "671383")})
+
+    def test_slug_keys_skip_retroactive_rows(self):
+        """관제탑 소급 행(submitted · notes 「관제탑 소급」)이 있으면 중복 생성 금지."""
+        ap = {"1021_annuity-start-age-payout-type-check_본진": {"접수": {
+            "시각": "2026-10-22T10:45:50+09:00", "seq": "671383", "진행사항": "심사중", "신청일시": "2026-10-22 10:45"}}}
+        now = datetime(2026, 10, 22, 12, 0, tzinfo=kit.KST)
+        rv = [{"slug": "annuity-start-age-payout-type-check", "channel": "main", "status": "submitted", "notes": "관제탑 소급"}]
+        self.assertEqual(ps.pending(ap, rv, SLUGS, now), [])
+
     def test_old_records_and_threads_ignored(self):
         later = datetime(2026, 10, 9, tzinfo=kit.KST)
         self.assertEqual(ps.pending(APPLY, [], SLUGS, later), [], "3일 넘은 접수 기록으로는 행을 만들지 않는다")
