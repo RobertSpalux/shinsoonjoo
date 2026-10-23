@@ -336,9 +336,24 @@ def copy_images(slug, out_dir, base):
     return out
 
 
-def rich_html(text_path, images):
+KAKAO_CHANNEL_URL = "http://pf.kakao.com/_xoxdBwX"   # brand.ts BRAND.social.kakao
+
+
+def cta_url_for(slug, config_dir=None):
+    """KC1 — 그 글의 사진 설정(configs/<slug>.json)이 카톡 채널 CTA 면 CTA 카드 링크도 카톡 채널.
+    승인된 옛 글(cta_url = goodfinance.kr/diagnosis)은 None → 종전 링크 그대로(심의받은 내용 불변)."""
+    p = os.path.join(config_dir or os.path.join(kit.ROOT, "configs"), f"{slug}.json")
+    try:
+        url = (json.load(open(p, encoding="utf-8")).get("cta_url") or "")
+    except (OSError, ValueError):
+        return None
+    return KAKAO_CHANNEL_URL if "pf.kakao.com" in url else None
+
+
+def rich_html(text_path, images, cta_url=None):
     """네이버 서식 HTML(configs/naver-format.json 규격) — 어드민 [게시용 복사]와 같은 toNaverRichHtml."""
-    r = subprocess.run(["npx", "tsx", "scripts/naver_rich.mts", text_path, *images], cwd=kit.ROOT,
+    extra = [f"--cta-url={cta_url}"] if cta_url else []
+    r = subprocess.run(["npx", "tsx", "scripts/naver_rich.mts", text_path, *images, *extra], cwd=kit.ROOT,
                        capture_output=True, text=True, encoding="utf-8", shell=(os.name == "nt"))
     if r.returncode != 0 or not r.stdout.strip():
         raise kit.KitError(f"네이버 서식 HTML 실패 — {r.stderr.strip()[:200]}")
@@ -363,7 +378,7 @@ def naver_kit(server, env, item, live, out_dir=NAVER_OUT, now=None):
     imgs = copy_images(a["slug"], out_dir, base)
     body_path = os.path.join(out_dir, base + "_본문.txt")
     open(body_path, "w", encoding="utf-8", newline="\n").write(body["text"])
-    html = rich_html(body_path, imgs)
+    html = rich_html(body_path, imgs, cta_url_for(a["slug"]))
     open(txt[:-4] + ".html", "w", encoding="utf-8").write(
         f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(body['title'])}</title>"
         f"<body style='max-width:860px;margin:24px auto;padding:0 16px'>"

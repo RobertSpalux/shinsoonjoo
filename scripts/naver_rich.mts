@@ -10,10 +10,13 @@
 import { readFileSync } from "node:fs";
 import { toNaverRichHtml } from "../src/lib/naver-rich";
 
-const [file, ...images] = process.argv.slice(2);
+// KC1 — --cta-url=<주소>: 마지막 사진(CTA 카드) 링크. 없으면 종전(진단 페이지) 그대로.
+const argv = process.argv.slice(2);
+const ctaArg = argv.find((a) => a.startsWith("--cta-url="));
+const [file, ...images] = argv.filter((a) => a !== ctaArg);
 if (!file) {
-  console.error("사용법: npx tsx scripts/naver_rich.mts <본문.txt> [사진…]");
+  console.error("사용법: npx tsx scripts/naver_rich.mts <본문.txt> [사진…] [--cta-url=<주소>]");
   process.exit(2);
 }
 const text = readFileSync(file, "utf-8");
-process.stdout.write(toNaverRichHtml(text, { images }));
+process.stdout.write(toNaverRichHtml(text, { images, ctaUrl: ctaArg?.slice("--cta-url=".length) }));
