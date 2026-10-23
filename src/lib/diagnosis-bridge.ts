@@ -18,7 +18,7 @@ export const BRIDGE_COPY = {
 } as const;
 
 /** 카카오톡 채널 채팅창(홈이 아니라 대화창으로 바로 연다). */
-export const KAKAO_CHAT_URL = `${BRAND.social.kakao.replace(/\/+$/, "")}/chat`;
+export const KAKAO_CHAT_URL = BRAND.social.kakaoChat;
 
 /** 복사할 첫 메시지 — 점수와 계약 수만. */
 export function buildKakaoMessage(score: number, contracts?: string): string {

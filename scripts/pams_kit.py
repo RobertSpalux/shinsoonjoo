@@ -57,8 +57,8 @@ KIT_DIR = os.path.join(os.path.expanduser("~"), "Downloads", "PAMS접수")
 PRINT_JS = os.path.join(ROOT, "scripts", "pams-print.mjs")
 BLANK_REVIEW = "제_____호"
 GATE_TEXT = "컴플라이언스 검사 미통과"
-AD_FORM = {"main": "홈페이지", "naver": "바이럴(블로그 등)", "threads": "스레드"}
-CH_LABEL = {"main": "본진", "naver": "네이버", "threads": "스레드"}
+AD_FORM = {"main": "홈페이지", "naver": "바이럴(블로그 등)", "threads": "스레드", "kakao": "기타"}
+CH_LABEL = {"main": "본진", "naver": "네이버", "threads": "스레드", "kakao": "카카오"}
 # 본진 키트의 「게시위치:」「규격:」 줄 — robert-os pams_apply 가 이 두 줄을 읽어 locations·moyangs 칸에 넣는다.
 # (2026-09-30 robert-os 1112 보고: 7호 본진 재채움에서 이 두 칸만 비었다 — 키트에 줄이 없었다.)
 # 게시위치 = 발행 전이라도 확정 URL. PAMS 게시위치 등록 실물 형식과 같다(9200호 → https://goodfinance.kr/news/<slug>).
@@ -488,7 +488,7 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("slug")
-    ap.add_argument("channel", choices=["main", "naver", "threads"])
+    ap.add_argument("channel", choices=["main", "naver", "threads", "kakao"])
     ap.add_argument("--capture")
     ap.add_argument("--base-url")
     ap.add_argument("--body", help="스레드 본문 파일(threads). 기본 assets/threads/drafts/<slug>/body.txt")
@@ -511,6 +511,12 @@ def main():
     a = ap.parse_args()
     env = load_env()
     try:
+        if a.channel == "kakao":   # KC1 — slug 는 premium_articles 가 아니라 assets/kakao/drafts/<slug>
+            import pams_kakao
+            kit = pams_kakao.build_kakao_kit(env, a.slug)
+            print(open(kit["txt"], encoding="utf-8").read())
+            print(f"✅ {kit['zip']}\n✅ {kit['txt']}")
+            return
         art = fetch_article(env, a.slug)
         server = LocalServer(a.base_url) if a.base_url else None
         if a.channel == "threads":

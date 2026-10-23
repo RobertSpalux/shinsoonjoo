@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import DiagnosisQuiz from "@/components/diagnosis/DiagnosisQuiz";
+import KakaoChannelCta from "@/components/diagnosis/KakaoChannelCta";
 import { getCareer } from "@/lib/brand";
 
 const { years } = getCareer();
@@ -28,9 +29,16 @@ export default function DiagnosisPage() {
             <br className="hidden md:block" />
             {years}년 현장의 눈으로 직접 봐드립니다.
           </p>
+          <div className="mt-6">
+            <KakaoChannelCta position="diagnosis_top" />
+          </div>
         </div>
 
         <DiagnosisQuiz />
+
+        <div className="mx-auto mt-16 max-w-2xl text-center">
+          <KakaoChannelCta position="diagnosis_bottom" />
+        </div>
       </section>
     </main>
   );

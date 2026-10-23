@@ -26,6 +26,7 @@ export const BRAND = {
   social: {
     instagram: "https://www.instagram.com/goodfinance_sj/",
     kakao: "http://pf.kakao.com/_xoxdBwX",
+    kakaoChat: "http://pf.kakao.com/_xoxdBwX/chat", // 채팅 직행 — CTA 버튼용(채널 홈의 미확인 경고 회피). 푸터 아이콘은 kakao(심의본)
   },
   careerStart: new Date("2003-07-01T00:00:00+09:00"),
   credentials: [
