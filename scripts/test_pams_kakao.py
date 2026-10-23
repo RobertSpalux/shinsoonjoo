@@ -100,7 +100,9 @@ class CtaPassThroughTest(unittest.TestCase):
     def test_kakao_config_gives_kakao_link(self):
         with tempfile.TemporaryDirectory() as d:
             self.write(d, "new", "pf.kakao.com/_xoxdBwX")
-            self.assertEqual(pub.cta_url_for("new", d), kk.KAKAO_CHANNEL_URL)
+            self.assertEqual(pub.cta_url_for("new", d), kk.KAKAO_CHANNEL_URL + "/chat")
+            ts = open(kit.os.path.join(kit.ROOT, "src", "lib", "brand.ts"), encoding="utf-8").read()
+            self.assertIn(f'"{pub.KAKAO_CHANNEL_URL}"', ts)
 
     def test_old_config_stays_diagnosis(self):
         with tempfile.TemporaryDirectory() as d:

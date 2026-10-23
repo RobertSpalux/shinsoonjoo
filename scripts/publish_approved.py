@@ -336,7 +336,7 @@ def copy_images(slug, out_dir, base):
     return out
 
 
-KAKAO_CHANNEL_URL = "http://pf.kakao.com/_xoxdBwX"   # brand.ts BRAND.social.kakao
+KAKAO_CHANNEL_URL = "http://pf.kakao.com/_xoxdBwX/chat"   # brand.ts BRAND.social.kakaoChat (채팅 직행)
 
 
 def cta_url_for(slug, config_dir=None):

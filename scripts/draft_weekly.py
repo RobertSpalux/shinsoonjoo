@@ -72,7 +72,7 @@ IMAGE_KEYS = ["overline", "title", "subtitle", "table_title", "col_before", "col
 #   「무료」 금지 · 이미 심의 승인된 글의 사진은 건드리지 않는다(새 원고부터).
 CTA_LINE = "내 증권을 보내 보장분석 상담받기"
 CTA_SUB = "카카오톡 채널 신순주의선한금융"
-CTA_URL = "pf.kakao.com/_xoxdBwX"
+CTA_URL = "pf.kakao.com/_xoxdBwX/chat"   # 채팅 직행(brand.ts BRAND.social.kakaoChat)
 
 # ── 금소법 게이트 규칙 (rules_finance_gate.md 2단·17항에서 기계로 잴 수 있는 것만) ──────────────
 CHECK_MARK = re.compile(r"\[확인:[^\]]*\]")

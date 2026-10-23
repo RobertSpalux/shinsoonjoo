@@ -17,7 +17,7 @@ export default function KakaoChannelCta({
     <TrackedLink
       event="kakao_cta_click"
       position={position}
-      href={BRAND.social.kakao}
+      href={BRAND.social.kakaoChat}
       target="_blank"
       rel="noopener noreferrer"
       className="inline-flex items-center gap-2.5 rounded-[var(--radius-sm)] bg-[#FEE500] px-7 py-3.5 text-sm font-semibold text-[#191919] transition-transform duration-300 hover:-translate-y-px"

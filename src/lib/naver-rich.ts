@@ -151,7 +151,7 @@ export interface NaverRichOptions {
 }
 
 /** KC1 — 새 원고의 CTA 링크. 단일 출처 BRAND.social.kakao. */
-export const NAVER_KAKAO_CTA_URL = BRAND.social.kakao;
+export const NAVER_KAKAO_CTA_URL = BRAND.social.kakaoChat;
 
 /**
  * osmu toNaverText 출력 → 네이버 붙여넣기용 HTML.
