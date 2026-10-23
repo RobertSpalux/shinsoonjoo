@@ -147,7 +147,8 @@ def load_env(env_file=None):
 def insurer_names():
     """banned-terms.ts INSURERS — 금지어 대장이 단일 출처(pams_threads 와 같은 파서)."""
     import preflight
-    ts = open(preflight.BANNED_TS, encoding="utf-8").read()
+    with open(preflight.BANNED_TS, encoding="utf-8") as f:
+        ts = f.read()
     m = re.search(r"const INSURERS = \[(.*?)\];", ts, re.S)
     return re.findall(r'"([^"]+)"', m.group(1)) if m else []
 
@@ -155,7 +156,8 @@ def insurer_names():
 REPLY_TS = os.path.join(os.path.dirname(HERE), "src", "lib", "compliance", "reply-terms.ts")
 def disease_dict(path=REPLY_TS):
     """reply-terms.ts DISEASES·DRUG_BRANDS·DISEASE_SUFFIX·NOT_DISEASE — 되받기 게이트와 같은 사전(단일 출처)."""
-    ts = open(path, encoding="utf-8").read()
+    with open(path, encoding="utf-8") as f:
+        ts = f.read()
 
     def arr(name):
         m = re.search(rf"const {name} = \[(.*?)\];", ts, re.S)
@@ -403,7 +405,8 @@ def collect(env, now=None, baseline_if_empty=True, search_fn=None, ledger_path=L
                "age": q["age"], "closed": "미확인(API 미제공)"}
         (dropped if why else cands).append({**row, "excluded": why} if why else row)
     os.makedirs(os.path.dirname(ledger_path), exist_ok=True)
-    json.dump(ledger, open(ledger_path + ".tmp", "w", encoding="utf-8"), ensure_ascii=False)
+    with open(ledger_path + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(ledger, f, ensure_ascii=False)
     os.replace(ledger_path + ".tmp", ledger_path)
     return {"at": now.isoformat(), "baseline": baseline, "seen_total": len(questions),
             "candidates": cands, "excluded": dropped, "errors": errors}

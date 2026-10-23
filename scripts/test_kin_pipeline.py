@@ -301,7 +301,8 @@ class Flow(unittest.TestCase):
         self.assertTrue(any("✖ [간병]" in l for l in lines))
         kid = made[0]["id"]
         self.assertEqual(kid, "1009_지식인_11")
-        txt = open(os.path.join(self.kits, kid + ".txt"), encoding="utf-8").read()
+        with open(os.path.join(self.kits, kid + ".txt"), encoding="utf-8") as f:
+            txt = f.read()
         self.assertIn("게시위치: 네이버 지식인", txt)
         self.assertIn("카테고리: 그외 기타(건강,화재,펫 보험 등)", txt)
         self.assertIn("── PAMS 에 붙여 넣을 원고 ──\n" + BODY + "\n── 끝 ──", txt)
@@ -325,19 +326,21 @@ class Flow(unittest.TestCase):
         xls = os.path.join(self.d, "jidatexcel.xls")
         approved = BODY + "<br>" + Notice.PAMS.replace("\n", "<br>").replace(
             "제0000호 (2023.00.00~2024.00.00)", "제2026-10-1234호 (2026.10.09~2027.10.08)")
-        open(xls, "w", encoding="utf-8").write(
-            "<table><tr><th>No</th><th>신청일시</th><th>변경일시</th><th>심의필번호</th><th>심의필일자</th>"
-            "<th>광고유효기간</th><th>답변내용</th></tr>"
-            f"<tr><td>1</td><td>2026-10-09 10:00</td><td>2026-10-09 10:05</td><td>프라임에셋 심의필 제2026-10-1234호</td>"
-            f"<td>2026-10-09</td><td>2027-10-08</td><td>{approved}</td></tr>"
-            "<tr><td>2</td><td></td><td></td><td></td><td></td><td></td><td>심사중 건</td></tr></table>")
+        with open(xls, "w", encoding="utf-8") as f:
+            f.write(
+                "<table><tr><th>No</th><th>신청일시</th><th>변경일시</th><th>심의필번호</th><th>심의필일자</th>"
+                "<th>광고유효기간</th><th>답변내용</th></tr>"
+                f"<tr><td>1</td><td>2026-10-09 10:00</td><td>2026-10-09 10:05</td><td>프라임에셋 심의필 제2026-10-1234호</td>"
+                f"<td>2026-10-09</td><td>2027-10-08</td><td>{approved}</td></tr>"
+                "<tr><td>2</td><td></td><td></td><td></td><td></td><td></td><td>심사중 건</td></tr></table>")
         recs = []
         out = kp.cmd_approvals({}, xls=xls, state_path=self.state, notify=self.sent.append,
                                record=lambda e, r, n, f, t: recs.append(n) or (None, "skip"), today="2026-10-09",
                                kit_dir=self.kits)
         self.assertEqual(out, [f"승인 처리 {kid} — 제2026-10-1234호"])
         self.assertEqual(recs, ["2026-10-1234"])
-        final = open(os.path.join(self.kits, kid + "_게시본.txt"), encoding="utf-8").read()
+        with open(os.path.join(self.kits, kid + "_게시본.txt"), encoding="utf-8") as f:
+            final = f.read()
         self.assertIn("제2026-10-1234호 (2026.10.09~2027.10.08)", final)
         self.assertNotIn("0000호", final)
         self.assertIn("그대로 복사해 지식iN", self.sent[-1])
@@ -712,11 +715,13 @@ class SyncWatcher(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             st, wp = os.path.join(d, "s.json"), os.path.join(d, "w.json")
             kits = {k: {"id": k, "kin_answer_id": "u" + k, "status": "심의대기"} for k in ("a", "b", "c")}
-            json.dump({"kits": kits}, open(st, "w", encoding="utf-8"))
+            with open(st, "w", encoding="utf-8") as f:
+                json.dump({"kits": kits}, f)
             rows = [{"심의번호": "2026-10-5017", "심의필일자": "2026-10-20", "유효기간": "2027-10-19", "게시위치등록됨": True, "키트id": "a"},
                     {"심의번호": "2026-10-4548", "심의필일자": "2026-10-19", "유효기간": "2027-10-18", "게시위치등록됨": True, "키트id": "b"},
                     {"심의번호": "", "키트id": "c"}, {"심의번호": "2026-10-4555", "키트id": "zz"}]
-            json.dump({"행": rows}, open(wp, "w", encoding="utf-8"))
+            with open(wp, "w", encoding="utf-8") as f:
+                json.dump({"행": rows}, f)
             recs, posted = [], []
             rec_fn = lambda e, r, n, f, t: recs.append(n) or ("id" + n, "ok")  # noqa: E731
             kp.cmd_sync_watcher({}, path=wp, state_path=st, record=rec_fn,
@@ -735,11 +740,13 @@ class SyncWatcher(unittest.TestCase):
             st, wp = os.path.join(d, "s.json"), os.path.join(d, "w.json")
             kits = {k: {"id": k, "kin_answer_id": "u" + k, "status": "승인", "question_url": "https://kin.naver.com/q/" + k}
                     for k in ("a", "b", "c")}
-            json.dump({"kits": kits}, open(st, "w", encoding="utf-8"))
+            with open(st, "w", encoding="utf-8") as f:
+                json.dump({"kits": kits}, f)
             rows = [{"심의번호": "2026-10-6031", "게시위치등록됨": True, "키트id": "a"},    # 비어 있음 → 채움
                     {"심의번호": "2026-10-6032", "게시위치등록됨": True, "키트id": "b"},    # 이미 채워짐 → 손대지 않음
                     {"심의번호": "2026-10-6033", "게시위치등록됨": False, "키트id": "c"}]  # 게시 전 → 손대지 않음
-            json.dump({"행": rows}, open(wp, "w", encoding="utf-8"))
+            with open(wp, "w", encoding="utf-8") as f:
+                json.dump({"행": rows}, f)
             have = {"2026-10-6031", "2026-10-6032", "2026-10-6033"}
             pending = {"2026-10-6031": "ida", "2026-10-6033": "idc"}   # DB 에서 url_registered_at 이 빈 행
             regs, posted = [], []

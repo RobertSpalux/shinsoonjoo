@@ -73,14 +73,16 @@ class KinError(Exception):
 # ── 상태 ────────────────────────────────────────────────────
 def load_state(path=STATE_PATH):
     try:
-        return json.load(open(path, encoding="utf-8"))
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
     except (FileNotFoundError, json.JSONDecodeError):
         return {"kits": {}}
 
 
 def save_state(state, path=STATE_PATH):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    json.dump(state, open(path + ".tmp", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=1)
     os.replace(path + ".tmp", path)
 
 
@@ -304,7 +306,8 @@ _PROMPT_TS = os.path.join(ROOT, "src", "lib", "factory-prompt.ts")
 
 def _ts_array(name, path=_PROMPT_TS):
     """factory-prompt.ts 의 문자열 배열 — 단일 출처(손으로 옮기지 않는다)."""
-    ts = open(path, encoding="utf-8").read()
+    with open(path, encoding="utf-8") as f:
+        ts = f.read()
     m = re.search(rf"export const {name} = \[(.*?)\];", ts, re.S)
     if not m:
         raise KinError(f"{name} 를 factory-prompt.ts 에서 못 찾았다")
@@ -762,7 +765,8 @@ def _html_rows(text):
 def read_export(path):
     """「지식인&댓글 엑셀변환」 → [{No, 신청일시, 변경일시, 심의필번호, 심의필일자, 광고유효기간, 답변내용}].
     양식(지식인댓글_엑셀변환_양식.png 실물 jidatexcel.xls): No · 신청일시 · 변경일시 · 심의필번호 · 심의필일자 · 광고유효기간 · 답변내용."""
-    raw = open(path, "rb").read()
+    with open(path, "rb") as f:
+        raw = f.read()
     if raw[:4] == b"PK\x03\x04":
         from openpyxl import load_workbook
         ws = load_workbook(path, read_only=True).active
@@ -860,7 +864,8 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
             rec["kin_answer_id"], _ = save_row(env, rec)
             os.makedirs(kit_dir, exist_ok=True)
             path = os.path.join(kit_dir, rec["id"] + ".txt")
-            open(path, "w", encoding="utf-8", newline="\n").write(kit_text(rec))
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(kit_text(rec))
             rec["kit"] = path
             state["kits"][rec["id"]] = rec
         made.append(rec)
@@ -893,7 +898,8 @@ def cmd_approve(env, kid, review_no, f, t, notice_text, notify=None, state_path=
         rec["ad_review_id"], rec["ad_review_msg"] = record(env, rec, review_no, f, t)
         out = os.path.join(kit_dir, kid + "_게시본.txt")
         os.makedirs(kit_dir, exist_ok=True)
-        open(out, "w", encoding="utf-8", newline="\n").write(final + "\n")
+        with open(out, "w", encoding="utf-8", newline="\n") as f:
+            f.write(final + "\n")
         rec["final_path"] = out
         save_state(state, state_path)
     (notify or notify_fn(env, dry))(
@@ -924,8 +930,10 @@ def cmd_approvals(env, xls=None, path=APPROVALS_JSON, state_path=STATE_PATH, not
     if xls:
         items = match_export(read_export(xls), list(state["kits"].values()))
     elif os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            approved = json.load(f) or {}
         items = [(kid, a.get("심의필번호", ""), _date(a.get("시작")), _date(a.get("종료")), a.get("답변내용", ""))
-                 for kid, a in (json.load(open(path, encoding="utf-8")) or {}).items()]
+                 for kid, a in approved.items()]
     else:
         return ["승인 파일 없음 — --xls 로 엑셀변환본을 주거나 approve 를 손으로"]
     out = []
@@ -987,7 +995,8 @@ def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=recor
     채우고 kin_answers 게시완료로(AR2). 이미 채워진 행은 건드리지 않는다."""
     if not os.path.exists(path):
         return ["감시기 파일 없음"]
-    rows = (json.load(open(path, encoding="utf-8")) or {}).get("행", [])
+    with open(path, encoding="utf-8") as f:
+        rows = (json.load(f) or {}).get("행", [])
     state = load_state(state_path)
     have = (existing_fn or (lambda: existing_review_nos(env)))()
     pending = None   # {review_no: ad_reviews.id} — url_registered_at 이 빈 기존 행. 필요할 때 한 번만 조회
@@ -1072,7 +1081,8 @@ def main():
             lines, _ = cmd_run(env, args.n, args.dry_run)
             print("\n".join(lines))
         elif args.cmd == "approve":
-            notice = open(args.notice_file, encoding="utf-8-sig").read()
+            with open(args.notice_file, encoding="utf-8-sig") as f:
+                notice = f.read()
             rec = cmd_approve(env, args.kit, args.review_no, args.f, args.t, notice, dry=args.dry_run)
             print(rec.get("final_path") or rec["final"])
         elif args.cmd == "approvals":
