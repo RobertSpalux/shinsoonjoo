@@ -14,11 +14,14 @@ PAMS 접수 순서(운영표) — 칸이 비면 로버트에게 「다음 접수
   · 알림 = 빈 칸이 있고 (다음 항목, 빈 칸 수)가 지난번과 다를 때만 1통. 같은 상태로 10분마다 보내지 않는다.
   · 칸이 다 찬 동안 pams_auto 는 키트 「준비됨」·「실패」 알림을 보류한다(state["held_kits"]). 칸이 비는 순간
     이 한 통 아래에 키트 파일 위치 / 「키트 없음 — 사유」 줄을 붙여 보내고 보류 목록을 비운다(SK2).
+  · 칸이 비었는데 다음 접수할 키트가 없으면 「칸 N 빔 · 다음 할 일: 네이버 비공개 게시 → 캡처 · 파일: <txt>」
+    하루 1통(SUP2). 파일 = _네이버비공개 중 ad_reviews 네이버 접수·승인 전인 가장 오래된 것(본진 승인 글 먼저).
 """
 import glob
 from datetime import datetime
 import json
 import os
+import re
 import sys
 
 import requests
@@ -125,6 +128,92 @@ def held_message(p, state, titles=None, file_exists=os.path.exists):
     head = message(p, titles) or f"다음 접수: 운영표에 준비된 항목 없음 (빈 칸 {p['free']}/{p['limit']})"
     lines = held_lines(state.get("held_kits") or {}, file_exists)
     return "\n".join([head] + lines)
+
+
+# ── 칸 빔 · 접수할 키트 없음 → 다음 할 일 한 통(SUP2) ─────────────
+# 2026-10-23 연금 본진 승인 뒤 칸 1이 비었는데 이틀간 아무 말이 없었다 — 「다음 접수」는 키트가 있을 때만 나간다.
+#   키트 이전 단계(네이버 비공개 게시·캡처 전)에서 멈추면 조용했다. 그 단계의 가장 오래된 파일을 하루 1통 알린다.
+#   판정은 운영표가 아니라 _네이버비공개 폴더 × ad_reviews(네이버) — 10/20 공급분은 운영표에 없었다.
+NAVER_PRIVATE_DIR = os.path.join(kit.KIT_DIR, "_네이버비공개")
+PRIVATE_TXT = re.compile(r"^\d{4}_(.+)_네이버비공개\.txt$")
+
+
+def label_to_slug(label, issues):
+    """파일명 가운데 칸(N호 또는 slug) → slug. issues = {slug: N}(configs/issue_numbers.json)."""
+    m = re.fullmatch(r"(\d+)호", label)
+    if not m:
+        return label
+    n = int(m.group(1))
+    return next((s for s, v in issues.items() if v == n), None)
+
+
+def private_backlog(files, issues, reviews, has_kit=lambda label: False):
+    """순수: 네이버 비공개 파일 중 아직 네이버 접수·승인 전인 것, 오래된 순.
+    files: [(이름, 경로, mtime)] · reviews: plan 과 같은 [{slug, channel, status}].
+    같은 글 본진이 승인된 파일을 앞에 둔다(네이버는 본진 승인 뒤에 접수 — 바로 접수까지 갈 수 있는 것부터).
+    키트(zip)가 이미 있는 파일은 뺀다 — 그건 「다음 접수」 몫이다. → [{slug, label, path, main_ok}]"""
+    done = {r["slug"] for r in reviews if r.get("channel") == "naver" and r.get("status") in DONE}
+    main_ok = {r["slug"] for r in reviews if r.get("channel") == "main" and r.get("status") == "approved"}
+    out = []
+    for name, path, mtime in sorted(files, key=lambda f: f[2]):
+        m = PRIVATE_TXT.match(name)
+        if not m:
+            continue
+        label = m.group(1)
+        slug = label_to_slug(label, issues)
+        if not slug or slug in done or has_kit(label):
+            continue
+        out.append({"slug": slug, "label": label, "path": path, "main_ok": slug in main_ok})
+    return sorted(out, key=lambda x: not x["main_ok"])   # 안정 정렬 — 같은 무리 안에서는 오래된 순 유지
+
+
+def slot_nudge_message(p, backlog):
+    """칸이 비었는데 접수할 키트가 없을 때의 한 줄. 알릴 게 아니면 None."""
+    if p["free"] <= 0 or p["next"]:
+        return None
+    if not backlog:
+        return (f"칸 {p['free']} 빔 · 다음 할 일: 없음 — 접수할 키트도 네이버 비공개 대기 파일도 없습니다"
+                " (원고 공급 SHIN_draft_daily 확인)")
+    return f"칸 {p['free']} 빔 · 다음 할 일: 네이버 비공개 게시 → 캡처 · 파일: {backlog[0]['path']}"
+
+
+def should_nudge(state, today):
+    """하루 1통 — 같은 날 다시 보내지 않는다(10분 바퀴마다 되풀이 금지)."""
+    return state.get("slot_nudge_day") != today
+
+
+def list_private_files(folder=NAVER_PRIVATE_DIR):
+    try:
+        names = os.listdir(folder)
+    except FileNotFoundError:
+        return []
+    return [(n, os.path.join(folder, n), os.path.getmtime(os.path.join(folder, n)))
+            for n in names if PRIVATE_TXT.match(n) and os.path.isfile(os.path.join(folder, n))]
+
+
+def notify_slot_empty(env, state, notify, log=print, today=None, kit_dir=kit.KIT_DIR):
+    """pams_auto 한 바퀴에서 notify_next 뒤에 부른다. 보냈으면 그 한 줄을 돌려준다."""
+    today = today or datetime.now(kit.KST).date().isoformat()
+    if not should_nudge(state, today):
+        return None
+    _, p = current(env)
+    if p["free"] <= 0 or p["next"]:
+        return None
+    try:
+        with open(kit.ISSUES_JSON, encoding="utf-8") as fp:
+            issues = json.load(fp)
+    except FileNotFoundError:
+        issues = {}
+    issues ={k: v for k, v in issues.items() if isinstance(v, int)}
+
+    def has_kit(label):
+        return bool(glob.glob(os.path.join(kit_dir, f"*_{label}_{kit.CH_LABEL['naver']}.zip")))
+
+    msg = slot_nudge_message(p, private_backlog(list_private_files(), issues, fetch_reviews(env), has_kit))
+    if msg and notify(msg):
+        state["slot_nudge_day"] = today
+    log(f"칸 빔 알림: {msg}")
+    return msg
 
 
 def slots_full(env):

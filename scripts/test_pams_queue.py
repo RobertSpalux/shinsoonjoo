@@ -231,6 +231,81 @@ class AutoHook(unittest.TestCase):
         self.assertLess(i, src.index("save_state(state)\n        upload_submitted_threads"))
 
 
+class SlotEmpty(unittest.TestCase):
+    """SUP2 — 칸이 비었는데 접수할 키트가 없으면 가장 오래된 미접수 네이버 비공개 파일을 하루 1통."""
+    ISSUES = {B: 8, C: 7}
+    FILES = [("1020_health-x_네이버비공개.txt", r"d\1020_health-x_네이버비공개.txt", 300),
+             ("1008_8호_네이버비공개.txt", r"d\1008_8호_네이버비공개.txt", 100),
+             ("1008_8호_네이버비공개_본문.txt", r"d\1008_8호_네이버비공개_본문.txt", 99),
+             ("1008_7호_네이버비공개.txt", r"d\1008_7호_네이버비공개.txt", 50),
+             ("1008_99호_네이버비공개.txt", r"d\1008_99호_네이버비공개.txt", 10)]
+    EMPTY = q.plan([], [{"slug": "a", "channel": "naver", "status": "submitted"},
+                        {"slug": "b", "channel": "naver", "status": "submitted"}], {})   # 칸 1 빔 · 다음 없음
+
+    def test_label_to_slug(self):
+        self.assertEqual(q.label_to_slug("8호", self.ISSUES), B)
+        self.assertEqual(q.label_to_slug("health-x", self.ISSUES), "health-x")
+        self.assertIsNone(q.label_to_slug("99호", self.ISSUES), "모르는 호수는 버린다")
+
+    def test_backlog_oldest_unsubmitted_main_approved_first(self):
+        rv = [{"slug": C, "channel": "naver", "status": "approved"},          # 7호 네이버 끝남 → 제외
+              {"slug": "health-x", "channel": "main", "status": "approved"}]
+        b = q.private_backlog(self.FILES, self.ISSUES, rv)
+        self.assertEqual([x["label"] for x in b], ["health-x", "8호"], "본진 승인 글 먼저, 그 안에서 오래된 순 · _본문 제외")
+        b = q.private_backlog(self.FILES, self.ISSUES, rv[:1] + [{"slug": B, "channel": "main", "status": "approved"},
+                                                                 {"slug": "health-x", "channel": "main", "status": "approved"}])
+        self.assertEqual(b[0]["label"], "8호", "둘 다 본진 승인이면 오래된 것")
+
+    def test_backlog_rejected_naver_stays_and_kit_excluded(self):
+        rv = [{"slug": B, "channel": "naver", "status": "rejected"}]
+        self.assertIn("8호", [x["label"] for x in q.private_backlog(self.FILES, self.ISSUES, rv)], "반송은 다시 할 대상")
+        b = q.private_backlog(self.FILES, self.ISSUES, [], has_kit=lambda lb: lb == "8호")
+        self.assertNotIn("8호", [x["label"] for x in b], "키트가 있으면 「다음 접수」 몫")
+
+    def test_message(self):
+        b = q.private_backlog(self.FILES, self.ISSUES, [])
+        m = q.slot_nudge_message(self.EMPTY, b)
+        self.assertEqual(m, r"칸 1 빔 · 다음 할 일: 네이버 비공개 게시 → 캡처 · 파일: d\1008_7호_네이버비공개.txt")
+        self.assertIn("원고 공급", q.slot_nudge_message(self.EMPTY, []))
+        full = q.plan([], [{"slug": s, "channel": "naver", "status": "submitted"} for s in "abc"], {})
+        self.assertIsNone(q.slot_nudge_message(full, b), "칸이 다 차면 없음")
+        ready = q.plan(ORDER, [], KITS)
+        self.assertIsNone(q.slot_nudge_message(ready, b), "접수할 키트가 있으면 「다음 접수」가 말한다")
+
+    def test_once_a_day(self):
+        orig = (q.current, q.fetch_reviews, q.list_private_files)
+        q.current = lambda env: ([], self.EMPTY)
+        q.fetch_reviews = lambda env: []
+        q.list_private_files = lambda folder=None: self.FILES[:2]
+        sent, st = [], {}
+        try:
+            m = q.notify_slot_empty({}, st, notify=lambda t: sent.append(t) or True, log=lambda *_: None, today="2026-10-25")
+            self.assertTrue(m.startswith("칸 1 빔 · 다음 할 일: 네이버 비공개 게시 → 캡처 · 파일: "), m)
+            self.assertIsNone(q.notify_slot_empty({}, st, notify=lambda t: sent.append(t) or True,
+                                                  log=lambda *_: None, today="2026-10-25"), "같은 날 두 번 안 보냄")
+            self.assertEqual(len(sent), 1)
+            q.notify_slot_empty({}, st, notify=lambda t: sent.append(t) or True, log=lambda *_: None, today="2026-10-26")
+            self.assertEqual(len(sent), 2, "다음 날 다시")
+            st2 = {}
+            q.notify_slot_empty({}, st2, notify=lambda t: False, log=lambda *_: None, today="2026-10-25")
+            self.assertNotIn("slot_nudge_day", st2, "보내기 실패면 다음 바퀴에 다시")
+            st3 = {}
+            q.current = lambda env: ([], q.plan(ORDER, [], KITS))
+            self.assertIsNone(q.notify_slot_empty({}, st3, notify=lambda t: sent.append(t) or True,
+                                                  log=lambda *_: None, today="2026-10-25"))
+            self.assertNotIn("slot_nudge_day", st3, "키트가 있는 날은 하루 한도를 쓰지 않는다")
+        finally:
+            q.current, q.fetch_reviews, q.list_private_files = orig
+
+    def test_pams_auto_hook(self):
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pams_auto.py"), encoding="utf-8") as fp:
+            src = fp.read()
+        i = src.index("pams_queue.notify_slot_empty(env, state")
+        self.assertIn("except Exception", src[i:i + 200])
+        self.assertLess(src.index("pams_queue.notify_next(env, state"), i)
+        self.assertLess(i, src.index("save_state(state)\n        upload_submitted_threads"))
+
+
 class NaverGuide(unittest.TestCase):
     def test_due_after_main_submitted(self):
         rv = [{"slug": C, "channel": "main", "status": "submitted"}]

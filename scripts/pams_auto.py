@@ -503,6 +503,12 @@ def main():
             # 2026-09-30 18:49 pams_queue.json 이 깨졌을 때 로그에만 남고 아무도 몰랐다 — 하루 한 번 알린다
             alert_once(env, state, f"queue:{type(e).__name__}",
                        f"⚠️ 접수 순서 알림이 멈췄습니다 — {type(e).__name__}: {str(e)[:120]}\n(configs/pams_queue.json 확인)")
+        # 칸이 비었는데 접수할 키트가 없으면 — 가장 오래된 미접수 네이버 비공개 파일 하루 1통(SUP2).
+        try:
+            import pams_queue
+            pams_queue.notify_slot_empty(env, state, notify=lambda t: telegram(env, t), log=log)
+        except Exception as e:
+            log(f"칸 빔 알림 실패: {e}")
         # 본진이 접수되면 → 같은 글 네이버 비공개 게시 안내(한 장 png)를 자동 발송(글마다 1회, 실패는 3회까지 재시도).
         try:
             pams_queue.send_naver_guides(env, state, notify=lambda t: telegram(env, t), log=log)
