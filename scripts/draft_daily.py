@@ -83,11 +83,12 @@ def next_topics(cfg, used, tries=TRIES):
     return dw.pick_topics(cfg, used, tries)
 
 
-def message(ok, title=None, base=None, n_images=0, reasons=()):
+def message(ok, title=None, base=None, n_images=0, reasons=(), category=None):
     if ok:
         where = f"Downloads\\PAMS접수\\_네이버비공개\\{base}.txt" if base else "네이버 파일 생성 실패 — 로그 확인"
         tail = "" if n_images else " (사진 없음)"
-        return f"오늘 원고: {title} · 네이버 파일: {where}{tail} — ⚠ 근거 원문 대조 전(게시 전 대조)"
+        cat = f" · 분류: {category}" if category else ""
+        return f"오늘 원고: {title}{cat} · 네이버 파일: {where}{tail} — ⚠ 근거 원문 대조 전(게시 전 대조)"
     return "오늘 원고 없음 — " + " / ".join(reasons)[:600]
 
 
@@ -226,14 +227,15 @@ def run(out_dir=dw.OUT_DIR, do_send=True):
         log(out_dir, f"  → DB 초안 {row['id']} · 키워드 「{kw}」(장부 대기 {PENDING_KW})")
         n, why = render_images(d, row["slug"])
         log(out_dir, f"  → 사진 {n}장" + (f" ({why})" if why else ""))
-        base = None
+        base, category = None, None
         try:
             res = naver_file(env, row["slug"], d)
             base = os.path.splitext(os.path.basename(res["txt"]))[0]
+            category = res.get("category")
             log(out_dir, f"  → 네이버 파일 {res['txt']}")
         except Exception as e:   # 네이버 파일이 막혀도 투입은 끝났다 — 알림에 적는다
             log(out_dir, f"  → 네이버 파일 실패: {type(e).__name__}: {str(e)[:200]}")
-        msg = message(True, row.get("naver_title") or row.get("title"), base, n)
+        msg = message(True, row.get("naver_title") or row.get("title"), base, n, category=category)
         log(out_dir, msg)
         if do_send:
             log(out_dir, "  발송 " + ("완료" if send(env, msg) else "실패"))
