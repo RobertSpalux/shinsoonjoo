@@ -37,6 +37,7 @@ except Exception:
 
 import pams_kit as kit  # noqa: E402
 import publish_approved as pa  # noqa: E402
+import naver_rules  # noqa: E402
 
 OUT_DIR = os.path.join(kit.KIT_DIR, "_네이버비공개")
 FORMAT_JSON = os.path.join(kit.ROOT, "configs", "naver-format.json")
@@ -74,9 +75,12 @@ CATEGORY_WORDS = {
 }
 
 
-def blog_category(title, keyword="", text=""):
+def blog_category(title, keyword="", text="", db_category=None):
     """원고 제목·키워드(가중 3)와 본문(칸당 최대 3)에서 분류 5개 중 하나를 고른다. 근거가 약하거나 동점이면 「확인 필요」.
-    순수 함수(테스트 대상)."""
+    DB premium_articles.category 가 분류 5개 중 하나면 그 값이 먼저다(CP1 — 법인편이 「보험 리모델링」인데 본문 동점으로
+    「확인 필요」가 나왔다). 순수 함수(테스트 대상)."""
+    if db_category in CATEGORY_WORDS:
+        return db_category
     head = f"{title or ''} {keyword or ''}"
     body = (text or "").split(NOTICE_RULE)[0]
     score = {}
@@ -238,6 +242,11 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
         raise kit.KitError(f"{out_dir} 에 같은 이름 파일이 이미 있습니다 — {', '.join(taken[:4])}"
                            + (f" 외 {len(taken) - 4}개" if len(taken) > 4 else "")
                            + ". 덮어쓰지 않았습니다(다시 만들려면 --force)")
+    # 🔴 근거 문장 게이트(CP1) — 근거 자료명 없는 네이버판은 비공개 파일을 만들지 않는다(pams_auto 가 키트를 못 만든다)
+    fails = kit.check_naver_basis(article.get("naver_blog_content"), article.get("main_website_markdown"),
+                                  article.get("raw_source_name") or "")
+    if fails:
+        raise kit.KitError("네이버 근거 문장 게이트 — 산출물을 만들지 않았습니다:\n  · " + "\n  · ".join(fails))
     body = pa.admin_post(server, env, "/api/admin/compose",
                          {"articleId": article["id"], "channel": "naver", "mode": "submission"})
     os.makedirs(out_dir, exist_ok=True)
@@ -259,7 +268,7 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
     title = check_title(body["title"])
     banner = copy_banner(out_dir, base)
     rich = append_banner(rich, banner)
-    category = blog_category(title, article.get("naver_keyword") or "", body["text"])
+    category = blog_category(title, naver_rules.keyword_for(slug) or "", body["text"], article.get("category"))
     # 탭 이름에도 제목을 쓰지 않는다 — 붙여 넣을 제목은 txt·png 맨 위 상자 하나뿐
     open(html_path, "w", encoding="utf-8").write(
         f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(issue)} 네이버 본문 (제목 아님)</title>"

@@ -233,6 +233,43 @@ def evidence_for(article, channel):
     return out
 
 
+BASIS_LINE = re.compile(r"[을를]\s*근거로")
+
+
+def source_titles_in(text, srcs):
+    """text 에 나오는 sources.json 자료명(공백 무시) — 순수 함수(테스트 대상)."""
+    flat = re.sub(r"\s+", "", text or "")
+    return [s["title"] for s in srcs if s.get("title") and re.sub(r"\s+", "", s["title"]) in flat]
+
+
+def basis_lines(text):
+    """「이 글은 ○○의 「자료명」(연도)를 근거로 …」 줄 — 자료명(「」)이 든 줄만 센다(「증권과 약관을 근거로」 같은 말은 빼고)."""
+    return [ln.strip() for ln in (text or "").split("\n") if BASIS_LINE.search(ln) and "「" in ln]
+
+
+def check_naver_basis(naver, main=None, raw_source_name="", srcs=None):
+    """🔴 CP1(2026-10-26) — 법인 계약 네이버판이 본진(5956)의 근거 문장 없이 공급돼 pams_auto 가 키트를 못 만들었다.
+    네이버판 생성·저장 전에 막는다. → 실패 사유 목록(빈 목록 = 통과). 순수 함수(테스트 대상).
+      ① 네이버 본문(+출처 줄)에 sources.json 자료명이 하나도 없음 — 증빙 없이 접수할 수 없다(evidence_for 와 같은 판정)
+      ② 본진에 근거 문장이 있는데 네이버에 없음 — 문장 위치·형식은 본진과 같게(건강검진판처럼)
+      ③ 본진이 인용한 자료명이 네이버에서 빠짐"""
+    if srcs is None:
+        with open(SOURCES_JSON, encoding="utf-8") as fp:
+            srcs = json.load(fp)["sources"]
+    fails = []
+    have = source_titles_in((naver or "") + (raw_source_name or ""), srcs)
+    if not have:
+        fails.append("네이버 본문에 configs/sources.json 자료명이 하나도 없습니다(근거 문장 0)")
+    if main:
+        if basis_lines(main) and not basis_lines(naver):
+            fails.append("본진에는 근거 문장(「…」를 근거로)이 있는데 네이버 본문에는 없습니다 — 본진 문장을 그대로 옮기세요: "
+                         + basis_lines(main)[0][:160])
+        miss = [t for t in source_titles_in(main, srcs) if t not in have]
+        if miss:
+            fails.append("본진이 인용한 자료명이 네이버 본문에 없습니다 — " + " / ".join(miss))
+    return fails
+
+
 def source_line(s):
     if s.get("review_source_line"):
         return s["review_source_line"]

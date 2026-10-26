@@ -95,8 +95,10 @@ def naver_gate(row, data=None, meta_kw=None):
     kw, new = resolve_keyword(row["slug"], meta_kw, data)
     f1, _ = naver_rules.check_title(row["naver_title"], kw)
     f2, notes = naver_rules.check_body(row["naver_blog_content"], [f"https://goodfinance.kr/news/{row['slug']}"])
-    if f1 + f2:
-        raise kit.KitError("네이버 규칙 10 미충족 — 저장하지 않습니다:\n  · " + "\n  · ".join(f1 + f2), gate=True)
+    # CP1 — 근거 문장 없는 네이버판(10/20 법인편)은 저장 단계에서 막는다
+    f3 = kit.check_naver_basis(row["naver_blog_content"], row.get("main_website_markdown"), row.get("raw_source_name") or "")
+    if f1 + f2 + f3:
+        raise kit.KitError("네이버 규칙 10 미충족 — 저장하지 않습니다:\n  · " + "\n  · ".join(f1 + f2 + f3), gate=True)
     return notes, (kw if new else None)
 
 

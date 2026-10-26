@@ -159,6 +159,51 @@ class Steps(unittest.TestCase):
         # 본문만으로는 제목 근거 없이 정하지 않는다(본문 가중 최대 3 → 한 칸 3점 이상이어야 하나 동점 방지용)
         self.assertEqual(c("제목", "", "연금 연금 연금 연금"), "연금·노후·세테크")
 
+    def test_blog_category_db_value_first(self):
+        """CP1 — 법인편: 제목에 분류 낱말이 없고 본문 동점이라 「확인 필요」가 나왔다. DB category 가 5개 중 하나면 그 값."""
+        c = g.blog_category
+        t = "법인 보험 계약자 피보험자 수익자 세 칸을 나란히 점검하는 법"
+        body = "보험금 보험금 보험금 해지 해지 해지"
+        self.assertEqual(c(t, "", body), g.CATEGORY_UNSURE)
+        self.assertEqual(c(t, "", body, "보험 리모델링"), "보험 리모델링")
+        self.assertEqual(c(t, "", body, "배상책임"), g.CATEGORY_UNSURE)          # 5개 밖 값은 쓰지 않는다
+
+    def test_basis_gate(self):
+        """CP1 — 본진(5956)의 근거 문장이 네이버판에 없었다 → pams_auto 「자료명을 찾지 못했습니다」."""
+        srcs = [{"title": "상법 제731조(타인의 생명의 보험)"}, {"title": "상법 제733조(보험수익자의 지정 또는 변경의 권리)"}]
+        basis = ("이 글은 국가법령정보센터의 「상법 제731조(타인의 생명의 보험)」·「상법 제733조(보험수익자의 지정 또는 변경의 권리)」"
+                 "(2025.9.9)를 근거로 세 칸의 의미를 정리합니다.")
+        main = "## 증권의 세 칸\n\n도입.\n\n" + basis + "\n\n본문."
+        naver_old = "도입.\n\n[이미지①]\n\n본문. 증권과 약관을 근거로 하나씩 짚어 봅니다."
+        fails = kit.check_naver_basis(naver_old, main, "", srcs)
+        self.assertEqual(len(fails), 3, fails)
+        self.assertIn("하나도 없습니다", fails[0])
+        self.assertIn("근거 문장", fails[1])
+        naver_new = "도입.\n\n" + basis + "\n\n[이미지①]\n\n본문."
+        self.assertEqual(kit.check_naver_basis(naver_new, main, "", srcs), [])
+        # 본진 자료명 하나가 빠지면 막는다
+        part = naver_new.replace("·「상법 제733조(보험수익자의 지정 또는 변경의 권리)」", "")
+        self.assertIn("상법 제733조", " ".join(kit.check_naver_basis(part, main, "", srcs)))
+        # 근거 문장 형식 이전 글(9/30): 본진에도 근거 문장이 없고 자료명이 출처 줄에만 있어도 통과
+        self.assertEqual(kit.check_naver_basis("본문.", "본문.", "상법 제731조(타인의 생명의 보험)", srcs), [])
+        # 네이버 단독
+        self.assertEqual(kit.check_naver_basis(naver_new, None, "", srcs), [])
+        self.assertEqual(kit.basis_lines(naver_old), [])
+
+    def test_build_refuses_without_basis_before_compose(self):
+        import tempfile
+
+        class Boom:
+            def __getattr__(self, k):
+                raise AssertionError("compose 서버를 부르면 안 된다")
+        d = tempfile.mkdtemp()
+        art = {"slug": "corporate-policy-owner-beneficiary-check", "id": "x",
+               "naver_blog_content": "본문만 있고 근거 문장이 없다.", "main_website_markdown": "본진."}
+        with self.assertRaises(kit.KitError) as cm:
+            g.build({}, art, Boom(), out_dir=d)
+        self.assertIn("근거 문장 게이트", str(cm.exception))
+        self.assertEqual(os.listdir(d), [], "아무 파일도 남기지 않는다")
+
     def test_format_line(self):
         self.assertIn("configs/naver-format.json", g.format_line())
         self.assertNotIn("읽기 실패", g.format_line())
