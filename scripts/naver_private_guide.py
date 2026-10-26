@@ -22,6 +22,7 @@ import re
 import html as htmllib
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -56,6 +57,56 @@ def keyword_of(title):
     """제목의 첫 낱말(조사 뺀 핵심어) — 파일 이름 예시용. 「백내장 실비 청구했는데 …」 → 백내장"""
     m = re.search(r"[0-9A-Za-z가-힣]{2,}", title or "")
     return m.group(0) if m else "글제목"
+
+
+KAKAO_BANNER_SRC = r"D:\robert-os\shared\assets\kakao\kakao_chat_goodfinance.png"
+BANNER_STEP = "마지막 카톡 배너 — 채팅 링크 직접 걸기, 캡처 전에"
+
+# 블로그 분류 5개(SUP3, 로버트 10/25 「글 작성하면 분류도 알아서」). 규칙: 고지의무·가입 전 확인=실손·보장성 가이드 ·
+#   기존 계약 손보기=보험 리모델링 · 청구·지급=보험금 청구·보상 · 연금·노후·세금=연금·노후·세테크 · 보험료 절감=보험료 절약·꿀팁
+CATEGORY_UNSURE = "확인 필요"
+CATEGORY_WORDS = {
+    "실손·보장성 가이드": ["고지", "알릴", "부담보", "가입 전", "가입전", "실손", "실비", "간편", "유병자", "인수", "면책"],
+    "보험 리모델링": ["리모델링", "기존 계약", "기존계약", "재설계", "합산", "중복", "보장 점검", "해지"],
+    "보험금 청구·보상": ["청구", "지급", "보험금", "심사", "보상", "손해사정"],
+    "연금·노후·세테크": ["연금", "노후", "세금", "절세", "세액공제", "비과세", "상속", "증여", "퇴직"],
+    "보험료 절약·꿀팁": ["보험료 절", "절약", "절감", "할인", "보험료 줄", "납입 부담"],
+}
+
+
+def blog_category(title, keyword="", text=""):
+    """원고 제목·키워드(가중 3)와 본문(칸당 최대 3)에서 분류 5개 중 하나를 고른다. 근거가 약하거나 동점이면 「확인 필요」.
+    순수 함수(테스트 대상)."""
+    head = f"{title or ''} {keyword or ''}"
+    body = (text or "").split(NOTICE_RULE)[0]
+    score = {}
+    for cat, words in CATEGORY_WORDS.items():
+        h = sum(1 for w in words if w in head)
+        b = sum(body.count(w) for w in words)
+        score[cat] = 3 * h + min(b, 3)
+    ranked = sorted(score.items(), key=lambda kv: -kv[1])
+    if ranked[0][1] < 3 or ranked[0][1] == ranked[1][1]:
+        return CATEGORY_UNSURE
+    return ranked[0][0]
+
+
+def banner_name(base):
+    return f"{base}_카톡배너.png"
+
+
+def copy_banner(out_dir, base, src=None):
+    """카톡 배너 원본을 같은 폴더에 복사 → 파일명. 원본이 없으면 KitError(링크는 넣지 않는다 — 로버트가 직접)."""
+    src = src or KAKAO_BANNER_SRC
+    if not os.path.isfile(src):
+        raise kit.KitError(f"카톡 배너 원본이 없습니다 — {src}")
+    name = banner_name(base)
+    shutil.copyfile(src, os.path.join(out_dir, name))
+    return name
+
+
+def append_banner(rich, name):
+    """html 맨 끝(진단 CTA 이미지 다음)에 배너 이미지 자리 — 링크(<a>) 없이 이미지만."""
+    return rich.rstrip("\n") + f'\n<img src="{htmllib.escape(name)}" width="800" style="width:100%;max-width:800px;height:auto;">\n'
 
 
 TITLE_BOX = "■ 제목 칸에 붙여 넣을 제목 — 이것 하나뿐"
@@ -93,19 +144,20 @@ def steps(issue, title, n_images, base):
         f"4. 사진 {n_images}장: html 안 [이미지N] 자리에 {base}_이미지N 이 이미 들어 있다(마지막 진단 카드는 링크 포함). "
         "붙여 넣은 뒤 빠진 사진이 있으면 그 자리에 넣고 남아 있는 자리표시 줄([이미지…])만 지운다 — 앞뒤 문장은 건드리지 않는다."
         if n_images else "4. 사진 없음 — [이미지] 자리표시 줄만 지운다.",
-        "5. 필수안내사항의 심의필 줄은 공란(제_____호) 그대로 둔다 — 심의 전이다.",
-        "6. 공개 설정 = 「비공개」 → 발행.",
-        "7. 발행된 비공개 글 전체를 캡처한다 — 🔴 「비공개」 표시가 화면에 보이게(2025-07-14 시행 규칙).",
-        f"8. 비공개 글을 PDF 로 저장할 때 저장 위치를 Downloads\\PAMS접수\\ 로, 파일 이름에 「{issue}」 또는 글의 핵심어(예: {keyword})를 넣는다"
+        f"5. {BANNER_STEP}. (html 맨 끝 진단 카드 다음의 카톡 배너 사진에 로버트가 채팅 링크를 건다)",
+        "6. 필수안내사항의 심의필 줄은 공란(제_____호) 그대로 둔다 — 심의 전이다.",
+        "7. 공개 설정 = 「비공개」 → 발행.",
+        "8. 발행된 비공개 글 전체를 캡처한다 — 🔴 「비공개」 표시가 화면에 보이게(2025-07-14 시행 규칙).",
+        f"9. 비공개 글을 PDF 로 저장할 때 저장 위치를 Downloads\\PAMS접수\\ 로, 파일 이름에 「{issue}」 또는 글의 핵심어(예: {keyword})를 넣는다"
         f"(예: {issue}.pdf · {keyword}.pdf). 압축은 하지 않는다 — zip 은 자동으로 만들어진다.",
         "   → 10분 안에 pams_auto 가 짝을 맞춰 네이버 키트(zip)를 만든다. 캡처는 캡처_처리됨\\ 으로 옮겨진다.",
         "   → PDF 첫 장 제목이 상자 제목과 다르거나 본문 첫 줄이 빠졌으면 zip 을 만들지 않고 텔레그램으로 알린다"
         f" — 글을 고친 뒤 다른 이름(예: {issue}_수정.pdf)으로 다시 저장한다.",
-        "9. 이 비공개 글이 곧 승인본이다 — 승인 뒤에는 심의필 줄만 채워 「전체공개」로 바꾼다(새로 올리지 않는다).",
+        "10. 이 비공개 글이 곧 승인본이다 — 승인 뒤에는 심의필 줄만 채워 「전체공개」로 바꾼다(새로 올리지 않는다).",
     ]
 
 
-def one_page_html(issue, slug, title, step_lines, n_images):
+def one_page_html(issue, slug, title, step_lines, n_images, category=None):
     # 번호는 <ol> 이 붙인다 — 문장 앞 「N. 」을 떼서 「1. 1.」 이중 번호를 막는다
     items = [htmllib.escape(STEP_NO.sub("", s)) for s in step_lines if not s.startswith(" ")]
     li = "".join(f"<li>{x}</li>" for x in items)
@@ -118,7 +170,8 @@ def one_page_html(issue, slug, title, step_lines, n_images):
         f"<div style='font-size:14px;color:#1b3a30;font-weight:700'>{htmllib.escape(TITLE_BOX[2:])}</div>"
         f"<div style='font-size:26px;font-weight:700;margin-top:6px;line-height:1.4'>{htmllib.escape(title)}</div></div>"
         f"<ol style='font-size:18px;line-height:1.75;padding-left:24px;margin:0'>{li}</ol>"
-        f"<div style='margin-top:18px;font-size:15px;color:#48423a'>사진 {n_images}장 · {htmllib.escape(format_line())}</div>"
+        + (f"<div style='margin-top:14px;font-size:18px;font-weight:700;color:#1b3a30'>분류: {htmllib.escape(category)}</div>" if category else "")
+        + f"<div style='margin-top:18px;font-size:15px;color:#48423a'>사진 {n_images}장 · {htmllib.escape(format_line())}</div>"
         "</div></body>")
 
 
@@ -204,22 +257,25 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
         raise
     html_path = os.path.join(out_dir, base + ".html")
     title = check_title(body["title"])
+    banner = copy_banner(out_dir, base)
+    rich = append_banner(rich, banner)
+    category = blog_category(title, article.get("naver_keyword") or "", body["text"])
     # 탭 이름에도 제목을 쓰지 않는다 — 붙여 넣을 제목은 txt·png 맨 위 상자 하나뿐
     open(html_path, "w", encoding="utf-8").write(
         f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(issue)} 네이버 본문 (제목 아님)</title>"
         f"<body style='max-width:860px;margin:24px auto;padding:0 16px'>\n{rich}</body>")
     st = steps(issue, title, len(imgs), base)
-    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", ""] + title_box(title, kit.naver_only(article)) + ["", "할 일:"] + ["  " + s for s in st] + [
+    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", f"분류: {category}", ""] + title_box(title, kit.naver_only(article)) + ["", "할 일:"] + ["  " + s for s in st] + [
         "", format_line(), f"사진 {len(imgs)}장: " + (", ".join(imgs) or "없음"), "", "── 본문(조립본 · 심의 제출용) ──"]
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(head) + "\n" + body["text"] + "\n")
     page_html = os.path.join(out_dir, base + "_안내.html")
-    open(page_html, "w", encoding="utf-8").write(one_page_html(issue, slug, title, st, len(imgs)))
+    open(page_html, "w", encoding="utf-8").write(one_page_html(issue, slug, title, st, len(imgs), category))
     png_path = os.path.join(out_dir, base + "_안내.png")
     render_png(page_html, png_path)
     os.remove(page_html)
     return {"txt": txt_path, "html": html_path, "png": png_path, "images": imgs, "title": title, "issue": issue,
-            "slug": slug}
+            "slug": slug, "banner": banner, "category": category}
 
 
 def send(env, res):
@@ -229,6 +285,7 @@ def send(env, res):
     kw = keyword_of(res["title"])
     # 캡션엔 머리말 표기만(제목 전체를 쓰면 「제목 (7호)」를 통째로 복사할 수 있다) — 제목은 사진 속 상자 하나뿐
     cap = (f"[네이버 비공개 게시 요청] {kit.title_label(res['title'], res.get('slug', ''))}\n"
+           f"분류: {res.get('category', CATEGORY_UNSURE)}\n"
            "제목은 사진 맨 위 「제목 칸에 붙여 넣을 제목」 상자의 것 하나만 쓴다.\n"
            f"파일: Downloads\\PAMS접수\\_네이버비공개\\{os.path.basename(res['txt'])} (+.html · 사진 {len(res['images'])}장)\n"
            f"▶ 비공개 글 PDF 를 Downloads\\PAMS접수\\ 에 「{kw}.pdf」(또는 「{res['issue']}.pdf」)로 저장만 하면 zip 은 10분 안에 자동 생성 — 압축·이름 맞추기 불필요.")

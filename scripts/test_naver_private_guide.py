@@ -120,6 +120,45 @@ class Steps(unittest.TestCase):
             g.check_rich_headings(text, old)
         self.assertIn("산출물을 만들지 않았습니다", str(cm.exception))
 
+    def test_banner_step_in_guide(self):
+        j = "\n".join(self.s)
+        self.assertIn("마지막 카톡 배너 — 채팅 링크 직접 걸기, 캡처 전에", j)
+        self.assertLess(j.index("카톡 배너"), j.index("캡처한다"))          # 캡처 전에
+        h = g.one_page_html("7호", "slug", "제목", self.s, 3, "보험 리모델링")
+        self.assertIn("마지막 카톡 배너", h)
+        self.assertIn("분류: 보험 리모델링", h)
+        self.assertNotIn("분류:", g.one_page_html("7호", "slug", "제목", self.s, 3))
+
+    def test_banner_copy_and_append(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        src = os.path.join(d, "src.png")
+        open(src, "wb").write(b"PNG")
+        base = "1026_30호_네이버비공개"
+        name = g.copy_banner(d, base, src)
+        self.assertEqual(name, base + "_카톡배너.png")
+        self.assertEqual(open(os.path.join(d, name), "rb").read(), b"PNG")
+        with self.assertRaises(kit.KitError):
+            g.copy_banner(d, base, os.path.join(d, "없음.png"))
+        out = g.append_banner('<p>x</p><img src="a_이미지5.png">\n', name)
+        self.assertTrue(out.rstrip().endswith(">"))
+        self.assertLess(out.index("a_이미지5.png"), out.index(name))     # 진단 CTA 이미지 다음
+        self.assertNotIn("<a ", out)                                     # 링크는 넣지 않는다
+        self.assertEqual(g.existing_outputs(d, base), [name])
+
+    def test_blog_category(self):
+        c = g.blog_category
+        self.assertEqual(c("건강검진 재검 권유받았다면 계약 전 알릴 의무는 어디까지인가", "건강검진 재검 고지"), "실손·보장성 가이드")
+        self.assertEqual(c("부담보 조건부 가입 전에 확인할 것", ""), "실손·보장성 가이드")
+        self.assertEqual(c("기존 계약 리모델링, 담보를 합산해 보면", ""), "보험 리모델링")
+        self.assertEqual(c("백내장 보험금 청구했는데 지급 심사에서", ""), "보험금 청구·보상")
+        self.assertEqual(c("연금 개시 전 세액공제와 노후 설계", ""), "연금·노후·세테크")
+        self.assertEqual(c("보험료 절감 방법 — 할인 특약", ""), "보험료 절약·꿀팁")
+        self.assertEqual(c("오늘의 일상", "", "본문"), g.CATEGORY_UNSURE)          # 근거 없음
+        self.assertEqual(c("고지 청구", ""), g.CATEGORY_UNSURE)                    # 동점
+        # 본문만으로는 제목 근거 없이 정하지 않는다(본문 가중 최대 3 → 한 칸 3점 이상이어야 하나 동점 방지용)
+        self.assertEqual(c("제목", "", "연금 연금 연금 연금"), "연금·노후·세테크")
+
     def test_format_line(self):
         self.assertIn("configs/naver-format.json", g.format_line())
         self.assertNotIn("읽기 실패", g.format_line())
