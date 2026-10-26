@@ -114,6 +114,8 @@ def append_banner(rich, name):
 
 
 TITLE_BOX = "■ 제목 칸에 붙여 넣을 제목 — 이것 하나뿐"
+# 로버트 할 일 4가지(SUP3m) — ④ 는 10/25 연금·건강검진 반송 「비공개 상태임이 확인되도록 캡처 또는 비공개 증빙자료」 때문.
+ROBERT_TODO = "로버트 할 일: ① 카톡 배너 링크 걸기 ② 비공개 게시 ③ PDF 저장 ④ 글 상단 캡처 png 저장(비공개 표시 보이게)"
 
 
 def title_box(title, naver_only=False):
@@ -154,7 +156,9 @@ def steps(issue, title, n_images, base):
         "8. 발행된 비공개 글 전체를 캡처한다 — 🔴 「비공개」 표시가 화면에 보이게(2025-07-14 시행 규칙).",
         f"9. 비공개 글을 PDF 로 저장할 때 저장 위치를 Downloads\\PAMS접수\\ 로, 파일 이름에 「{issue}」 또는 글의 핵심어(예: {keyword})를 넣는다"
         f"(예: {issue}.pdf · {keyword}.pdf). 압축은 하지 않는다 — zip 은 자동으로 만들어진다.",
-        "   → 10분 안에 pams_auto 가 짝을 맞춰 네이버 키트(zip)를 만든다. 캡처는 캡처_처리됨\\ 으로 옮겨진다.",
+        f"   · 🔴 글 상단(제목 옆 「· 비공개」 표시가 보이게) 화면 캡처를 png 로 같은 폴더에 저장한다 — 이름은 PDF 와 같게 시작"
+        f"(예: {issue}_상단.png · {keyword}_상단.png). PDF 머리엔 「비공개」가 안 찍힌다(10/25 반송 사유).",
+        "   → PDF·png 가 다 있으면 10분 안에 pams_auto 가 짝을 맞춰 네이버 키트(zip)를 만든다(png 없으면 만들지 않고 알림). 둘 다 캡처_처리됨\\ 으로 옮겨진다.",
         "   → PDF 첫 장 제목이 상자 제목과 다르거나 본문 첫 줄이 빠졌으면 zip 을 만들지 않고 텔레그램으로 알린다"
         f" — 글을 고친 뒤 다른 이름(예: {issue}_수정.pdf)으로 다시 저장한다.",
         "10. 이 비공개 글이 곧 승인본이다 — 승인 뒤에는 심의필 줄만 채워 「전체공개」로 바꾼다(새로 올리지 않는다).",
@@ -173,6 +177,7 @@ def one_page_html(issue, slug, title, step_lines, n_images, category=None):
         "<div style='border:2px solid #1b3a30;border-radius:6px;padding:12px 16px;margin:12px 0 18px'>"
         f"<div style='font-size:14px;color:#1b3a30;font-weight:700'>{htmllib.escape(TITLE_BOX[2:])}</div>"
         f"<div style='font-size:26px;font-weight:700;margin-top:6px;line-height:1.4'>{htmllib.escape(title)}</div></div>"
+        f"<div style='font-size:19px;font-weight:700;color:#1b3a30;margin:0 0 14px'>{htmllib.escape(ROBERT_TODO)}</div>"
         f"<ol style='font-size:18px;line-height:1.75;padding-left:24px;margin:0'>{li}</ol>"
         + (f"<div style='margin-top:14px;font-size:18px;font-weight:700;color:#1b3a30'>분류: {htmllib.escape(category)}</div>" if category else "")
         + f"<div style='margin-top:18px;font-size:15px;color:#48423a'>사진 {n_images}장 · {htmllib.escape(format_line())}</div>"
@@ -274,7 +279,7 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
         f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(issue)} 네이버 본문 (제목 아님)</title>"
         f"<body style='max-width:860px;margin:24px auto;padding:0 16px'>\n{rich}</body>")
     st = steps(issue, title, len(imgs), base)
-    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", f"분류: {category}", ""] + title_box(title, kit.naver_only(article)) + ["", "할 일:"] + ["  " + s for s in st] + [
+    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", f"분류: {category}", ROBERT_TODO, ""] + title_box(title, kit.naver_only(article)) + ["", "할 일:"] + ["  " + s for s in st] + [
         "", format_line(), f"사진 {len(imgs)}장: " + (", ".join(imgs) or "없음"), "", "── 본문(조립본 · 심의 제출용) ──"]
     txt_path = os.path.join(out_dir, base + ".txt")
     open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(head) + "\n" + body["text"] + "\n")
@@ -297,7 +302,9 @@ def send(env, res):
            f"분류: {res.get('category', CATEGORY_UNSURE)}\n"
            "제목은 사진 맨 위 「제목 칸에 붙여 넣을 제목」 상자의 것 하나만 쓴다.\n"
            f"파일: Downloads\\PAMS접수\\_네이버비공개\\{os.path.basename(res['txt'])} (+.html · 사진 {len(res['images'])}장)\n"
-           f"▶ 비공개 글 PDF 를 Downloads\\PAMS접수\\ 에 「{kw}.pdf」(또는 「{res['issue']}.pdf」)로 저장만 하면 zip 은 10분 안에 자동 생성 — 압축·이름 맞추기 불필요.")
+           f"{ROBERT_TODO}\n"
+           f"▶ 비공개 글 PDF 를 Downloads\\PAMS접수\\ 에 「{kw}.pdf」(또는 「{res['issue']}.pdf」)로, 글 상단 캡처를 「{kw}_상단.png」로 저장하면 "
+           "zip 은 10분 안에 자동 생성 — 압축 불필요.")
     with open(res["png"], "rb") as fp:
         r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", data={"chat_id": chat, "caption": cap[:1000]},
                           files={"photo": fp}, timeout=60)

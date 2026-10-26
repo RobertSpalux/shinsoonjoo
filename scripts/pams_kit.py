@@ -4,7 +4,7 @@
 PAMS 접수 키트 생성 — 로버트는 zip 을 올리고 자가점검만 체크한다. 나머지는 기계.
 
     python scripts/pams_kit.py <slug> main
-    python scripts/pams_kit.py <slug> naver --capture <네이버 비공개 캡처(.pdf/.png/.jpg)>
+    python scripts/pams_kit.py <slug> naver --capture <네이버 비공개 글 PDF> --proof <글 상단 「비공개」 보이는 캡처.png>
     python scripts/pams_kit.py <slug> threads [--body <본문.txt>] [--reply-phrase "<댓글 문구>"]
     python scripts/pams_kit.py <slug> threads --submitted <키트.zip>   ← PAMS 접수 뒤 Storage 업로드
     (스레드 규칙은 scripts/pams_threads.py 머리말)
@@ -298,7 +298,9 @@ def kit_lines(slug, channel, title, title_from, sources, files, content_hash_=No
     tail = []
     if content_hash_:   # 심의본 = 게시본 대조용(scripts/review_lock.py) — 접수되면 이 값이 ad_reviews.notes 로 옮겨진다
         tail = ["", f"원고해시: sha256 {content_hash_}"]
-    return head + [f"- {s}" for s in sources] + ["", "zip 안 파일:"] + [f"- {fn}" for fn in files] + tail
+    # 「← …」 꼬리는 robert-os pams_apply.zip목록 이 떼고 읽는다(파일 이름만 대조)
+    listed = [f"- {fn}" + ("  ← 비공개 상태 증빙(광고시안 아님)" if fn.endswith(PRIVATE_PROOF_SUFFIX) else "") for fn in files]
+    return head + [f"- {s}" for s in sources] + ["", "zip 안 파일:"] + listed + tail
 
 
 # ── 로컬 서버 ────────────────────────────────────────────────
@@ -433,12 +435,34 @@ def check_capture(pdf_path, title, body, log=print):
 
 # ── 키트 ────────────────────────────────────────────────────
 PROPOSAL_EXT = (".pdf", ".png", ".jpg", ".jpeg", ".hwp", ".hwpx")
+# 🔴 네이버 비공개 상태 증빙 — 10/25 연금·건강검진 네이버 반송 「비공개 상태임이 확인되도록 캡처 또는 비공개 증빙자료」.
+#    크롬 인쇄 PDF 머리에는 「비공개」 표시가 안 나온다 → 블로그 화면 상단 캡처(png)를 zip 에 같이 넣는다(광고시안 아님).
+PRIVATE_PROOF_SUFFIX = "_비공개게시 확인.png"
+PROOF_EXT = (".png", ".jpg", ".jpeg", ".webp")
+
+
+def proof_name(title):
+    return safe_filename(title) + PRIVATE_PROOF_SUFFIX
 
 
 def proposal_files(names):
-    """zip 안 파일 이름 → 광고시안(증빙 대장 configs/sources.json 의 evidence_file 이 아닌 문서·그림)."""
-    evid = {s.get("evidence_file") for s in json.load(open(SOURCES_JSON, encoding="utf-8"))["sources"] if s.get("evidence_file")}
-    return [n for n in names if os.path.basename(n) not in evid and os.path.splitext(n)[1].lower() in PROPOSAL_EXT]
+    """zip 안 파일 이름 → 광고시안(증빙 대장 configs/sources.json 의 evidence_file · 비공개 증빙이 아닌 문서·그림)."""
+    with open(SOURCES_JSON, encoding="utf-8") as fp:
+        evid = {s.get("evidence_file") for s in json.load(fp)["sources"] if s.get("evidence_file")}
+    return [n for n in names if os.path.basename(n) not in evid and not os.path.basename(n).endswith(PRIVATE_PROOF_SUFFIX)
+            and os.path.splitext(n)[1].lower() in PROPOSAL_EXT]
+
+
+def copy_proof(src, dst):
+    """비공개 증빙 그림 → dst(.png). png 는 그대로, jpg·webp 는 png 로 바꾼다."""
+    ext = os.path.splitext(src)[1].lower()
+    if ext not in PROOF_EXT:
+        raise KitError(f"비공개 증빙 형식을 모릅니다 — {ext} (png/jpg)")
+    if ext == ".png":
+        shutil.copyfile(src, dst)
+        return
+    from PIL import Image
+    Image.open(src).save(dst, "PNG")
 
 
 def check_zip_members(names):
@@ -457,9 +481,10 @@ def check_zip(path):
         return check_zip_members([i.filename for i in z.infolist() if not i.is_dir()])
 
 
-def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR, now=None, log=print):
+def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR, now=None, log=print, proof=None):
     """키트를 만든다. 게이트·증빙·캡처 문제면 KitError (파일은 하나도 남기지 않는다).
-    server 를 주면 그 서버를 쓰고, 없으면 로컬 next dev 를 띄웠다 끈다."""
+    server 를 주면 그 서버를 쓰고, 없으면 로컬 next dev 를 띄웠다 끈다.
+    네이버는 proof(블로그 화면 상단 「비공개」가 보이는 캡처 그림)가 필수 — zip 에 <제목>_비공개게시 확인.png 로 들어간다."""
     slug = article["slug"]
     # 🔴 주제 중복 검사(2026-09-30) — 이미 있는 글·TOPIC-BANK ✅ 와 겹치면 키트를 만들지 않는다(관제탑 지시라도).
     import topic_guard
@@ -468,6 +493,9 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
         raise KitError("네이버 키트는 캡처 파일이 필요합니다")
     if capture and not os.path.exists(capture):
         raise KitError(f"캡처 파일이 없습니다 — {capture}")
+    if channel == "naver" and not (proof and os.path.exists(proof)):
+        raise KitError("네이버 키트는 비공개 상태 증빙 그림(png)이 필요합니다 — 글 상단 「비공개」 표시가 보이는 캡처"
+                       "(10/25 반송 「비공개 상태임이 확인되도록 캡처 또는 비공개 증빙자료」)")
     if channel == "naver":   # 🔴 제목·첫 줄이 원고와 다르면 서버를 띄우기 전에 멈춘다
         check_capture(capture, article.get("naver_title") or "", article.get("naver_blog_content") or "", log)
     title, title_from = posting_title(article, channel)
@@ -500,6 +528,7 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
 
         if channel == "naver":
             capture_to_pdf(capture, pdf_path)
+            copy_proof(proof, os.path.join(stage, proof_name(title)))
         for _, p in evid:
             shutil.copyfile(p, os.path.join(stage, os.path.basename(p)))
 
@@ -527,6 +556,7 @@ def main():
     ap.add_argument("slug")
     ap.add_argument("channel", choices=["main", "naver", "threads", "kakao"])
     ap.add_argument("--capture")
+    ap.add_argument("--proof", help="naver: 글 상단 「비공개」 표시가 보이는 캡처(png/jpg) — 필수")
     ap.add_argument("--base-url")
     ap.add_argument("--body", help="스레드 본문 파일(threads). 기본 assets/threads/drafts/<slug>/body.txt")
     ap.add_argument("--reply-phrase", help="첫 댓글 문구(threads). 기본 문구는 pams_threads.REPLY_PHRASE")
@@ -565,7 +595,7 @@ def main():
                                        photos=a.photo, stage_upload=a.stage,
                                        name=a.name, prep_id=a.prep_id, tag=a.tag)
         else:
-            kit = build_kit(env, art, a.channel, capture=a.capture, server=server)
+            kit = build_kit(env, art, a.channel, capture=a.capture, server=server, proof=a.proof)
     except KitError as e:
         print(f"\n⛔ {e}\n   키트를 만들지 않았습니다.", file=sys.stderr)
         sys.exit(3 if e.gate else 1)
