@@ -27,8 +27,11 @@ LINK_D = "https://goodfinance.kr/news/daily-life-liability-deductible-nusu"
 TABLE = ["[표1] 세대별로 들어 있는 자리", "구분 | 자리 | 근거", "3·4세대 | 특약으로 분리 | 표준약관"]
 
 
-def body(n_chars=2800, faq=3, summary=True, links=(LINK_A, LINK_B), faq_head=None, table=TABLE, images=5):
-    lines = ["상담을 하다 보면 같은 질문을 하시는 분이 많습니다."]
+BASIS = "이 글은 국가법령정보센터의 「상법 제662조(소멸시효)」(2025.9.9)를 근거로 원리를 정리합니다."
+
+
+def body(n_chars=2800, faq=3, summary=True, links=(LINK_A, LINK_B), faq_head=None, table=TABLE, images=5, basis=BASIS):
+    lines = ["상담을 하다 보면 같은 질문을 하시는 분이 많습니다."] + ([basis] if basis else [])
     media = list(table) + [f"[이미지{'①②③④⑤⑥⑦⑧⑨⑩'[i]}]" for i in range(images)]
     filler = "가" * (n_chars - nr.body_len("\n".join(lines + media)) - 200)
     lines.append(filler)
@@ -295,6 +298,19 @@ class DraftGateTest(unittest.TestCase):
         with self.assertRaises(self.di.kit.KitError) as c:
             self.di.naver_gate({**self.row, "naver_blog_content": body(n_chars=2238)}, self.data)
         self.assertIn("2,500~3,500", str(c.exception))
+
+    def test_no_basis_blocks(self):
+        """CP1 — 10/20 법인 네이버판은 근거 문장이 없어 pams_auto 가 키트를 못 만들었다. 저장 단계에서 막는다."""
+        with self.assertRaises(self.di.kit.KitError) as c:
+            self.di.naver_gate({**self.row, "naver_blog_content": body(basis=None)}, self.data)
+        self.assertIn("자료명이 하나도 없습니다", str(c.exception))
+
+    def test_main_basis_must_carry_over(self):
+        main = "## 소제목\n\n" + BASIS.replace("「상법 제662조(소멸시효)」", "「상법 제662조(소멸시효)」·「상법 제731조(타인의 생명의 보험)」")
+        with self.assertRaises(self.di.kit.KitError) as c:
+            self.di.naver_gate({**self.row, "main_website_markdown": main}, self.data)
+        self.assertIn("상법 제731조(타인의 생명의 보험)", str(c.exception))
+        self.assertEqual(self.di.naver_gate({**self.row, "main_website_markdown": BASIS}, self.data), ([], None))
 
 
 class BannedVerbTest(unittest.TestCase):
