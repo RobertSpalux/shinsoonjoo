@@ -40,14 +40,15 @@ class Harness:
         self.gate_blocked = set(gate_blocked)
         self.fail = None  # 게이트 아닌 실패 문구(자료명 못 찾음 등)
         self.tries = 0
-        self.built, self.notes = [], []
+        self.built, self.notes, self.proofs = [], [], []
         self.dir = tempfile.mkdtemp()
         self.state = {"kits": {}, "gate_blocked": {}, "captures": {}}
 
     def fetch(self, ch):
         return self.drafts[ch]
 
-    def build(self, env, a, ch, capture=None, server=None, out_dir=None):
+    def build(self, env, a, ch, capture=None, server=None, out_dir=None, proof=None):
+        self.proofs.append(proof)
         if a["slug"] in self.gate_blocked:
             raise kit.KitError("확인 미완료", gate=True)
         self.tries += 1
@@ -206,6 +207,8 @@ class MainKitTest(unittest.TestCase):
         self.assertEqual(h.built, [])
         cap = os.path.join(h.dir, "7호.pdf")
         open(cap, "wb").write(b"img")
+        with open(os.path.join(h.dir, "7호_비공개.png"), "wb") as fp:
+            fp.write(b"png")
         self.assertEqual(len(h.run()), 1)
         self.assertEqual([(s, c) for s, c, _ in h.built], [("ltc-grade-home-care-rider-check", "naver")])
 
@@ -217,18 +220,23 @@ class MainKitTest(unittest.TestCase):
 
 
 class CaptureTest(unittest.TestCase):
-    def cap(self, h, name):
+    def cap(self, h, name, body=b"img"):
         p = os.path.join(h.dir, name)
         with open(p, "wb") as fp:
-            fp.write(b"img")
+            fp.write(body)
         return p
+
+    def proof(self, h, name="부모님 장기요양등급 나왔다면 비공개.png", body=b"png"):
+        """블로그 화면 상단 「· 비공개」 캡처 — 이름은 글 제목(또는 slug·PDF 이름)으로 시작."""
+        return self.cap(h, name, body)
 
     def test_single_waiting_article_pairs_without_hint(self):
         h = Harness(main=[], naver=[art()])
-        self.cap(h, "스크린샷 2026-09-29.png")
+        self.cap(h, "스크린샷 2026-09-29.pdf")
+        self.proof(h)
         made = h.run()
         self.assertEqual([(s, c) for s, c, _ in h.built], [("ltc-grade-home-care-rider-check", "naver")])
-        self.assertTrue(os.path.exists(os.path.join(h.dir, auto.DONE_DIR_NAME, "스크린샷 2026-09-29.png")))
+        self.assertTrue(os.path.exists(os.path.join(h.dir, auto.DONE_DIR_NAME, "스크린샷 2026-09-29.pdf")))
         self.assertTrue(h.notes[-1].startswith("장기요양 등급 받았는데 (7호) 네이버 키트 준비됨 — 0929_7호_네이버.zip"), h.notes[-1])
         self.assertEqual(len(made), 1)
         self.assertEqual(h.run(), [], "처리한 캡처는 다시 쓰지 않는다")
@@ -236,6 +244,7 @@ class CaptureTest(unittest.TestCase):
     def test_issue_number_in_filename_picks_that_article(self):
         h = Harness(main=[], naver=[art(), art(slug="caregiver-daily-benefit-support-vs-use", naver_title="간병")])
         self.cap(h, "7호 네이버 캡처.pdf")
+        self.proof(h, "7호 네이버 캡처_상단.png")
         h.run()
         self.assertEqual(h.built[0][0], "ltc-grade-home-care-rider-check")
 
@@ -266,7 +275,7 @@ class CaptureTest(unittest.TestCase):
 
     def test_ambiguous_asks_once_and_builds_nothing(self):
         h = Harness(main=[], naver=[art(), art(slug="caregiver-daily-benefit-support-vs-use", naver_title="간병")])
-        self.cap(h, "캡처.png")
+        self.cap(h, "캡처.pdf")
         self.assertEqual(h.run(), [])
         self.assertEqual(h.built, [])
         self.assertEqual(len(h.notes), 1)
@@ -276,14 +285,15 @@ class CaptureTest(unittest.TestCase):
 
     def test_no_waiting_article_asks(self):
         h = Harness(main=[], naver=[])
-        self.cap(h, "캡처.png")
+        self.cap(h, "캡처.pdf")
         h.run()
         self.assertIn("네이버 대기 글이 없음", h.notes[0])
 
     def test_locked_naver_is_not_a_candidate(self):
         locked = art(reviews=[{"channel": "naver", "status": "submitted"}])
         h = Harness(main=[], naver=[locked])
-        self.cap(h, "7호.png")
+        self.cap(h, "7호.pdf")
+        self.proof(h)
         h.run()
         self.assertEqual(h.built, [])
 
@@ -292,12 +302,13 @@ class CaptureTest(unittest.TestCase):
         h = Harness(main=[], naver=[art()])
         real_build = h.build
 
-        def build(env, a, ch, capture=None, server=None, out_dir=None):
+        def build(env, a, ch, capture=None, server=None, out_dir=None, proof=None):
             if capture and os.path.basename(capture) == "7호.pdf":
                 raise kit.KitError("제목 불일치: 기대 「A」 / 실제 「A.」(끝 문장부호)")
-            return real_build(env, a, ch, capture=capture, server=server, out_dir=out_dir)
+            return real_build(env, a, ch, capture=capture, server=server, out_dir=out_dir, proof=proof)
         h.build = build
         p = self.cap(h, "7호.pdf")
+        self.proof(h)
         self.assertEqual(h.run(), [])
         self.assertEqual(len(h.notes), 1)
         self.assertIn("제목 불일치", h.notes[0])
@@ -335,11 +346,87 @@ class CaptureTest(unittest.TestCase):
 
     def test_gate_blocked_capture_waits(self):
         h = Harness(main=[], naver=[art()], gate_blocked={"ltc-grade-home-care-rider-check"})
-        p = self.cap(h, "7호.png")
+        p = self.cap(h, "7호.pdf")
+        self.proof(h)
         h.run()
         self.assertTrue(os.path.exists(p), "게이트에 막히면 캡처를 그대로 둔다")
         self.assertEqual(h.run(), [])
         self.assertEqual(len(h.built), 0)
+
+
+class PrivateProofTest(unittest.TestCase):
+    """SUP3m — 네이버 키트에 비공개 상태 증빙 그림 필수(10/25 연금·건강검진 반송)."""
+    TITLE = "건강검진 재검 고지, 결과가 정상이어도 질문에 해당하나요?"
+    MSG = "비공개 표시가 보이게 글 상단 캡처(png)도 같은 폴더에 저장해 주세요 — "
+
+    def setUp(self):
+        self.h = Harness(main=[], naver=[art(slug="health-checkup-retest-recommendation-disclosure", naver_title=self.TITLE)])
+
+    def put(self, name, body=b"x"):
+        p = os.path.join(self.h.dir, name)
+        with open(p, "wb") as fp:
+            fp.write(body)
+        return p
+
+    def test_pdf_without_proof_alerts_once_then_builds_when_png_arrives(self):
+        h = self.h
+        self.put("health-checkup-retest-recommendation-disclosure.pdf")
+        self.assertEqual(h.run(), [])
+        self.assertEqual(h.built, [], "증빙 그림 없이는 키트를 만들지 않는다")
+        self.assertEqual(len(h.notes), 1)
+        self.assertIn(self.MSG + self.TITLE, h.notes[0])
+        h.run()
+        self.assertEqual(len(h.notes), 1, "같은 PDF 로는 다시 알리지 않는다")
+        # 로버트가 블로그 상단 캡처를 제목 이름으로 저장(? 는 파일 이름에 못 쓴다)
+        png = self.put("건강검진 재검 고지, 결과가 정상이어도 질문에 해당하나요.png")
+        self.assertEqual(len(h.run()), 1)
+        self.assertEqual(h.proofs[-1], png, "증빙 그림을 build 에 넘긴다")
+        done = os.path.join(h.dir, auto.DONE_DIR_NAME)
+        self.assertEqual(sorted(os.listdir(done)), sorted(["health-checkup-retest-recommendation-disclosure.pdf",
+                                                           os.path.basename(png)]), "PDF·증빙 둘 다 처리됨으로")
+
+    def test_png_alone_is_not_a_capture(self):
+        """10/26 실측 — 제목 이름 증빙 png 가 캡처로 잡혀 그림 하나로 키트를 만들려 했다."""
+        h = self.h
+        self.put("건강검진 재검 고지, 결과가 정상이어도 질문에 해당하나요.png")
+        self.assertEqual(h.run(), [])
+        self.assertEqual(h.built, [])
+        self.assertEqual(h.notes, [], "그림만 있으면 묻지도 않는다(PDF 를 기다린다)")
+
+    def test_same_name_new_file_is_reprocessed_unchanged_is_not(self):
+        """10/25 실측 — status=done 이면 같은 이름 새 PDF 를 건너뛰었다. 이제 sig 가 바뀌면 다시 본다."""
+        h = self.h
+        self.put("건강검진.pdf")
+        self.put("health-checkup-retest-recommendation-disclosure_상단.png")
+        self.assertEqual(len(h.run()), 1)
+        p = self.put("건강검진.pdf", b"new version longer")
+        self.put("health-checkup-retest-recommendation-disclosure_상단.png", b"new png")
+        self.assertEqual(len(h.run()), 1, "같은 이름이라도 새 파일이면 다시 만든다")
+        self.assertFalse(os.path.exists(p))
+        done = os.listdir(os.path.join(h.dir, auto.DONE_DIR_NAME))
+        self.assertIn("건강검진_2.pdf", done, "처리됨 폴더의 옛 파일을 덮지 않는다")
+        # 같은 파일(sig 같음)이 맨 위에 남아 있으면 다시 쓰지 않는다
+        q = self.put("건강검진.pdf", b"third")
+        h.state["captures"]["건강검진.pdf"]["sig"] = auto.file_sig(q)
+        self.assertEqual(auto.list_captures(h.dir, h.state), [])
+
+    def test_find_proof_by_title_slug_or_pdf_name_latest_wins(self):
+        d = self.h.dir
+        a = self.h.drafts["naver"][0]
+        cap = self.put("7호.pdf")
+        self.assertIsNone(auto.find_proof(d, cap, a))
+        self.put("다른 글 상단.png")
+        self.put("17호 상단.png")
+        self.put("7호_네이버_1-thumb.png")   # 본문 사진은 증빙이 아니다
+        self.assertIsNone(auto.find_proof(d, cap, a), "제목·slug·PDF 이름으로 시작하지 않으면 증빙이 아니다(17호 ≠ 7호)")
+        old = self.put("7호 상단.png")
+        os.utime(old, (1, 1))
+        new = self.put("health-checkup-retest-recommendation-disclosure.jpg")
+        self.assertEqual(auto.find_proof(d, cap, a), new, "여럿이면 가장 최근 것")
+        os.remove(new)
+        self.assertEqual(auto.find_proof(d, cap, a), old)
+        v2 = self.put("7호_v2.pdf")
+        self.assertEqual(auto.find_proof(d, v2, a), old, "_v2·_수정 PDF 도 원래 이름 증빙과 짝")
 
 
 class ThreadsKitPickTest(unittest.TestCase):

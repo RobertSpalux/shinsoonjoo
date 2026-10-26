@@ -153,6 +153,59 @@ class OneProposal(unittest.TestCase):
         self.assertLess(s.index("check_zip_members(files)", i), s.index("zipfile.ZipFile(tmp_zip", i))
 
 
+class PrivateProof(unittest.TestCase):
+    """SUP3m — 10/25 연금·건강검진 네이버 반송 「비공개 상태임이 확인되도록 캡처 또는 비공개 증빙자료」."""
+    EVID = OneProposal.EVID
+    TITLE = "연금보험 연금개시 나이와 수령 방식, 계약이 여러 건일 때 점검할 것"
+
+    def test_proof_name_matches_relay_convention(self):
+        # 관제탑이 10/26 손으로 묶은 반송 보완 키트(robert-os test_pams_apply)와 같은 이름
+        self.assertEqual(kit.proof_name(self.TITLE), f"{self.TITLE}_비공개게시 확인.png")
+        self.assertEqual(kit.proof_name("고지, 해당하나요?"), "고지, 해당하나요_비공개게시 확인.png")
+
+    def test_proof_is_not_a_second_proposal(self):
+        names = [f"{self.TITLE}.pdf", kit.proof_name(self.TITLE), self.EVID]
+        self.assertEqual(kit.proposal_files(names), [f"{self.TITLE}.pdf"])
+        self.assertEqual(kit.check_zip_members(names), f"{self.TITLE}.pdf")
+        with self.assertRaises(kit.KitError):   # 다른 png 는 여전히 시안으로 센다
+            kit.check_zip_members([f"{self.TITLE}.pdf", "화면.png", self.EVID])
+
+    def test_txt_lists_proof_with_tail(self):
+        files = sorted([f"{self.TITLE}.pdf", kit.proof_name(self.TITLE), self.EVID])
+        ls = kit.kit_lines("annuity-start-age-payout-type-check", "naver", self.TITLE, "naver_title", SRC, files)
+        self.assertIn(f"- {kit.proof_name(self.TITLE)}  ← 비공개 상태 증빙(광고시안 아님)", ls)
+        self.assertIn(f"- {self.TITLE}.pdf", ls)
+
+    @unittest.skipUnless(os.path.exists(ROBERT_OS_APPLY), "robert-os pams_apply.py 없음")
+    def test_robert_os_reads_proof_name_without_tail(self):
+        spec = importlib.util.spec_from_file_location("pams_apply", ROBERT_OS_APPLY)
+        pa = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pa)
+        files = [f"{self.TITLE}.pdf", kit.proof_name(self.TITLE)]
+        ls = kit.kit_lines("annuity-start-age-payout-type-check", "naver", self.TITLE, "naver_title", SRC, files)
+        self.assertEqual(pa.zip목록("\n".join(ls) + "\n"), files)
+
+    def test_copy_proof_png_and_jpg(self):
+        from PIL import Image
+        with tempfile.TemporaryDirectory() as d:
+            for ext in (".png", ".jpg"):
+                src = os.path.join(d, "상단" + ext)
+                Image.new("RGB", (4, 4), "white").save(src)
+                dst = os.path.join(d, "out" + ext + kit.PRIVATE_PROOF_SUFFIX)
+                kit.copy_proof(src, dst)
+                self.assertEqual(Image.open(dst).format, "PNG")
+            with self.assertRaises(kit.KitError):
+                kit.copy_proof(os.path.join(d, "a.pdf"), os.path.join(d, "b.png"))
+
+    def test_build_kit_requires_proof_for_naver_before_server(self):
+        s = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pams_kit.py"), encoding="utf-8").read()
+        i = s.index("def build_kit(")
+        j = s.index("비공개 상태 증빙 그림(png)이 필요합니다", i)
+        self.assertLess(j, s.index("srv = LocalServer", i), "증빙이 없으면 서버를 띄우기 전에 멈춘다")
+        self.assertLess(s.index("copy_proof(proof, os.path.join(stage, proof_name(title)))", i),
+                        s.index("check_zip_members(files)", i))
+
+
 class CaptureCheck(unittest.TestCase):
     """2026-10-01 7호 네이버 — 제목 끝 마침표 + 본문 첫 줄 누락 PDF 가 zip 으로 묶였다. 글자는 그날 실제 PDF 에서 뽑은 그대로."""
     TITLE = "부모님 장기요양등급 나왔다면 — 방문요양·주야간보호는 인정서에 적힌 만큼만 쓸 수 있습니다"

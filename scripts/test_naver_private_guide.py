@@ -129,6 +129,21 @@ class Steps(unittest.TestCase):
         self.assertIn("분류: 보험 리모델링", h)
         self.assertNotIn("분류:", g.one_page_html("7호", "slug", "제목", self.s, 3))
 
+    def test_robert_todo_and_proof_png_step(self):
+        """SUP3m — 10/25 반송 「비공개 상태임이 확인되도록 캡처」 → 글 상단 캡처 png 가 할 일 ④."""
+        self.assertEqual(g.ROBERT_TODO, "로버트 할 일: ① 카톡 배너 링크 걸기 ② 비공개 게시 ③ PDF 저장 "
+                                        "④ 글 상단 캡처 png 저장(비공개 표시 보이게)")
+        h = g.one_page_html("7호", "slug", "제목", self.s, 3)
+        self.assertIn(g.ROBERT_TODO, h)
+        self.assertLess(h.index(g.ROBERT_TODO), h.index("<ol"), "할 일 4가지는 목록 위에")
+        j = "\n".join(self.s)
+        self.assertIn("「· 비공개」 표시가 보이게", j)
+        self.assertIn("7호_상단.png", j)
+        self.assertIn("png 없으면 만들지 않고 알림", j)
+        src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "naver_private_guide.py"), encoding="utf-8").read()
+        self.assertIn('f"분류: {category}", ROBERT_TODO', src, "txt 머리에도 싣는다")
+        self.assertIn('f"{ROBERT_TODO}\\n"', src, "텔레그램 캡션에도 싣는다")
+
     def test_banner_copy_and_append(self):
         import tempfile
         d = tempfile.mkdtemp()

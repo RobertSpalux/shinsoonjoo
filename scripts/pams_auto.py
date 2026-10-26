@@ -11,10 +11,13 @@ PAMS 접수 키트 자동 생성 — Windows 작업 스케줄러가 10분마다 
   1. 본진: 발행 플래그(is_main_published)가 false 이고 본진이 아직 접수·승인 전인 글 → 본진 키트.
      · 이미 만든 키트는 다시 만들지 않는다 — 키트 파일이 있고 **원고 해시**가 같으면 건너뛴다.
      · 원고가 바뀌면(해시 변경) 다시 만들고 옛 키트는 지운다(옛 원고로 접수하는 사고 방지).
-  2. 네이버: Downloads\\PAMS접수\\ 에 로버트가 넣은 캡처(png/jpg/pdf) → 짝을 맞춰 네이버 키트.
+  2. 네이버: Downloads\\PAMS접수\\ 에 로버트가 넣은 비공개 글 PDF → 짝을 맞춰 네이버 키트.
      · 짝: 파일명에 slug·「N호」·네이버 제목 조각이 있으면 그 글. 없으면 네이버 대기 글이 **딱 1편**일 때 그 글.
      · 애매하면(후보 0편·2편 이상) 만들지 않고 텔레그램으로 한 번 묻는다. 파일명에 「7호」처럼 넣으면 다음 바퀴에 짝이 맞는다.
-     · 키트가 되면 캡처는 PAMS접수\\캡처_처리됨\\ 로 옮긴다.
+     · 🔴 같은 폴더의 비공개 증빙 그림 `<제목 또는 slug 또는 PDF 이름>*.png`(블로그 화면 상단 「· 비공개」가 보이는 캡처)가
+       있어야 만든다 → zip 에 `<제목>_비공개게시 확인.png`. 없으면 만들지 않고 한 번 알린다(10/25 연금·건강검진 반송).
+       그림(png/jpg)은 증빙으로만 쓴다 — 그림 하나로 키트를 만들지 않는다(10/26 증빙 png 가 캡처로 잡힌 실측).
+     · 키트가 되면 PDF·증빙 그림은 PAMS접수\\캡처_처리됨\\ 로 옮긴다. 처리한 이름이라도 파일(sig)이 바뀌면 다시 본다.
   3. 키트가 생기면 텔레그램 1통 — 「0929_7호_본진.zip 준비됨 — PAMS 게시명: … / 자료명: …」
 
 🔴 게이트 — 컴플라이언스 확인이 안 끝난 글은 건너뛴다(우회 없음). 판정은 pams_kit 의 /preview 서버 게이트.
@@ -45,7 +48,8 @@ STATE_PATH = os.path.join(STATE_DIR, "pams_auto_state.json")
 LOG_PATH = os.path.join(STATE_DIR, "pams_auto.log")
 LOCK_PATH = os.path.join(STATE_DIR, "pams_auto.lock")
 TASK_NAME = "SHIN_PAMS_KIT"
-CAPTURE_EXT = (".png", ".jpg", ".jpeg", ".webp", ".pdf")
+CAPTURE_EXT = (".pdf",)
+PROOF_EXT = kit.PROOF_EXT
 DONE_DIR_NAME = "캡처_처리됨"
 
 
@@ -222,8 +226,13 @@ def list_captures(kit_dir, state):
         if not os.path.isfile(p) or not fn.lower().endswith(CAPTURE_EXT):
             continue
         rec = state["captures"].get(fn, {})
-        if fn.endswith(".part") or rec.get("status") == "done":
+        if fn.endswith(".part"):
             continue
+        if rec.get("status") == "done" and rec.get("sig") == file_sig(p):
+            continue  # 🔴 sig 까지 같을 때만 — 처리한 이름으로 새 PDF 를 저장하면 다시 본다(10/25 실측: 같은 이름 새 PDF 를 건너뜀)
+        if rec.get("status") == "done" and not rec.get("sig") and os.path.exists(os.path.join(kit_dir, DONE_DIR_NAME, fn)) \
+                and file_sig(os.path.join(kit_dir, DONE_DIR_NAME, fn)) == file_sig(p):
+            continue  # sig 기록 전 옛 처리분 — 처리됨 폴더 것과 같은 파일이면 그대로 건너뜀
         if rec.get("status") == "bad" and rec.get("sig") == file_sig(p):
             continue  # 원고와 안 맞아 이미 알린 캡처 — 같은 파일이면 다시 알리지 않는다(덮어쓰면 다시 본다)
         out.append(p)
@@ -235,6 +244,47 @@ def file_sig(path):
         return f"{os.path.getmtime(path):.0f}:{os.path.getsize(path)}"
     except OSError:
         return ""
+
+
+# 네이버 본문 사진·배너·안내 그림은 증빙이 아니다(10/08 「17호_네이버_1-thumb.png」 같은 본문 사진이 맨 위 폴더에 놓인 실측)
+NOT_PROOF_RX = re.compile(r"thumb|table|cta|_이미지\d|카톡배너|_안내\.", re.I)
+
+
+def _flat(s):
+    return re.sub(r"[^0-9a-z가-힣]", "", (s or "").lower())
+
+
+def find_proof(kit_dir, capture, article):
+    """비공개 증빙 그림 — 같은 폴더(맨 위)의 png/jpg 중 이름이 글 제목·네이버 제목·slug·PDF 이름으로 시작하는 것.
+    여럿이면 가장 최근 것. 없으면 None. (비교는 글자·숫자만 — 파일 이름엔 ? 같은 글자가 빠진다)"""
+    if not os.path.isdir(kit_dir):
+        return None
+    pdf_stem = os.path.splitext(os.path.basename(capture))[0]
+    keys = [k for k in (_flat(article.get("naver_title")), _flat(article.get("title")), _flat(article.get("slug")),
+                        _flat(re.sub(r"_v\d+$|_수정\d*$", "", pdf_stem)))
+            if len(k) >= 2]
+    hits = []
+    for fn in os.listdir(kit_dir):
+        p = os.path.join(kit_dir, fn)
+        if not os.path.isfile(p) or not fn.lower().endswith(PROOF_EXT) or NOT_PROOF_RX.search(fn):
+            continue
+        stem = _flat(os.path.splitext(fn)[0])
+        if any(stem.startswith(k) for k in keys):
+            hits.append(p)
+    hits.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    return hits[0] if hits else None
+
+
+def move_done(kit_dir, path):
+    """처리한 파일 → 캡처_처리됨\\. 같은 이름이 이미 있으면 덮지 않고 _2, _3 … 을 붙인다."""
+    done = os.path.join(kit_dir, DONE_DIR_NAME)
+    os.makedirs(done, exist_ok=True)
+    stem, ext = os.path.splitext(os.path.basename(path))
+    dst, n = os.path.join(done, stem + ext), 2
+    while os.path.exists(dst):
+        dst, n = os.path.join(done, f"{stem}_{n}{ext}"), n + 1
+    shutil.move(path, dst)
+    return dst
 
 
 # ── 한 바퀴 ─────────────────────────────────────────────────
@@ -303,7 +353,15 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
                    "(손으로 만든 키트로 보고 덮어쓰지 않음). 자동으로 다시 만들려면 그 zip 을 옮긴 뒤 캡처를 다시 저장하세요.")
             state["captures"][fn] = {"status": "bad", "slug": art["slug"], "sig": file_sig(cap), "why": f"{taken} 있음"}
             continue
-        jobs.append((art, "naver", cap, why))
+        proof = find_proof(kit_dir, cap, art)
+        if not proof:   # 🔴 비공개 증빙 없이 내면 반송(10/25) — 만들지 않고, 같은 PDF 로는 한 번만 알린다
+            if not (rec.get("status") == "no_proof" and rec.get("sig") == file_sig(cap)):
+                notify(f"[PAMS 캡처] 비공개 표시가 보이게 글 상단 캡처(png)도 같은 폴더에 저장해 주세요 — "
+                       f"{art.get('naver_title') or art.get('title')}\n"
+                       f"(파일 이름은 제목 또는 {os.path.splitext(fn)[0]} 로 시작 · 저장하면 10분 안에 키트를 만듭니다)")
+                state["captures"][fn] = {"status": "no_proof", "slug": art["slug"], "sig": file_sig(cap)}
+            continue
+        jobs.append((art, "naver", (cap, proof), why))
 
     log(f"바퀴: 본진 초안 {len(main_drafts)}편 · 네이버 대기 {len(naver_waiting)}편 · 작업 {len(jobs)}건")
     if not jobs:
@@ -313,11 +371,13 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
     if server:
         server.__enter__()
     try:
-        for a, ch, cap, why in jobs:
+        for a, ch, pair, why in jobs:
+            cap, proof = pair or (None, None)
             key = f"{a['slug']}|{ch}"
-            log(f"키트 시도 {key} ({why})" + (f" · 캡처 {os.path.basename(cap)}" if cap else ""))
+            log(f"키트 시도 {key} ({why})" + (f" · 캡처 {os.path.basename(cap)} + 비공개 증빙 {os.path.basename(proof)}" if cap else ""))
             try:
-                k = build(env, a, ch, capture=cap, server=server, out_dir=kit_dir)
+                k = (build(env, a, ch, capture=cap, proof=proof, server=server, out_dir=kit_dir) if cap
+                     else build(env, a, ch, capture=None, server=server, out_dir=kit_dir))
             except kit.KitError as e:
                 if e.gate:
                     state["gate_blocked"][key] = gate_key(a, ch)
@@ -349,11 +409,11 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
                         os.remove(old)  # 옛 원고 키트 — 남겨 두면 잘못 올릴 수 있다
             state["kits"][key] = {"zip": k["zip"], "txt": k["txt"], "hash": k["hash"],
                                   "created": datetime.now(kit.KST).isoformat()}
-            if cap:
-                done = os.path.join(kit_dir, DONE_DIR_NAME)
-                os.makedirs(done, exist_ok=True)
-                shutil.move(cap, os.path.join(done, os.path.basename(cap)))
-                state["captures"][os.path.basename(cap)] = {"status": "done", "slug": a["slug"], "zip": k["zip"]}
+            if cap:   # sig 를 남긴다 — 같은 이름으로 새 파일을 저장하면 다시 본다
+                for p in (cap, proof):
+                    sig = file_sig(p)
+                    move_done(kit_dir, p)
+                    state["captures"][os.path.basename(p)] = {"status": "done", "slug": a["slug"], "zip": k["zip"], "sig": sig}
             if hold_alerts:   # 칸이 다 찼다 — 지금 알려도 접수할 수 없다. 칸이 비면 「다음 접수」에 싣는다.
                 held[key] = {"label": f"{kit.title_label(k.get('article_title') or k.get('title'), a['slug'])} "
                                       f"{kit.CH_LABEL[ch]}", "zip": k["zip"]}
