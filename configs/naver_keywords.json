@@ -10,7 +10,10 @@
     "csection-silson-childbirth-280day": "제왕절개 실비",
     "annuity-start-age-payout-type-check": "연금보험 연금개시",
     "whole-life-death-benefit-sum-by-cause": "종신보험 사망보험금",
-    "corporate-policy-owner-beneficiary-check": "법인 보험 계약자"
+    "corporate-policy-owner-beneficiary-check": "법인 보험 계약자",
+    "hidden-insurance-money-lookup-dormant-interest": "내보험찾아줌",
+    "pension-savings-insurance-payout-differs-illustration": "연금저축보험 수령액",
+    "car-accident-minor-injury-8week-future-treatment": "교통사고 합의금"
   },
   "plan": [
     {"no": 1, "keyword": "건강검진 재검 고지", "title": "건강검진 재검 고지, 재검 결과가 정상이면 보험 가입 때 알려야 하나요"},

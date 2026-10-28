@@ -18,5 +18,8 @@
   "annuity-insurance-cancel-tax-keep-options": 21,
   "noncovered-injection-silson-treatment-purpose": 22,
   "silson-duplicate-proportional-compensation": 23,
-  "csection-silson-childbirth-280day": 24
+  "csection-silson-childbirth-280day": 24,
+  "hidden-insurance-money-lookup-dormant-interest": 25,
+  "pension-savings-insurance-payout-differs-illustration": 26,
+  "car-accident-minor-injury-8week-future-treatment": 27
 }
