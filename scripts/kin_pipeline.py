@@ -529,6 +529,19 @@ def question_intent(title, summary):
     return {"ask": ask, "products": products, "situations": situations}, ""
 
 
+def rescue_title_only(excluded):
+    """KIN1 — 「질문 본문 없음」(답변이 하나뿐이라 겹칠 조각이 없는 질문)은 **제목만으로** 의도 3요소가 잡힐 때만 살린다.
+    summary 는 비운다 — 남의 답변 조각이 질문 행세를 못 하게(KQ2 규칙 그대로). 10/29 실수집 27건이 여기서 빠졌다."""
+    out = []
+    for x in excluded:
+        if not str(x.get("excluded", "")).startswith("질문 본문 없음"):
+            continue
+        intent, _ = question_intent(x.get("title"), "")
+        if intent:
+            out.append({k: v for k, v in x.items() if k != "excluded"} | {"summary": "", "title_only": True})
+    return out
+
+
 def split_by_intent(cands):
     """후보 → (의도가 잡힌 후보[intent 붙음], [(뺀 후보, 사유)])."""
     keep, drop = [], []
@@ -889,7 +902,8 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
         msg = f"🔴 지식iN 수집 실패 — 검색 {n_q}건 전부 실패: {errors[0][:200]}"
         (notify or notify_fn(env, dry))(msg + "\n키 확인: robert-os shared/.env NAVER_CLIENT_ID/SECRET(개발자센터)")
         raise KinError(msg)
-    scoped, off = in_scope(res["candidates"])
+    rescued = rescue_title_only(res.get("excluded") or [])
+    scoped, off = in_scope(res["candidates"] + rescued)
     # KQ4 — 제목+질문 조각으로 묻는 것·상품·상황을 못 잡은 질문은 초안을 만들지 않는다(일반론이 된다)
     clear, unclear = split_by_intent(scoped)
     clear = rank(clear, now)   # KIN1 — 최근성·답변 적음·구체 상황·근거 순
@@ -897,6 +911,7 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
     expiring, exp_line = expiry_check(today, expiring_fn or (lambda d: count_expiring(env, d)))
     lines = [f"지식iN 수집: 질문 {res['seen_total']} · 후보 {len(res['candidates'])} · 제외 {len(res['excluded'])}"
              + (" · 첫 실행 기준선" if res.get("baseline") else "")
+             + (f" · 제목만으로 살림 {len(rescued)}" if rescued else "")
              + f" · 의도 명확 {len(clear)} · 의도 불명확 {len(unclear)} · 오늘 만들 것 {len(chosen)}"
              + (f" · ⚠ 검색 실패 {len(errors)}/{n_q}" if errors else ""), exp_line]
     lines += [f"🎯 [{c['topic']}] {c['title'][:40]} — {c.get('score_note', '')}" for c in chosen]

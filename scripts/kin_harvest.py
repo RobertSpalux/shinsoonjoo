@@ -62,7 +62,8 @@ APIHUB = "https://naverapihub.apigw.ntruss.com/search/v1/kin"   # naver_research
 OPENAPI = "https://openapi.naver.com/v1/search/kin.json"
 SHARED_ENV = os.environ.get("ROBERT_OS_ENV", r"D:\robert-os\shared\.env")
 FRESH_HOURS = 168    # KIN1 — 최근성 7일(첫 관측 기준). 더 새로운 질문은 kin_pipeline.score 가 위로 올린다
-ANSWERS_MAX = 3      # 검색에 걸린 answerNo 가 이 이상이면 「답변 다수」
+ANSWERS_MAX = 6      # 검색에 걸린 answerNo 가 이 이상이면 「답변 다수」. KIN1: 3→6(10/29 실수집 88건이 3~5 에서 잘림) —
+                     # 적은 답변은 kin_pipeline.score 가 위로 올린다
 DISPLAY = 30
 SLEEP = 0.15
 

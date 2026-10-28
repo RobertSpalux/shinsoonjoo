@@ -87,7 +87,8 @@ class Harvest(unittest.TestCase):
             self.assertEqual(kh.exclusion(q), "법률(시효·기한) — 사실 검증 불가", title + snip)
         for title in ("실비 청구 서류 문의", "고지의무 기간 5년 맞나요"):
             self.assertIsNone(kh.exclusion({**base, "title": title}), title)
-        self.assertIn("답변 다수", kh.exclusion({**base, "answers_seen": 3}))
+        self.assertIn("답변 다수", kh.exclusion({**base, "answers_seen": kh.ANSWERS_MAX}))
+        self.assertNotIn("답변 다수", kh.exclusion({**base, "answers_seen": 3}) or "")   # KIN1 — 3~5 는 점수로
         self.assertIn("비교", kh.exclusion({**base, "title": "실비 어디가 좋나요 비교"}))
         self.assertIn("특정 회사", kh.exclusion({**base, "snippets": ["삼성화재 가입"]}, ["삼성화재"]))
         self.assertIn("개인정보", kh.exclusion({**base, "snippets": ["연락 010-1234-5678"]}))
@@ -846,6 +847,15 @@ class Kin1(unittest.TestCase):
             self.assertEqual(len(sent), 1)
             for s in ("docId=1", "제2026-10-7001호 (2026.10.29~2027.10.28)", "답변 본문입니다.", "posted k --url"):
                 self.assertIn(s, sent[0])
+
+    def test_rescue_title_only(self):
+        ex = [{"url": "a", "title": "양악수술 실비보험 청구 가능한가요?", "summary": "남의 답변 조각", "excluded": "질문 본문 없음(…)"},
+              {"url": "b", "title": "보험실효...", "summary": "", "excluded": "질문 본문 없음(…)"},
+              {"url": "c", "title": "실비 청구 되나요?", "summary": "", "excluded": "답변 다수(answerNo≥7)"}]
+        r = kp.rescue_title_only(ex)
+        self.assertEqual([x["url"] for x in r], ["a"])
+        self.assertEqual(r[0]["summary"], "")          # 남의 답변 조각은 넘기지 않는다
+        self.assertNotIn("excluded", r[0])
 
     def test_new_topics_fit_and_pension_category(self):
         for t in ("갱신보험료", "보장공백", "연금수령", "치아"):
