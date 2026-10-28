@@ -61,7 +61,7 @@ PLACEHOLDER_RX = re.compile(r"제\s*0{3,5}\s*호\s*\(\s*\d{4}\.00\.00\s*~\s*\d{4
 # 변액/연금보험 · 그외 기타(건강,화재,펫 보험 등) · 태아보험. 고르면 「답변내용」 아래 칸에 안내문구+필수안내사항 자동생성.
 # 칸의 name/value 는 아직 재지 않았다 — 글자(라벨)만 적는다.
 CATEGORY_ETC = "그외 기타(건강,화재,펫 보험 등)"
-CATEGORY = {"간편심사": "유병자보험"}          # 나머지 소재는 전부 CATEGORY_ETC
+CATEGORY = {"간편심사": "유병자보험", "연금수령": "변액/연금보험"}   # 나머지 소재는 전부 CATEGORY_ETC
 POSTING_LOCATION = "네이버 지식인"             # 폼 기본값(실물). 고치지 않는다.
 NOTICE_MARK = "※ 유의사항"                     # src/lib/compliance/kin-terms.ts KIN_NOTICE_MARK 와 같다
 
@@ -88,12 +88,16 @@ def save_state(state, path=STATE_PATH):
 
 # ── 순수 함수(테스트 대상) ─────────────────────────────────────
 def pick(candidates, state, today, n):
-    """오늘 더 만들 질문. 하루 상한 DAILY_MAX · 같은 소재 하루 1건 · 직전 날 마지막 소재와 연속 금지 · 이미 다룬 질문 제외."""
+    """오늘 더 만들 질문. 하루 상한 DAILY_MAX · 같은 소재 하루 1건 · **어제** 마지막 소재와 연속 금지 · 이미 다룬 질문 제외.
+
+    🔴 KIN1(2026-10-29): 예전엔 「직전 키트가 있던 날」의 마지막 소재를 막았다 → 10/21 실손청구 뒤 키트가 0건이라
+    그 금지가 풀리지 않고 10/22~25 의도 명확 후보(전부 실손청구)를 매일 0건으로 만들었다. 이제 어제 것만 본다."""
     kits = state.get("kits", {})
     today_kits = [k for k in kits.values() if k.get("day") == today]
     room = max(0, min(n, DAILY_MAX - len(today_kits)))
     used_topics = {k["topic"] for k in today_kits}
-    prev = sorted((k for k in kits.values() if k.get("day", "") < today), key=lambda k: k.get("created", ""))
+    yesterday = (date.fromisoformat(today) - timedelta(days=1)).isoformat()
+    prev = sorted((k for k in kits.values() if k.get("day") == yesterday), key=lambda k: k.get("created", ""))
     if prev:
         used_topics.add(prev[-1]["topic"])
     done_urls = {k["question_url"] for k in kits.values()}
@@ -106,6 +110,43 @@ def pick(candidates, state, today, n):
         out.append(c)
         used_topics.add(c["topic"])
     return out
+
+
+# ── 후보 점수(KIN1 2026-10-29 관제탑) ─────────────────────────────
+# 최근성 · 답변 수 적음 · 구체적 상황(상담 필요도) · 우리 근거로 답할 수 있음. 채택 여부는 검색 API 가 주지 않아 점수에 없다
+# (지어내지 않는다 — 게시 직전 로버트가 화면에서 본다). 같은 점수면 수집 순서(최신순) 그대로.
+def score(c, now):
+    """(점수, 설명) — 높을수록 먼저. c 는 의도가 잡힌 후보(intent 포함)."""
+    parts = []
+    try:
+        hours = (now - datetime.fromisoformat(c["first_seen"])).total_seconds() / 3600
+    except (KeyError, TypeError, ValueError):
+        hours = None
+    fresh = 0 if hours is None else 3 if hours <= 24 else 2 if hours <= 72 else 1 if hours <= 168 else 0
+    parts.append(f"최근성 {fresh}")
+    ans = c.get("answers_seen") or 0
+    few = 3 if ans == 0 else 2 if ans == 1 else 1 if ans == 2 else 0
+    parts.append(f"답변적음 {few}")
+    sits = len((c.get("intent") or {}).get("situations") or [])
+    concrete = min(sits, 3)
+    parts.append(f"상황 {concrete}")
+    grounded = 1 if c.get("topic") in GROUNDED_TOPICS else 0
+    parts.append(f"근거 {grounded}")
+    total = fresh + few + concrete + grounded
+    return total, f"{total}점(" + " · ".join(parts) + ")"
+
+
+# 우리 승인 글(본진·네이버)·약관 일반 규칙으로 답할 수 있는 소재 — 근거 자료가 있는 것만 가산
+GROUNDED_TOPICS = {"실손청구", "고지의무", "부담보", "간편심사", "리모델링점검", "갱신보험료", "보장공백", "연금수령"}
+
+
+def rank(cands, now):
+    """점수 높은 순(안정 정렬). 각 후보에 score_note 를 붙인다."""
+    out = []
+    for c in cands:
+        s, note = score(c, now)
+        out.append({**c, "score": s, "score_note": note})
+    return sorted(out, key=lambda c: -c["score"])
 
 
 def in_scope(candidates):
@@ -430,7 +471,8 @@ ASK_RE = re.compile(r"[?？]"
 PRODUCT_RE = re.compile(
     r"(?:실손|실비|치아|암|간병인?|치매|운전자|종신|정기|연금|저축|상해|질병|건강|화재|배상\s*책임|일상\s*생활\s*배상|어린이|태아|"
     r"유병자|간편\s*심사|간편|종합|생명|정액|수술비|입원비?|자동차|여행자|펫|변액|CI|GI)\s*보험|"
-    r"실손|실비|진단비|수술비|입원\s*(?:비|일당)|일당|후유\s*장해|사망\s*보험금|배상\s*책임|휴업\s*손해|부담보|특약|보장성")
+    r"실손|실비|진단비|수술비|입원\s*(?:비|일당)|일당|후유\s*장해|사망\s*보험금|배상\s*책임|휴업\s*손해|부담보|특약|보장성|"
+    r"갱신형|연금저축|임플란트|크라운|보철")
 # 질문자 상황 종류 — (이름, 질문에서 잡는 식, 답변 본문이 그 상황을 다뤘다고 보는 식)
 # 본문 식은 일반 낱말이다 — 질문의 구체 사정(검사 이름·다친 경위)을 되받으면 personal 게이트(kin-terms)가 막는다.
 SITUATION_KINDS = [
@@ -453,6 +495,10 @@ SITUATION_KINDS = [
     ("사망·수익자", re.compile(r"사망|수익자|상속"), re.compile(r"사망|수익자")),
     ("서류 발급", re.compile(r"발급|진단서|서류"), re.compile(r"발급|서류|진단서")),
     ("소득·생계", re.compile(r"생계|소득|월급|일을\s*못|일\s*못|휴업"), re.compile(r"휴업|소득|생계")),
+    # KIN1 — 연금 수령·갱신 인상 질문의 상황
+    ("연금 수령", re.compile(r"수령|연금\s*개시|연금\s*(?:받|타)|일시금|연금\s*(?:액|으로)"), re.compile(r"수령|개시|일시금")),
+    ("보험료 인상", re.compile(r"(?:보험료|갱신료).{0,10}(?:올|인상|오르|두\s*배|많이)|인상\s*(?:됐|되었|통보|안내)"),
+     re.compile(r"인상|오르|올라")),
 ]
 INTENT_ASK_MAX = 80
 
@@ -837,14 +883,23 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
     today = now.date().isoformat()
     state = load_state(state_path)
     res = (harvest_fn or (lambda: kin_harvest.collect(env, now=now)))()
+    errors, n_q = res.get("errors") or [], res.get("queries") or 0
+    if n_q and len(errors) >= n_q:
+        # KIN1 — 10/26~28 검색 API 401 로 「질문 0」인데 ✅ 로 보고됐다. 전부 실패면 실패로 알리고 멈춘다.
+        msg = f"🔴 지식iN 수집 실패 — 검색 {n_q}건 전부 실패: {errors[0][:200]}"
+        (notify or notify_fn(env, dry))(msg + "\n키 확인: robert-os shared/.env NAVER_CLIENT_ID/SECRET(개발자센터)")
+        raise KinError(msg)
     scoped, off = in_scope(res["candidates"])
     # KQ4 — 제목+질문 조각으로 묻는 것·상품·상황을 못 잡은 질문은 초안을 만들지 않는다(일반론이 된다)
     clear, unclear = split_by_intent(scoped)
+    clear = rank(clear, now)   # KIN1 — 최근성·답변 적음·구체 상황·근거 순
     chosen = pick(clear, state, today, n)
     expiring, exp_line = expiry_check(today, expiring_fn or (lambda d: count_expiring(env, d)))
     lines = [f"지식iN 수집: 질문 {res['seen_total']} · 후보 {len(res['candidates'])} · 제외 {len(res['excluded'])}"
              + (" · 첫 실행 기준선" if res.get("baseline") else "")
-             + f" · 의도 명확 {len(clear)} · 의도 불명확 {len(unclear)} · 오늘 만들 것 {len(chosen)}", exp_line]
+             + f" · 의도 명확 {len(clear)} · 의도 불명확 {len(unclear)} · 오늘 만들 것 {len(chosen)}"
+             + (f" · ⚠ 검색 실패 {len(errors)}/{n_q}" if errors else ""), exp_line]
+    lines += [f"🎯 [{c['topic']}] {c['title'][:40]} — {c.get('score_note', '')}" for c in chosen]
     lines += [f"⛔ 보험 무관 — {c['title'][:40]} ({why})" for c, why in off]
     lines += [f"🔍 [{c['topic']}] {c['title'][:40]} — {why}" for c, why in unclear]
     if make_fn is None:
@@ -859,7 +914,7 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
                "question_url": c["url"], "question_title": c["title"], "question_summary": c["summary"],
                "answer": answer, "answer_sha256": hashlib.sha256(answer.encode("utf-8")).hexdigest(),
                "category": CATEGORY.get(c["topic"], CATEGORY_ETC),
-               "note": special_note(c["topic"]), "status": "심의대기"}
+               "note": special_note(c["topic"]), "status": "심의대기", "score": c.get("score_note", "")}
         if not dry:
             rec["kin_answer_id"], _ = save_row(env, rec)
             os.makedirs(kit_dir, exist_ok=True)
@@ -988,7 +1043,8 @@ def mark_answer_posted(env, kin_answer_id):
 
 
 def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=record_review, existing_fn=None,
-                     mark_posted=mark_answer_posted, dry=False, pending_fn=None, register_url=register_posted_url):
+                     mark_posted=mark_answer_posted, dry=False, pending_fn=None, register_url=register_posted_url,
+                     notify=None):
     """감시기(robert-os pams_지식인행.json) 승인 행 → ad_reviews(kin) 자동 기록. review_no 가 이미 있으면 새 행은 안 만든다(중복 0).
     게시위치등록됨 이면 kin_answers 를 게시완료로. 사람이 approvals/approve 를 돌릴 필요가 없다.
     이미 있는 행이라도 게시위치등록됨=True 인데 url_registered_at 이 비었으면 posted_url(질문 URL)·url_registered_at 을
@@ -1000,7 +1056,7 @@ def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=recor
     state = load_state(state_path)
     have = (existing_fn or (lambda: existing_review_nos(env)))()
     pending = None   # {review_no: ad_reviews.id} — url_registered_at 이 빈 기존 행. 필요할 때 한 번만 조회
-    out, changed = [], False
+    out, changed, bundles = [], False, []
     for row in rows:
         no = normalize_review_no(row.get("심의번호") or "")
         if not no:
@@ -1008,25 +1064,27 @@ def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=recor
         kid = row.get("키트id") or row.get("키트")
         rec = state["kits"].get(kid)
         if no in have:
-            if not (row.get("게시위치등록됨") and rec and rec.get("question_url")):
+            if not (row.get("게시위치등록됨") and rec and rec.get("question_url")) or rec.get("status") == "게시":
                 continue
             if pending is None:
                 pending = (pending_fn or (lambda: unregistered_review_ids(env)))()
             ad_id = pending.get(no)
-            if not ad_id:
-                continue   # 이미 채워진 행
             if dry:
                 out.append(f"[dry-run] 게시 반영 예정 {no} ← {kid}")
                 continue
-            if not register_url(env, ad_id, rec["question_url"]):
-                out.append(f"게시 반영 실패 {no} ← {kid}")
-                continue
-            del pending[no]
+            if ad_id:
+                if not register_url(env, ad_id, rec["question_url"]):
+                    out.append(f"게시 반영 실패 {no} ← {kid}")
+                    continue
+                del pending[no]
+            # KIN1 — DB 행이 이미 채워져 있어도(다른 경로가 등록) 상태 파일·kin_answers 는 맞춘다.
+            # 예전엔 여기서 건너뛰어 승인·게시 18건이 상태 파일 「심의대기」, kin_answers 「초안」으로 남았다(10/29 실측).
             if rec.get("kin_answer_id"):
                 mark_posted(env, rec["kin_answer_id"])
-            rec.update({"status": "게시", "posted_url": rec["question_url"], "ad_review_id": ad_id})
+            rec.update({"status": "게시", "review_no": no, "posted_url": rec.get("posted_url") or rec["question_url"],
+                        **({"ad_review_id": ad_id} if ad_id else {})})
             changed = True
-            out.append(f"게시 반영 {no} ← {kid}")
+            out.append(f"게시 반영 {no} ← {kid}" + ("" if ad_id else " (DB 등록은 이미 됨 — 상태만 맞춤)"))
             continue
         if not rec:
             out.append(f"건너뜀 {no}: 키트 {kid} 가 상태 파일에 없다")
@@ -1044,18 +1102,38 @@ def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=recor
                     "status": "게시" if row.get("게시위치등록됨") else "승인"})
         if row.get("게시위치등록됨") and rec.get("kin_answer_id"):
             mark_posted(env, rec["kin_answer_id"])
+        if rec["status"] == "승인":
+            bundles.append(post_bundle(rec))
         changed = True
         out.append(f"기록 {no} ← {kid} ({rec['status']})")
     if changed:
         save_state(state, state_path)
+    if bundles:   # KIN1 — 승인되면 「게시할 묶음」 한 번(질문 링크 + 최종본 + 심의필 번호)
+        (notify or notify_fn(env, dry))(f"✅ 지식인 승인 {len(bundles)}건 — 게시할 묶음\n\n" + "\n\n━━━━━━━━\n\n".join(bundles))
     return out or ["새 승인 없음"]
+
+
+def post_bundle(rec):
+    """게시 묶음 하나 — 질문 링크 · 심의필 · 답변(심의본 그대로). 필수안내사항은 PAMS 자동생성분이 정본이라
+    지어 붙이지 않는다(docs/KIN-PIPELINE.md 「규칙의 근거」) — 「심의내용」 돋보기 화면 전문을 쓰라고 적는다."""
+    return "\n".join([
+        f"[{rec.get('topic', '')}] {rec.get('question_title', '')[:40]}",
+        f"질문: {rec.get('question_url', '')}",
+        f"심의필: 프라임에셋 심의필 제{rec['review_no']}호 ({(rec.get('review_from') or '').replace('-', '.')}"
+        f"~{(rec.get('review_to') or '').replace('-', '.')})",
+        "최종본 = PAMS 「심의내용」 돋보기 화면 전문(답변 + 안내문구 + 필수안내사항) 그대로. 답변 부분은 아래와 한 글자도 같아야 한다:",
+        "──",
+        rec.get("answer", "").strip(),
+        "──",
+        f"게시 뒤: python scripts/kin_pipeline.py posted {rec['id']} --url <답변 URL>",
+    ])
 
 
 def main():
     ap = argparse.ArgumentParser(description="지식iN 답변 파이프라인")
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("run")
-    r.add_argument("--n", type=int, default=3)
+    r.add_argument("--n", type=int, default=DAILY_MAX)   # KIN1 — 하루 5건 목표
     r.add_argument("--dry-run", action="store_true")
     a = sub.add_parser("approve")
     a.add_argument("kit")
