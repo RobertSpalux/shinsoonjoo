@@ -7,10 +7,10 @@
     python scripts/kin_harvest.py --no-baseline    # 첫 실행에도 후보를 낸다(나이 「미확인」 표시)
     python scripts/kin_harvest.py --out <파일.json>
 
-소재(우리 것만): 실손 청구 · 고지의무 · 부담보 · 간병 · 간편심사 · 리모델링 점검.
+소재(우리 것만): 실손 청구 · 고지의무 · 부담보 · 간병 · 간편심사 · 리모델링 점검 · 갱신 보험료 · 보장 공백 · 연금 수령 · 치아.
 
 🔴 API 가 주지 않는 것 — 지어내지 않는다(2026-10-09 실측: items 에 title·link·description 만 있다).
-  · **작성일이 없다.** 그래서 「최근 72시간」은 **우리 대장의 첫 관측 시각**으로 정한다.
+  · **작성일이 없다.** 그래서 「최근 7일」(FRESH_HOURS, KIN1 전 72시간)은 **우리 대장의 첫 관측 시각**으로 정한다.
     첫 실행은 보이는 질문을 전부 「기준선」으로 적고 후보로 내지 않는다(옛 질문이 새 질문 행세를 못 하게).
     그다음부터 대장에 없던 docId = 지난 바퀴 이후 새로 보인 질문. 첫 관측 72시간이 지나면 후보에서 빠진다.
   · **채택·마감 여부가 없다.** → 「마감」 칸은 늘 「미확인(API 미제공)」. 게시 직전 로버트가 화면에서 본다.
@@ -57,8 +57,13 @@ STATE_DIR = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~
 LEDGER = os.path.join(STATE_DIR, "kin_seen.json")
 CANDIDATES = os.path.join(STATE_DIR, "kin_candidates.json")
 APIHUB = "https://naverapihub.apigw.ntruss.com/search/v1/kin"   # naver_research.py 와 같은 게이트웨이
-FRESH_HOURS = 72
-ANSWERS_MAX = 3      # 검색에 걸린 answerNo 가 이 이상이면 「답변 다수」
+# 🔴 KIN1(2026-10-29 실측): 10/26 부터 .env.local 키가 APIHUB·OPENAPI 둘 다 401 → 수집 0건인데 ✅ 로 보고됐다.
+#    robert-os shared/.env 의 NAVER_CLIENT_ID/SECRET(네이버 개발자센터 키)는 OPENAPI 에서 200. 그 키를 먼저 쓴다.
+OPENAPI = "https://openapi.naver.com/v1/search/kin.json"
+SHARED_ENV = os.environ.get("ROBERT_OS_ENV", r"D:\robert-os\shared\.env")
+FRESH_HOURS = 168    # KIN1 — 최근성 7일(첫 관측 기준). 더 새로운 질문은 kin_pipeline.score 가 위로 올린다
+ANSWERS_MAX = 6      # 검색에 걸린 answerNo 가 이 이상이면 「답변 다수」. KIN1: 3→6(10/29 실수집 88건이 3~5 에서 잘림) —
+                     # 적은 답변은 kin_pipeline.score 가 위로 올린다
 DISPLAY = 30
 SLEEP = 0.15
 
@@ -70,6 +75,11 @@ TOPICS = {
     "간병": ["간병인보험", "간병비보험", "간병보험"],
     "간편심사": ["간편심사보험", "유병자보험", "간편보험 가입"],
     "리모델링점검": ["보험 리모델링", "보험 정리", "보험 중복 가입", "보험 점검"],
+    # KIN1(2026-10-29 관제탑) — 갱신 보험료 · 보장 공백 · 연금 수령 · 치아
+    "갱신보험료": ["갱신 보험료 인상", "갱신형 보험료", "실비 갱신 보험료"],
+    "보장공백": ["보장 공백", "보험 보장 부족", "보장 부족 보험"],
+    "연금수령": ["연금보험 수령", "연금저축보험 수령", "연금보험 연금 개시"],
+    "치아": ["치아보험", "치아보험 청구", "치아보험 면책"],
 }
 
 COMPARE_RE = re.compile(r"비교|어디\s*가|어느\s*(?:회사|보험사|곳|상품)|추천|vs|VS|중에\s*(?:뭐|어떤|어느)|순위|갈아타")
@@ -366,23 +376,54 @@ SUMMARY_MAX = 400
 
 
 # ── 수집 ────────────────────────────────────────────────────
-def search(env, query, display=DISPLAY):
-    r = requests.get(APIHUB, params={"query": query, "display": display, "start": 1, "sort": "date"},
-                     headers={"X-NCP-APIGW-API-KEY-ID": env.get("NAVER_CLIENT_ID", ""),
-                              "X-NCP-APIGW-API-KEY": env.get("NAVER_CLIENT_SECRET", "")}, timeout=15)
-    if r.status_code != 200:
-        raise RuntimeError(f"네이버 검색 API HTTP {r.status_code}")
-    return r.json().get("items", [])
+def shared_naver_keys(path=SHARED_ENV):
+    """robert-os shared/.env 의 NAVER_CLIENT_ID·SECRET(네이버 개발자센터 키) — 없으면 (None, None). 값은 출력하지 않는다."""
+    keys = {}
+    try:
+        with open(path, encoding="utf-8-sig") as fp:
+            for line in fp:
+                k, _, v = line.strip().partition("=")
+                if k.strip() in ("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET") and v:
+                    keys[k.strip()] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return keys.get("NAVER_CLIENT_ID"), keys.get("NAVER_CLIENT_SECRET")
+
+
+def routes(env, shared=None):
+    """시도 순서 [(이름, URL, 헤더)] — ① shared/.env 키 → 개발자센터 OPENAPI ② .env.local 키 → OPENAPI ③ .env.local 키 → APIHUB."""
+    sid, ssec = shared if shared is not None else shared_naver_keys()
+    lid, lsec = env.get("NAVER_CLIENT_ID", ""), env.get("NAVER_CLIENT_SECRET", "")
+    out = []
+    if sid and ssec:
+        out.append(("openapi(shared)", OPENAPI, {"X-Naver-Client-Id": sid, "X-Naver-Client-Secret": ssec}))
+    if lid and lsec:
+        out.append(("openapi(.env.local)", OPENAPI, {"X-Naver-Client-Id": lid, "X-Naver-Client-Secret": lsec}))
+        out.append(("apihub(.env.local)", APIHUB, {"X-NCP-APIGW-API-KEY-ID": lid, "X-NCP-APIGW-API-KEY": lsec}))
+    return out
+
+
+def search(env, query, display=DISPLAY, routes_=None, get=None):
+    """첫 200 응답의 items. 모두 실패하면 RuntimeError(경로별 HTTP 상태) — 조용히 0건이 되지 않게(KIN1)."""
+    get = get or requests.get
+    tried = []
+    for name, url, headers in (routes_ if routes_ is not None else routes(env)):
+        r = get(url, params={"query": query, "display": display, "start": 1, "sort": "date"}, headers=headers, timeout=15)
+        if r.status_code == 200:
+            return r.json().get("items", [])
+        tried.append(f"{name} {r.status_code}")
+    raise RuntimeError("네이버 검색 API 실패 — " + (" · ".join(tried) or "키 없음(shared/.env·.env.local)"))
 
 
 def collect(env, now=None, baseline_if_empty=True, search_fn=None, ledger_path=LEDGER):
     now = now or datetime.now(KST)
     live = search_fn is None
     search_fn = search_fn or (lambda q: search(env, q))
-    by_topic, errors = {}, []
+    by_topic, errors, n_queries = {}, [], 0
     for topic, queries in TOPICS.items():
         items = []
         for q in queries:
+            n_queries += 1
             try:
                 items += search_fn(q)
             except Exception as e:  # noqa: BLE001 — 한 검색어 실패가 수집 전체를 막지 않는다
@@ -402,14 +443,14 @@ def collect(env, now=None, baseline_if_empty=True, search_fn=None, ledger_path=L
         why = exclusion(q, insurers, dicts)
         row = {"url": q["url"], "docId": q["docId"], "title": q["title"], "summary": summarize(q),
                "topic": q["topics"][0], "topics": q["topics"], "answers_seen": q["answers_seen"],
-               "age": q["age"], "closed": "미확인(API 미제공)"}
+               "age": q["age"], "first_seen": q["first_seen"], "closed": "미확인(API 미제공)"}
         (dropped if why else cands).append({**row, "excluded": why} if why else row)
     os.makedirs(os.path.dirname(ledger_path), exist_ok=True)
     with open(ledger_path + ".tmp", "w", encoding="utf-8") as f:
         json.dump(ledger, f, ensure_ascii=False)
     os.replace(ledger_path + ".tmp", ledger_path)
     return {"at": now.isoformat(), "baseline": baseline, "seen_total": len(questions),
-            "candidates": cands, "excluded": dropped, "errors": errors}
+            "candidates": cands, "excluded": dropped, "errors": errors, "queries": n_queries}
 
 
 def main():

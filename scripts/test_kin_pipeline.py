@@ -87,7 +87,8 @@ class Harvest(unittest.TestCase):
             self.assertEqual(kh.exclusion(q), "법률(시효·기한) — 사실 검증 불가", title + snip)
         for title in ("실비 청구 서류 문의", "고지의무 기간 5년 맞나요"):
             self.assertIsNone(kh.exclusion({**base, "title": title}), title)
-        self.assertIn("답변 다수", kh.exclusion({**base, "answers_seen": 3}))
+        self.assertIn("답변 다수", kh.exclusion({**base, "answers_seen": kh.ANSWERS_MAX}))
+        self.assertNotIn("답변 다수", kh.exclusion({**base, "answers_seen": 3}) or "")   # KIN1 — 3~5 는 점수로
         self.assertIn("비교", kh.exclusion({**base, "title": "실비 어디가 좋나요 비교"}))
         self.assertIn("특정 회사", kh.exclusion({**base, "snippets": ["삼성화재 가입"]}, ["삼성화재"]))
         self.assertIn("개인정보", kh.exclusion({**base, "snippets": ["연락 010-1234-5678"]}))
@@ -184,7 +185,9 @@ class Harvest(unittest.TestCase):
         self.assertFalse(base)
         self.assertEqual([q["docId"] for q in out], ["2"])   # 새로 보인 것만
         out, _ = kh.apply_ledger(q2, led, now + timedelta(hours=80))
-        self.assertEqual(out, [])                       # 첫 관측 72시간 지나면 빠짐
+        self.assertEqual([q["docId"] for q in out], ["2"])   # KIN1 — 7일 안이면 남는다(옛 72시간)
+        out, _ = kh.apply_ledger(q2, led, now + timedelta(hours=kh.FRESH_HOURS + 2))
+        self.assertEqual(out, [])                       # 첫 관측 7일(FRESH_HOURS) 지나면 빠짐
 
     def test_no_baseline_first_run(self):
         q1 = {"1": {"docId": "1", "title": "t", "snippets": [], "topics": ["간병"], "answers_seen": 0, "url": "u1"}}
@@ -764,12 +767,134 @@ class SyncWatcher(unittest.TestCase):
                       mark_posted=lambda e, i: posted.append(i), pending_fn=lambda: dict(pending), register_url=reg)
             out = kp.cmd_sync_watcher({}, **kw)
             self.assertEqual(regs, [("ida", "https://kin.naver.com/q/a")])
-            self.assertEqual(posted, ["ua"])
+            # KIN1 — b 는 DB 등록은 이미 됐으니 다시 등록하지 않되, 상태 파일·kin_answers 는 맞춘다(10/29 실측 18건 「초안」)
+            self.assertEqual(posted, ["ua", "ub"])
             self.assertEqual(kp.load_state(st)["kits"]["a"]["status"], "게시")
+            self.assertEqual(kp.load_state(st)["kits"]["b"]["status"], "게시")
+            self.assertEqual(kp.load_state(st)["kits"]["c"]["status"], "승인")
             self.assertTrue(any("게시 반영 2026-10-6031" in l for l in out))
+            self.assertTrue(any("게시 반영 2026-10-6032" in l and "상태만" in l for l in out))
             again = kp.cmd_sync_watcher({}, **kw)
             self.assertEqual(regs, [("ida", "https://kin.naver.com/q/a")])   # 재실행 변화 0
             self.assertEqual(again, ["새 승인 없음"])
+
+
+class Kin1(unittest.TestCase):
+    """KIN1(2026-10-29) — 멈춘 원인 둘(어제 아닌 소재 금지 · 401 무음) + 점수 · 승인 묶음."""
+
+    def test_pick_old_topic_does_not_block_forever(self):
+        """10/21 실손청구 뒤 키트 0건 → 10/24 의도 명확 2건(실손청구)이 0건이 됐다. 어제가 아니면 막지 않는다."""
+        st = {"kits": {"x": {"day": "2026-10-21", "created": "2026-10-21T09:00", "topic": "실손청구", "question_url": "u0"}}}
+        c = [{"url": "u1", "topic": "실손청구"}, {"url": "u2", "topic": "실손청구"}]
+        self.assertEqual([x["url"] for x in kp.pick(c, st, "2026-10-24", 5)], ["u1"])   # 같은 소재 하루 1건은 그대로
+        self.assertEqual(kp.pick(c, st, "2026-10-22", 5), [])                           # 바로 다음 날은 여전히 금지
+
+    def test_rank_prefers_fresh_few_answers_concrete(self):
+        now = datetime(2026, 10, 29, 9, 0, tzinfo=kp.kit.KST)
+        old = {"url": "a", "topic": "간병", "first_seen": "2026-10-23T09:00:00+09:00", "answers_seen": 2,
+               "intent": {"situations": ["청구"]}}
+        new = {"url": "b", "topic": "실손청구", "first_seen": "2026-10-29T07:00:00+09:00", "answers_seen": 0,
+               "intent": {"situations": ["청구", "거절·부지급"]}}
+        r = kp.rank([old, new], now)
+        self.assertEqual([x["url"] for x in r], ["b", "a"])
+        self.assertEqual(r[0]["score"], 3 + 3 + 2 + 1)
+        self.assertIn("최근성 3", r[0]["score_note"])
+
+    def test_search_falls_back_and_fails_loud(self):
+        class R:
+            def __init__(self, code, items=None):
+                self.status_code, self._items = code, items or []
+
+            def json(self):
+                return {"items": self._items}
+        calls = []
+
+        def get_ok_second(url, **kw):
+            calls.append(url)
+            return R(401) if len(calls) == 1 else R(200, [{"link": "x"}])
+        rs = kh.routes({"NAVER_CLIENT_ID": "l", "NAVER_CLIENT_SECRET": "s"}, shared=("i", "k"))
+        self.assertEqual([n for n, _, _ in rs], ["openapi(shared)", "openapi(.env.local)", "apihub(.env.local)"])
+        self.assertEqual(kh.search({}, "q", routes_=rs, get=get_ok_second), [{"link": "x"}])
+        with self.assertRaises(RuntimeError) as e:
+            kh.search({}, "q", routes_=rs, get=lambda url, **kw: R(401))
+        self.assertIn("openapi(shared) 401", str(e.exception))
+
+    def test_run_all_search_failed_is_failure(self):
+        """10/26~28: 검색 전부 401 → 「질문 0」 ✅. 이제 알림 + KinError."""
+        sent = []
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(kp.KinError):
+                kp.cmd_run({}, 5, True, harvest_fn=lambda: {"seen_total": 0, "candidates": [], "excluded": [],
+                                                             "errors": ["실손: 401"] * 3, "queries": 3},
+                           notify=sent.append, state_path=os.path.join(d, "s.json"), kit_dir=d,
+                           expiring_fn=lambda t: 0)
+        self.assertTrue(sent and "수집 실패" in sent[0])
+
+    def test_sync_new_approval_sends_bundle(self):
+        with tempfile.TemporaryDirectory() as d:
+            st, wp = os.path.join(d, "s.json"), os.path.join(d, "w.json")
+            kits = {"k": {"id": "k", "kin_answer_id": "uk", "status": "심의대기", "topic": "치아",
+                          "question_url": "https://kin.naver.com/qna/detail.naver?docId=1", "question_title": "치아보험 질문",
+                          "answer": "답변 본문입니다."}}
+            with open(st, "w", encoding="utf-8") as f:
+                json.dump({"kits": kits}, f)
+            with open(wp, "w", encoding="utf-8") as f:
+                json.dump({"행": [{"심의번호": "2026-10-7001", "심의필일자": "2026-10-29", "유효기간": "2027-10-28",
+                                  "게시위치등록됨": False, "키트id": "k"}]}, f)
+            sent = []
+            kp.cmd_sync_watcher({}, path=wp, state_path=st, record=lambda *a: ("rid", "ok"), existing_fn=set,
+                                mark_posted=lambda e, i: None, notify=sent.append)
+            self.assertEqual(len(sent), 1)
+            for s in ("docId=1", "제2026-10-7001호 (2026.10.29~2027.10.28)", "답변 본문입니다.", "posted k --url"):
+                self.assertIn(s, sent[0])
+
+    def test_rescue_title_only(self):
+        ex = [{"url": "a", "title": "양악수술 실비보험 청구 가능한가요?", "summary": "남의 답변 조각", "excluded": "질문 본문 없음(…)"},
+              {"url": "b", "title": "보험실효...", "summary": "", "excluded": "질문 본문 없음(…)"},
+              {"url": "c", "title": "실비 청구 되나요?", "summary": "", "excluded": "답변 다수(answerNo≥7)"}]
+        r = kp.rescue_title_only(ex)
+        self.assertEqual([x["url"] for x in r], ["a"])
+        self.assertEqual(r[0]["summary"], "")          # 남의 답변 조각은 넘기지 않는다
+        self.assertNotIn("excluded", r[0])
+
+    def test_new_topics_fit_and_pension_category(self):
+        for t in ("갱신보험료", "보장공백", "연금수령", "치아"):
+            self.assertIn(t, kh.TOPICS)
+            self.assertLessEqual(len(kp.special_note(t).encode("utf-8")), kp.NOTE_MAX_BYTES)
+        self.assertEqual(kp.CATEGORY["연금수령"], "변액/연금보험")
+        i, _ = kp.question_intent("연금보험 수령 시작하면 일시금이 나을까요?", "가입한 지 10년 됐어요")
+        self.assertIn("연금 수령", i["situations"])
+
+
+class Kin1Weekly(unittest.TestCase):
+    def test_weekly_kin_line(self):
+        import weekly_lead_report as wl
+        from datetime import date as d_
+        st = {"kits": {"a": {"day": "2026-10-20", "review_no": "2026-10-1", "review_from": "2026-10-21", "status": "게시"},
+                       "b": {"day": "2026-10-22", "status": "미승인(PAMS 행 없음)"},
+                       "c": {"day": "2026-10-10", "review_no": "2026-10-2", "review_from": "2026-10-11", "status": "게시"}}}
+        k = wl.kin_counts(st, d_(2026, 10, 19), d_(2026, 10, 25))
+        self.assertEqual(k, {"초안": 2, "승인": 1, "게시": 1})
+        text = wl.compose((d_(2026, 10, 19), d_(2026, 10, 25)), None, {"kin": {**k, "유입": 3}}, {}, {})
+        self.assertIn("⑤ 지식인", text)
+        self.assertIn("초안 2 → 승인 1 → 게시 1", text)
+        self.assertIn("미집계", text)
+
+
+class Kin1Cron(unittest.TestCase):
+    def test_cron_skip_and_steps(self):
+        import kin_daily_cron as kc
+        self.assertEqual(kc.main([], branch_fn=lambda: "feat/x", notify_fn=lambda t: None), kc.SKIP)
+
+        class R:
+            def __init__(self, rc):
+                self.returncode, self.stdout, self.stderr = rc, "", ""
+        ran = []
+        rc = kc.main([], run=lambda cmd, **kw: ran.append(cmd[-3:]) or R(1 if "run" in cmd else 0),
+                     branch_fn=lambda: "main", notify_fn=lambda t: None)
+        self.assertEqual(rc, 1)
+        self.assertEqual(ran[0][-1], "sync-watcher")
+        self.assertEqual(ran[1], ["run", "--n", "5"])
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@
   ② 글별 유입: GA4 세션(착지 /news/<slug>) 을 유입원(네이버 블로그·스레드·검색·기타)으로 나눔 + GSC 검색 클릭(페이지별)
   ③ ad_reviews: 승인(reviewed_at) · 게시위치 등록(url_registered_at = 게시 완료 증빙) 건수
   ④ 스레드 댓글(@goodfinance_sj): robert-os finance/state/replies.json **읽기만** — 받은 댓글·답글 단 수
+  ⑤ 지식인(KIN1): kin_state.json 초안·승인·게시 + GA4 kin.naver 유입. 채택·조회·프로필 방문은 API 가 없어 미집계
 숫자 옆에 전주 대비(▲▼).
 
 자격증명 = robert-os 관제판과 같은 것을 **재사용**(새 키 없음):
@@ -152,7 +153,41 @@ def compose(week, prev, cur_m, prev_m, labels):
     L.append("④ 스레드 댓글(@goodfinance_sj)")
     L.append("  조회 실패(replies.json)" if t is None else
              f"  받은 댓글 {delta(t['받음'], pt.get('받음'))} · 답글 {delta(t['답글'], pt.get('답글'))}")
+    k, pk = cur_m.get("kin"), prev_m.get("kin") or {}
+    L.append("")
+    L.append("⑤ 지식인")
+    if k is None:
+        L.append("  조회 실패(kin_state.json)")
+    else:
+        L.append(f"  초안 {delta(k['초안'], pk.get('초안'))} → 승인 {delta(k['승인'], pk.get('승인'))}"
+                 f" → 게시 {delta(k['게시'], pk.get('게시'))} · 사이트 유입(kin.naver) "
+                 + ("조회 실패" if k.get("유입") is None else delta(k["유입"], pk.get("유입"))))
+        L.append("  · 채택·조회수·프로필 방문 = 검색 API 미제공(미집계) · 카톡/전화 문의 출처 = 접수 때 기록 필요(미집계)")
     return "\n".join(L)
+
+
+KIN_STATE = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "SHIN", "kin_state.json")
+
+
+def kin_counts(state, start, end):
+    """kin_state.json(kin_pipeline 상태) → 지난주 초안·승인·게시 수. 게시 시각이 없으면 심의필일자로 친다."""
+    kits = (state or {}).get("kits", {}).values()
+    draft = sum(1 for x in kits if in_range(x.get("day"), start, end))
+    ok = sum(1 for x in kits if x.get("review_no") and in_range(x.get("review_from"), start, end))
+    posted = sum(1 for x in kits if x.get("status") == "게시"
+                 and in_range(x.get("posted_at") or x.get("review_from"), start, end))
+    return {"초안": draft, "승인": ok, "게시": posted}
+
+
+def ga4_kin_sessions(ros, start, end):
+    """sessionSource 에 kin.naver 가 든 세션 — 답변에 링크가 없으니 프로필·검색 경유분만 잡힌다."""
+    svc = _svc(ros, "analyticsdata", "v1beta", GA4_SCOPE)
+    body = {"dateRanges": [{"startDate": str(start), "endDate": str(end)}],
+            "dimensions": [{"name": "sessionSource"}], "metrics": [{"name": "sessions"}],
+            "dimensionFilter": {"filter": {"fieldName": "sessionSource",
+                                           "stringFilter": {"matchType": "CONTAINS", "value": "kin.naver"}}}}
+    rows = svc.properties().runReport(property=f"properties/{ros['GA4_PROPERTY_ID_GOODFINANCE']}", body=body).execute().get("rows", [])
+    return sum(int(r["metricValues"][0]["value"]) for r in rows)
 
 
 # ── 조회 ─────────────────────────────────────────────────────
@@ -273,6 +308,16 @@ def measure(env, ros, start, end, log):
     except Exception as e:
         log(f"replies 조회 실패: {e}")
         m["threads"] = None
+    try:
+        m["kin"] = kin_counts(json.load(open(KIN_STATE, encoding="utf-8")), start, end)
+        try:
+            m["kin"]["유입"] = ga4_kin_sessions(ros, start, end)
+        except Exception as e:
+            log(f"kin 유입 조회 실패: {type(e).__name__}: {str(e)[:160]}")
+            m["kin"]["유입"] = None
+    except Exception as e:
+        log(f"kin_state 조회 실패: {e}")
+        m["kin"] = None
     return m
 
 
