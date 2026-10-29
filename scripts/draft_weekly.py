@@ -390,7 +390,7 @@ def build_prompt(topic, cfg, rules_text):
 
 # 출력
 JSON 객체 하나만 출력한다(코드펜스·설명 금지). 키:
-{{"title": 본진 제목, "naver_title": 네이버 제목, "summary": 2문장, "tags": [5개], "key_points": [4개], "faq_json": [{{"question","answer"}} 3개],
+{{"title": 본진 제목, "naver_title": 네이버 제목, "summary": 2문장, "tags": [5개], "key_points": [정확히 3개 — 본진 머리가 「핵심만 3줄」로 고정이다], "faq_json": [{{"question","answer"}} 3개],
   "verify_claims": [{{"claim","basis","confidence"}}], "naver": 네이버판 본문, "main": 본진판 마크다운,
   "naver_images": {{{", ".join(f'"{k}"' for k in IMAGE_KEYS)}}}}}
 """
