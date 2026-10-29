@@ -20,6 +20,44 @@ KITS = {(A, "main"): r"x\0930_9호_본진.zip", (B, "main"): r"x\0930_8호_본�
 OTHER_THREADS = {"slug": "caregiver-daily-benefit-support-vs-use", "channel": "threads", "status": "submitted"}
 
 
+class SlotRule(unittest.TestCase):
+    """PAIR1(2026-10-29 로버트) — 업무광고 3칸 = 본진 1 · 네이버 1 · 남은 1칸은 더 오래 기다린 쪽."""
+    M1, M2 = {"slug": "m1", "channel": "main"}, {"slug": "m2", "channel": "main"}
+    N1 = {"slug": "n1", "channel": "naver"}
+
+    def test_main_first_when_no_main_under_review(self):
+        self.assertEqual(q.pick_slot([self.N1, self.M1], [])["slug"], "m1", "둘 다 비면 본진 먼저")
+
+    def test_naver_when_main_busy(self):
+        rv = [{"slug": "x", "channel": "main", "status": "submitted"}]
+        self.assertEqual(q.pick_slot([self.M1, self.N1], rv)["slug"], "n1")
+
+    def test_third_slot_longest_wait(self):
+        rv = [{"slug": "x", "channel": "main", "status": "submitted"}, {"slug": "y", "channel": "naver", "status": "under_review"}]
+        waited = {("m1", "main"): 300, ("m2", "main"): 100, ("n1", "naver"): 200}
+        self.assertEqual(q.pick_slot([self.M1, self.N1, self.M2], rv, waited)["slug"], "m2", "가장 오래 기다린 키트")
+        self.assertEqual(q.pick_slot([self.M1, self.N1, self.M2], rv)["slug"], "m1", "시각 모르면 운영표 순서")
+
+    def test_plan_uses_rule(self):
+        order = [self.M1, self.N1]
+        kits = {("m1", "main"): "a.zip", ("n1", "naver"): "b.zip"}
+        rv = [{"slug": "n1", "channel": "main", "status": "approved"}, {"slug": "x", "channel": "main", "status": "submitted"}]
+        p = q.plan(order, rv, kits)
+        self.assertEqual(p["next"]["slug"], "n1", "본진 칸이 차 있으면 네이버")
+        self.assertEqual(p["zip"], "b.zip")
+
+    def test_prelink_naver_kit_dropped(self):
+        order = [self.N1]
+        rv = [{"slug": "n1", "channel": "main", "status": "approved", "reviewed_at": 500}]
+        kits = {("n1", "naver"): "old.zip"}
+        self.assertIsNone(q.drop_prelink_naver_kits(order, rv, kits, {("n1", "naver"): 400})[("n1", "naver")],
+                          "본진 승인 전 키트 = 📄 링크 없음")
+        self.assertEqual(q.drop_prelink_naver_kits(order, rv, kits, {("n1", "naver"): 600})[("n1", "naver")], "old.zip")
+        self.assertEqual(q.drop_prelink_naver_kits(order, rv, kits, {("n1", "naver"): 400}, naver_only={"n1"})[("n1", "naver")],
+                         "old.zip", "네이버 단독은 그대로")
+        self.assertEqual(kits[("n1", "naver")], "old.zip", "원본 dict 는 안 바꾼다")
+
+
 class Plan(unittest.TestCase):
     def test_first_ready_in_order(self):
         p = q.plan(ORDER, [OTHER_THREADS], KITS)
@@ -210,11 +248,13 @@ class Config(unittest.TestCase):
         self.assertTrue(all(c != "main" for c in chans[first_non_main:]), "본진 먼저 — 본진이 다른 채널 뒤에 오면 안 된다")
 
     def test_config_main_order_and_exception(self):
-        """2026-10-01 23:00 관제탑 — 본진 7→8→9→10→11→13→12→14→15→16 · 예외는 7호 네이버 하나."""
+        """2026-10-01 23:00 관제탑 — 본진 7→8→9→10→11→13→12→14→15→16 · 예외는 7호 네이버 하나.
+        2026-10-29 PAIR1 — 본진 짝 없던 25·21·26·27호 본진을 16호 뒤에."""
         import pams_kit as kit
         _, order = q.load_queue()
         mains = [kit.issue_label(o["slug"]) for o in order if o["channel"] == "main"]
-        self.assertEqual(mains, ["7호", "8호", "9호", "10호", "11호", "13호", "12호", "14호", "15호", "16호"])
+        self.assertEqual(mains, ["7호", "8호", "9호", "10호", "11호", "13호", "12호", "14호", "15호", "16호",
+                                 "25호", "21호", "26호", "27호"])
         ex = [(kit.issue_label(o["slug"]), o["channel"]) for o in order if o.get("before_main_ok")]
         self.assertEqual(ex, [("7호", "naver")])
         self.assertEqual(len({(o["slug"], o["channel"]) for o in order}), len(order), "중복 항목 없음")
@@ -247,23 +287,38 @@ class SlotEmpty(unittest.TestCase):
         self.assertEqual(q.label_to_slug("health-x", self.ISSUES), "health-x")
         self.assertIsNone(q.label_to_slug("99호", self.ISSUES), "모르는 호수는 버린다")
 
-    def test_backlog_oldest_unsubmitted_main_approved_first(self):
+    @staticmethod
+    def live(slug, at=None):
+        return {"slug": slug, "channel": "main", "status": "approved", "posted_url": f"https://goodfinance.kr/news/{slug}",
+                "reviewed_at": at}
+
+    def test_backlog_only_main_live_oldest_first(self):
         rv = [{"slug": C, "channel": "naver", "status": "approved"},          # 7호 네이버 끝남 → 제외
-              {"slug": "health-x", "channel": "main", "status": "approved"}]
+              self.live("health-x")]
         b = q.private_backlog(self.FILES, self.ISSUES, rv)
-        self.assertEqual([x["label"] for x in b], ["health-x", "8호"], "본진 승인 글 먼저, 그 안에서 오래된 순 · _본문 제외")
-        b = q.private_backlog(self.FILES, self.ISSUES, rv[:1] + [{"slug": B, "channel": "main", "status": "approved"},
-                                                                 {"slug": "health-x", "channel": "main", "status": "approved"}])
-        self.assertEqual(b[0]["label"], "8호", "둘 다 본진 승인이면 오래된 것")
+        self.assertEqual([x["label"] for x in b], ["health-x"], "PAIR1 — 본진 게시 전(8호)은 내놓지 않는다 · _본문 제외")
+        b = q.private_backlog(self.FILES, self.ISSUES, rv[:1] + [self.live(B), self.live("health-x")])
+        self.assertEqual([x["label"] for x in b], ["8호", "health-x"], "둘 다 본진 게시면 오래된 순")
+
+    def test_backlog_pair_rule(self):
+        approved_no_url = [{"slug": B, "channel": "main", "status": "approved"}]
+        self.assertEqual(q.private_backlog(self.FILES, self.ISSUES, approved_no_url), [], "승인만, posted_url 없음 → 대기")
+        self.assertEqual(q.private_backlog(self.FILES, self.ISSUES, [self.live(B, at=150)]), [],
+                         "본진 승인(150) 전에 만든 파일(100) = 📄 링크 없음 → 제외")
+        self.assertEqual([x["label"] for x in q.private_backlog(self.FILES, self.ISSUES, [], naver_only={B, C})],
+                         ["7호", "8호"], "네이버 단독 글은 기다릴 본진이 없다 — 종전대로")
+        two = [("1028_8호_네이버비공개.txt", "old", 100), ("1105_8호_네이버비공개.txt", "new", 400)]
+        b = q.private_backlog(two, self.ISSUES, [self.live(B, at=200)])
+        self.assertEqual([x["path"] for x in b], ["new"], "글마다 가장 최근(재조립본) 하나")
 
     def test_backlog_rejected_naver_stays_and_kit_excluded(self):
-        rv = [{"slug": B, "channel": "naver", "status": "rejected"}]
+        rv = [{"slug": B, "channel": "naver", "status": "rejected"}, self.live(B)]
         self.assertIn("8호", [x["label"] for x in q.private_backlog(self.FILES, self.ISSUES, rv)], "반송은 다시 할 대상")
-        b = q.private_backlog(self.FILES, self.ISSUES, [], has_kit=lambda lb: lb == "8호")
+        b = q.private_backlog(self.FILES, self.ISSUES, [self.live(B)], has_kit=lambda lb: lb == "8호")
         self.assertNotIn("8호", [x["label"] for x in b], "키트가 있으면 「다음 접수」 몫")
 
     def test_message(self):
-        b = q.private_backlog(self.FILES, self.ISSUES, [])
+        b = q.private_backlog(self.FILES, self.ISSUES, [self.live(B), self.live(C)])
         m = q.slot_nudge_message(self.EMPTY, b)
         self.assertEqual(m, r"칸 1 빔 · 다음 할 일: 네이버 비공개 게시 → 캡처 · 파일: d\1008_7호_네이버비공개.txt")
         self.assertIn("원고 공급", q.slot_nudge_message(self.EMPTY, []))
@@ -273,9 +328,10 @@ class SlotEmpty(unittest.TestCase):
         self.assertIsNone(q.slot_nudge_message(ready, b), "접수할 키트가 있으면 「다음 접수」가 말한다")
 
     def test_once_a_day(self):
-        orig = (q.current, q.fetch_reviews, q.list_private_files)
+        orig = (q.current, q.fetch_reviews, q.list_private_files, q.fetch_naver_only)
         q.current = lambda env: ([], self.EMPTY)
-        q.fetch_reviews = lambda env: []
+        q.fetch_reviews = lambda env: [self.live("health-x")]
+        q.fetch_naver_only = lambda env, slugs: set()
         q.list_private_files = lambda folder=None: self.FILES[:2]
         sent, st = [], {}
         try:
@@ -295,7 +351,7 @@ class SlotEmpty(unittest.TestCase):
                                                   log=lambda *_: None, today="2026-10-25"))
             self.assertNotIn("slot_nudge_day", st3, "키트가 있는 날은 하루 한도를 쓰지 않는다")
         finally:
-            q.current, q.fetch_reviews, q.list_private_files = orig
+            q.current, q.fetch_reviews, q.list_private_files, q.fetch_naver_only = orig
 
     def test_pams_auto_hook(self):
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "pams_auto.py"), encoding="utf-8") as fp:
@@ -306,17 +362,28 @@ class SlotEmpty(unittest.TestCase):
         self.assertLess(i, src.index("save_state(state)\n        upload_submitted_threads"))
 
 
+LIVE_C = {"slug": C, "channel": "main", "status": "approved", "posted_url": "https://goodfinance.kr/news/" + C}
+
+
 class NaverGuide(unittest.TestCase):
-    def test_due_after_main_submitted(self):
-        rv = [{"slug": C, "channel": "main", "status": "submitted"}]
-        self.assertEqual(q.naver_guides_due(ORDER, rv, {}), [C])
+    def test_due_only_after_main_live(self):
+        """PAIR1 — 본진 접수만으로는 안내하지 않는다. 승인 + posted_url(게시)이 생겨야 📄 본진 링크가 살아 있다."""
+        self.assertEqual(q.naver_guides_due(ORDER, [{"slug": C, "channel": "main", "status": "submitted"}], {}), [])
+        self.assertEqual(q.naver_guides_due(ORDER, [{"slug": C, "channel": "main", "status": "approved"}], {}), [],
+                         "승인만 · 게시 URL 없음")
+        self.assertEqual(q.naver_guides_due(ORDER, [LIVE_C], {}), [C])
+
+    def test_extra_private_file_slugs(self):
+        live_a = {"slug": A, "channel": "main", "status": "approved", "posted_url": "u"}
+        self.assertEqual(q.naver_guides_due(ORDER, [live_a], {}), [], "운영표 밖·파일 없음")
+        self.assertEqual(q.naver_guides_due(ORDER, [live_a], {}, extra=[A]), [A], "_네이버비공개 에 파일이 있는 글은 대상")
 
     def test_not_due_before_main(self):
         self.assertEqual(q.naver_guides_due(ORDER, [], {}), [])
         self.assertEqual(q.naver_guides_due(ORDER, [{"slug": C, "channel": "main", "status": "rejected"}], {}), [])
 
     def test_not_due_when_sent_or_naver_done_or_failed_out(self):
-        rv = [{"slug": C, "channel": "main", "status": "approved"}]
+        rv = [LIVE_C]
         self.assertEqual(q.naver_guides_due(ORDER, rv, {"naver_guide_sent": {C: "t"}}), [])
         self.assertEqual(q.naver_guides_due(ORDER, rv + [{"slug": C, "channel": "naver", "status": "submitted"}], {}), [])
         self.assertEqual(q.naver_guides_due(ORDER, rv, {"naver_guide_fail": {C: q.GUIDE_MAX_TRY}}), [])
@@ -328,26 +395,50 @@ class NaverGuide(unittest.TestCase):
 
     def test_send_records_once_and_retries_failures(self):
         import contextlib
-        rv = [{"slug": C, "channel": "main", "status": "submitted"}]
+        rv = [LIVE_C]
         orig = (q.fetch_reviews, q.load_queue, q.kit.fetch_article)
         q.fetch_reviews = lambda env: rv
         q.load_queue = lambda path=None: (3, ORDER)
-        q.kit.fetch_article = lambda env, slug: {"slug": slug, "id": "x"}
+        q.kit.fetch_article = lambda env, slug: {"slug": slug, "id": "x", "title": "장기요양"}
         sent, notes, st = [], [], {}
         srv = lambda: contextlib.nullcontext("srv")
+        res = {"png": "p.png", "txt": r"d\1105_7호_네이버비공개.txt"}
         try:
-            ok = q.send_naver_guides({}, st, notes.append, log=lambda *_: None, server_factory=srv,
-                                     build=lambda env, art, s: {"png": "p.png"}, send=lambda env, res: sent.append(res))
+            ok = q.send_naver_guides({}, st, notes.append, log=lambda *_: None, server_factory=srv, private_files=[],
+                                     build=lambda env, art, s: res, send=lambda env, res: sent.append(res))
             self.assertEqual(ok, [C]); self.assertIn(C, st["naver_guide_sent"]); self.assertEqual(len(sent), 1)
-            self.assertEqual(q.send_naver_guides({}, st, notes.append, log=lambda *_: None, server_factory=srv,
-                                                 build=lambda *a: {"png": "p"}, send=lambda *a: sent.append(1)), [])
+            self.assertEqual(notes, [], "옛 파일이 없으면 재조립 알림 없음")
+            self.assertEqual(q.send_naver_guides({}, st, notes.append, log=lambda *_: None, server_factory=srv, private_files=[],
+                                                 build=lambda *a: res, send=lambda *a: sent.append(1)), [])
             st2 = {}
             def boom(*a): raise RuntimeError("compose 409")
             for _ in range(q.GUIDE_MAX_TRY):
-                q.send_naver_guides({}, st2, notes.append, log=lambda *_: None, server_factory=srv, build=boom, send=boom)
+                q.send_naver_guides({}, st2, notes.append, log=lambda *_: None, server_factory=srv, private_files=[],
+                                    build=boom, send=boom)
             self.assertEqual(st2["naver_guide_fail"][C], q.GUIDE_MAX_TRY)
             self.assertTrue(any("수동: python scripts/naver_private_guide.py" in n for n in notes))
-            self.assertEqual(q.send_naver_guides({}, st2, notes.append, log=lambda *_: None, server_factory=srv, build=boom, send=boom), [])
+            self.assertEqual(q.send_naver_guides({}, st2, notes.append, log=lambda *_: None, server_factory=srv,
+                                                 private_files=[], build=boom, send=boom), [])
+        finally:
+            q.fetch_reviews, q.load_queue, q.kit.fetch_article = orig
+
+    def test_relink_after_main_live(self):
+        """본진 승인 전에 만든 비공개 파일(📄 없음)이 있으면 → 재조립 + 「옛 파일 쓰지 말 것」 한 줄(PAIR1)."""
+        import contextlib
+        orig = (q.fetch_reviews, q.load_queue, q.kit.fetch_article)
+        q.fetch_reviews = lambda env: [LIVE_C]
+        q.load_queue = lambda path=None: (3, [])            # 운영표에 없어도 파일이 있으면 대상
+        q.kit.fetch_article = lambda env, slug: {"slug": slug, "id": "x", "title": "장기요양"}
+        notes = []
+        files = [("1028_7호_네이버비공개.txt", "old", 1)]
+        try:
+            ok = q.send_naver_guides({}, {}, notes.append, log=lambda *_: None, server_factory=lambda: contextlib.nullcontext(),
+                                     private_files=files, build=lambda *a: {"png": "p", "txt": r"d\1105_7호_네이버비공개.txt"},
+                                     send=lambda *a: None)
+            self.assertEqual(ok, [C])
+            self.assertEqual(len(notes), 1)
+            self.assertIn("1105_7호_네이버비공개.txt", notes[0]); self.assertIn("1028_7호_네이버비공개.txt", notes[0])
+            self.assertIn("📄", notes[0])
         finally:
             q.fetch_reviews, q.load_queue, q.kit.fetch_article = orig
 

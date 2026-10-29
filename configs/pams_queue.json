@@ -1,5 +1,5 @@
 {
-  "_주석": "PAMS 접수 순서(운영표) — pams_auto 가 매 바퀴 읽어, 심사중 칸이 비면 「다음 접수: ○」 한 줄을 텔레그램으로 보낸다(scripts/pams_queue.py). 본진 먼저(사이트 = 상담 버튼이 있는 곳). [2026-09-30 18:40 로버트 지정] 본진 순서 = 장기요양(7호) → 도수치료(8호) → 1세대 실비(9호). 끝난 항목(접수·승인)은 자동으로 건너뛴다 — 지우지 않아도 된다. 새 원고는 여기 한 줄 추가. [2026-10-01 관제탑] 스레드 11·12·14·15·16호는 소통형(assets/threads/drafts/<slug>/talk.txt)으로 접수한다 — 정보형 키트(body.txt)는 대기열에서 내리고 파일은 PAMS접수\\_정보형_보관 에 보존. [2026-10-01 23:00 관제탑] 이 파일이 큐 순서의 단일 정본이다(robert-os 도 이것만 읽는다). 원칙: 본진 먼저(7→8→9→10→11→13→12→14→15→16) · 네이버는 같은 글 본진이 **승인된 뒤**에만 「다음 접수」가 된다(pams_queue.plan) — 예외는 항목에 before_main_ok: true 로 적는다(7호 네이버). 스레드는 폼 직접입력(통상 5분)이라 본진 뒤에 두되 승인 조건은 없다.",
+  "_주석": "PAMS 접수 순서(운영표) — pams_auto 가 매 바퀴 읽어, 심사중 칸이 비면 「다음 접수: ○」 한 줄을 텔레그램으로 보낸다(scripts/pams_queue.py). 본진 먼저(사이트 = 상담 버튼이 있는 곳). [2026-09-30 18:40 로버트 지정] 본진 순서 = 장기요양(7호) → 도수치료(8호) → 1세대 실비(9호). 끝난 항목(접수·승인)은 자동으로 건너뛴다 — 지우지 않아도 된다. 새 원고는 여기 한 줄 추가. [2026-10-01 관제탑] 스레드 11·12·14·15·16호는 소통형(assets/threads/drafts/<slug>/talk.txt)으로 접수한다 — 정보형 키트(body.txt)는 대기열에서 내리고 파일은 PAMS접수\\_정보형_보관 에 보존. [2026-10-01 23:00 관제탑] 이 파일이 큐 순서의 단일 정본이다(robert-os 도 이것만 읽는다). 원칙: 본진 먼저(7→8→9→10→11→13→12→14→15→16) · 네이버는 같은 글 본진이 **승인된 뒤**에만 「다음 접수」가 된다(pams_queue.plan) — 예외는 항목에 before_main_ok: true 로 적는다(7호 네이버). 스레드는 폼 직접입력(통상 5분)이라 본진 뒤에 두되 승인 조건은 없다. [2026-10-29 PAIR1 로버트] 한 주제 = 본진 원본 + 네이버 각색 한 쌍, 본진 먼저 심의·게시. 네이버는 본진 승인·게시(posted_url) 뒤 📄 본진 링크 줄이 든 조립본으로만 접수(본진 승인 전 키트는 자동 제외). 칸 배정 = 본진 1 · 네이버 1 · 남은 1칸은 키트가 더 오래 기다린 쪽(pams_queue.pick_slot). 지식iN 은 칸 밖.",
   "limit": 3,
   "order": [
     {
@@ -57,6 +57,26 @@
       "slug": "overseas-stay-3month-silson-premium-refund",
       "channel": "main",
       "why": "16호 — 해외 석 달 이상 체류 실손보험료 환급. 해지 전에 물어야 한다는 단서가 핵심"
+    },
+    {
+      "slug": "hidden-insurance-money-lookup-dormant-interest",
+      "channel": "main",
+      "why": "[2026-10-29 PAIR1] 25호 본진 — 네이버 단독으로 만든 것을 한 쌍으로 되돌림. 오늘 칸(13호 네이버 + 25호 본진)"
+    },
+    {
+      "slug": "annuity-insurance-cancel-tax-keep-options",
+      "channel": "main",
+      "why": "[2026-10-29 PAIR1] 21호 연금보험 해지 세금 본진 — 네이버(3790)만 승인돼 본진 짝 없음. 가장 오래 기다린 쪽"
+    },
+    {
+      "slug": "pension-savings-insurance-payout-differs-illustration",
+      "channel": "main",
+      "why": "[2026-10-29 PAIR1] 26호 연금저축보험 수령액 본진"
+    },
+    {
+      "slug": "car-accident-minor-injury-8week-future-treatment",
+      "channel": "main",
+      "why": "[2026-10-29 PAIR1] 27호 교통사고 경상환자 8주 본진"
     },
     {
       "slug": "ltc-grade-home-care-rider-check",
@@ -127,6 +147,21 @@
       "slug": "overseas-stay-3month-silson-premium-refund",
       "channel": "naver",
       "why": "비공개 게시 캡처가 먼저 필요(scripts/naver_private_guide.py)"
+    },
+    {
+      "slug": "hidden-insurance-money-lookup-dormant-interest",
+      "channel": "naver",
+      "why": "[PAIR1] 본진 승인·게시 뒤 📄 본진 링크 줄 넣어 재조립(send_naver_guides) → 비공개 게시 → 캡처. 10/29 12:09 키트(1029_25호_네이버.zip)는 링크 없음 = 보류"
+    },
+    {
+      "slug": "pension-savings-insurance-payout-differs-illustration",
+      "channel": "naver",
+      "why": "[PAIR1] 본진 승인·게시 뒤 재조립(1028_26호 비공개 파일은 링크 없음 = 보류)"
+    },
+    {
+      "slug": "car-accident-minor-injury-8week-future-treatment",
+      "channel": "naver",
+      "why": "[PAIR1] 본진 승인·게시 뒤 재조립(1028_27호 비공개 파일은 링크 없음 = 보류)"
     }
   ]
 }

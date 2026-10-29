@@ -8,7 +8,11 @@ PAMS 접수 순서(운영표) — 칸이 비면 로버트에게 「다음 접수
 순서 = configs/pams_queue.json(단일 출처). pams_auto 가 매 바퀴 notify_next() 를 부른다.
   · 심사중 = ad_reviews.status ∈ {submitted, under_review} 전체 건수(팜스 한도 = [심사중] 3건, CLAUDE.md §6.4).
   · 끝난 항목 = 그 글·채널에 submitted/under_review/approved 행이 있음 → 건너뜀.
-  · 다음 접수 = 끝나지 않았고 키트(zip)가 준비된 첫 항목. 키트 없는 항목(네이버 캡처 전 등)은 건너뛰고 한 줄 끝에 적는다.
+  · 다음 접수 = 끝나지 않았고 키트(zip)가 준비된 항목 중 칸 배정 규칙(pick_slot, PAIR1 2026-10-29)으로 고른 하나 —
+    심사중 본진 0건이면 본진, 네이버 0건이면 네이버, 그 밖(남은 1칸)은 키트가 가장 오래 기다린 항목.
+    키트 없는 항목(네이버 캡처 전 등)은 건너뛰고 한 줄 끝에 적는다.
+  · 🔴 한 쌍 원칙(PAIR1) — 네이버 키트가 같은 글 본진 승인보다 먼저 만들어졌으면(📄 본진 링크 없음) 후보에서 뺀다.
+    본진이 승인·게시(posted_url)되면 send_naver_guides 가 네이버 비공개 파일을 다시 조립해 보낸다.
   · 네이버 = 같은 글 본진이 **승인된 뒤**에만 다음 접수가 된다(본진 먼저 원칙). 예외는 운영표 항목의 before_main_ok: true,
     그리고 네이버 단독 글(본진판 비어 있음 = kit.naver_only, SH16) — 운영표에 손으로 적지 않아도 자동 예외(SH17).
   · 알림 = 빈 칸이 있고 (다음 항목, 빈 칸 수)가 지난번과 다를 때만 1통. 같은 상태로 10분마다 보내지 않는다.
@@ -60,14 +64,49 @@ def find_kit(item, kit_dir=kit.KIT_DIR):
 
 
 # ── 순수 판정(시험 대상) ─────────────────────────────────────
-def plan(order, reviews, kits, limit=3, naver_only=()):
+def pick_slot(candidates, reviews, waited=None):
+    """빈 칸 하나에 무엇을 넣나 — 로버트 2026-10-29 「본진 1 · 네이버 1 · 남은 1칸은 더 오래 기다린 쪽」(PAIR1).
+    candidates: 키트가 준비된 항목(운영표 순서). waited: {(slug, channel): 키트 생성 시각(epoch)}.
+    ① 심사중 본진이 0건이면 첫 본진 ② 심사중 네이버가 0건이면 첫 네이버 ③ 그 밖은 키트가 가장 오래 기다린 항목
+    (시각을 모르면 운영표 순서). 스레드는 ③ 에서만 겨룬다."""
+    if not candidates:
+        return None
+    busy = {ch: sum(1 for r in reviews if r.get("status") in ACTIVE and r.get("channel") == ch) for ch in ("main", "naver")}
+    for ch in ("main", "naver"):
+        if busy[ch] == 0:
+            first = next((c for c in candidates if c["channel"] == ch), None)
+            if first:
+                return first
+    waited = waited or {}
+    inf = float("inf")
+    return min(enumerate(candidates), key=lambda ic: (waited.get((ic[1]["slug"], ic[1]["channel"]), inf), ic[0]))[1]
+
+
+def drop_prelink_naver_kits(order, reviews, kits, kit_time, naver_only=()):
+    """본진 승인 **전에** 만든 네이버 키트는 본진 링크 줄(📄)이 없는 원고다 → 접수 후보에서 뺀다(PAIR1).
+    네이버 승인본은 고칠 수 없어 링크가 먼저 있어야 한다. 네이버 단독·before_main_ok 항목은 그대로.
+    reviews 의 본진 approved 행 reviewed_at(epoch) 보다 키트 시각이 이르면 None. → 새 kits(원본은 안 바꿈)."""
+    main_at = {r["slug"]: r.get("reviewed_at") for r in reviews if r.get("channel") == "main" and r.get("status") == "approved"}
+    out = dict(kits)
+    for it in order:
+        k = (it["slug"], it["channel"])
+        if it["channel"] != "naver" or it.get("before_main_ok") or it["slug"] in naver_only or not out.get(k):
+            continue
+        at, t = main_at.get(it["slug"]), kit_time.get(k)
+        if at is not None and t is not None and t < at:
+            out[k] = None
+    return out
+
+
+def plan(order, reviews, kits, limit=3, naver_only=(), waited=None):
     """order: [{slug, channel}] · reviews: [{slug, channel, status}] · kits: {(slug, channel): zip경로|None}
     naver_only: 네이버 단독 글 slug 들(본진판 없음, SH16) — 기다릴 본진이 없으니 before_main_ok 와 같이 본다.
+    waited: {(slug, channel): 키트 시각} — 남은 1칸 배정(pick_slot)에 쓴다.
     → {active, free, next(item|None), zip, waiting([item] 키트 없음), done([item])}"""
     active = sum(1 for r in reviews if r.get("status") in ACTIVE)
     done_keys = {(r["slug"], r["channel"]) for r in reviews if r.get("status") in DONE}
     approved = {(r["slug"], r["channel"]) for r in reviews if r.get("status") == "approved"}
-    done, waiting, held, nxt, zp = [], [], [], None, None
+    done, waiting, held, ready = [], [], [], []
     for it in order:
         k = (it["slug"], it["channel"])
         if k in done_keys:
@@ -82,8 +121,9 @@ def plan(order, reviews, kits, limit=3, naver_only=()):
         if not kits.get(k):
             waiting.append(it)
             continue
-        if nxt is None:
-            nxt, zp = it, kits[k]
+        ready.append(it)
+    nxt = pick_slot(ready, reviews, waited)
+    zp = kits[(nxt["slug"], nxt["channel"])] if nxt else None
     return {"active": active, "free": max(0, limit - active), "next": nxt, "zip": zp,
             "waiting": waiting, "held": held, "done": done, "limit": limit}
 
@@ -147,14 +187,23 @@ def label_to_slug(label, issues):
     return next((s for s, v in issues.items() if v == n), None)
 
 
-def private_backlog(files, issues, reviews, has_kit=lambda label: False):
+def main_live(reviews):
+    """본진이 승인되고 게시 URL(posted_url)까지 생긴 글 → {slug: 본진 승인 시각(epoch|None)}.
+    네이버 비공개 게시·접수는 여기 든 글만(PAIR1 — 네이버 끝 📄 본진 링크가 살아 있어야 한다)."""
+    return {r["slug"]: r.get("reviewed_at") for r in reviews
+            if r.get("channel") == "main" and r.get("status") == "approved" and r.get("posted_url")}
+
+
+def private_backlog(files, issues, reviews, has_kit=lambda label: False, naver_only=()):
     """순수: 네이버 비공개 파일 중 아직 네이버 접수·승인 전인 것, 오래된 순.
-    files: [(이름, 경로, mtime)] · reviews: plan 과 같은 [{slug, channel, status}].
-    같은 글 본진이 승인된 파일을 앞에 둔다(네이버는 본진 승인 뒤에 접수 — 바로 접수까지 갈 수 있는 것부터).
+    files: [(이름, 경로, mtime)] · reviews: plan 과 같은 [{slug, channel, status, posted_url, reviewed_at}].
+    🔴 한 쌍 원칙(PAIR1, 2026-10-29) — 같은 글 본진이 승인·게시(posted_url)되기 전의 파일은 내놓지 않는다.
+       본진 승인 전에 만든 파일(mtime < 본진 승인)도 뺀다 — 📄 본진 링크 줄이 없는 조립본이다(재조립은 send_naver_guides).
+       글마다 가장 최근 파일 하나만 본다. 네이버 단독 글(naver_only)은 기다릴 본진이 없어 종전대로.
     키트(zip)가 이미 있는 파일은 뺀다 — 그건 「다음 접수」 몫이다. → [{slug, label, path, main_ok}]"""
     done = {r["slug"] for r in reviews if r.get("channel") == "naver" and r.get("status") in DONE}
-    main_ok = {r["slug"] for r in reviews if r.get("channel") == "main" and r.get("status") == "approved"}
-    out = []
+    live = main_live(reviews)
+    newest = {}
     for name, path, mtime in sorted(files, key=lambda f: f[2]):
         m = PRIVATE_TXT.match(name)
         if not m:
@@ -163,8 +212,14 @@ def private_backlog(files, issues, reviews, has_kit=lambda label: False):
         slug = label_to_slug(label, issues)
         if not slug or slug in done or has_kit(label):
             continue
-        out.append({"slug": slug, "label": label, "path": path, "main_ok": slug in main_ok})
-    return sorted(out, key=lambda x: not x["main_ok"])   # 안정 정렬 — 같은 무리 안에서는 오래된 순 유지
+        if slug not in naver_only:
+            if slug not in live:
+                continue
+            at = live[slug]
+            if at is not None and mtime < at:
+                continue
+        newest[slug] = (mtime, {"slug": slug, "label": label, "path": path, "main_ok": slug in live})
+    return [v for _, v in sorted(newest.values(), key=lambda mv: mv[0])]
 
 
 def slot_nudge_message(p, backlog):
@@ -209,7 +264,10 @@ def notify_slot_empty(env, state, notify, log=print, today=None, kit_dir=kit.KIT
     def has_kit(label):
         return bool(glob.glob(os.path.join(kit_dir, f"*_{label}_{kit.CH_LABEL['naver']}.zip")))
 
-    msg = slot_nudge_message(p, private_backlog(list_private_files(), issues, fetch_reviews(env), has_kit))
+    files = list_private_files()
+    slugs = [label_to_slug(PRIVATE_TXT.match(n).group(1), issues) for n, _, _ in files]
+    solo = fetch_naver_only(env, [s for s in slugs if s])
+    msg = slot_nudge_message(p, private_backlog(files, issues, fetch_reviews(env), has_kit, naver_only=solo))
     if msg and notify(msg):
         state["slot_nudge_day"] = today
     log(f"칸 빔 알림: {msg}")
@@ -237,13 +295,24 @@ def order_line(order, p=None):
 
 
 # ── 조회 ─────────────────────────────────────────────────────
+def _epoch(ts):
+    """ISO 시각 → epoch(초). 없거나 못 읽으면 None."""
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
 def fetch_reviews(env):
     url, h = kit._rest(env)
     rv = url.rsplit("/", 1)[0] + "/ad_reviews"
-    rows = requests.get(rv, params={"select": "channel,status,premium_articles(slug)",
+    rows = requests.get(rv, params={"select": "channel,status,posted_url,reviewed_at,premium_articles(slug)",
                                     "status": "in.(submitted,under_review,approved)", "channel": kit.NOT_KIN},
                         headers=h, timeout=30).json()
-    return [{"slug": (r.get("premium_articles") or {}).get("slug"), "channel": r["channel"], "status": r["status"]}
+    return [{"slug": (r.get("premium_articles") or {}).get("slug"), "channel": r["channel"], "status": r["status"],
+             "posted_url": r.get("posted_url"), "reviewed_at": _epoch(r.get("reviewed_at"))}
             for r in rows]
 
 
@@ -266,8 +335,11 @@ def fetch_naver_only(env, slugs):
 def current(env, kit_dir=kit.KIT_DIR):
     limit, order = load_queue()
     kits = {(it["slug"], it["channel"]): find_kit(it, kit_dir) for it in order}
+    kit_time = {k: os.path.getmtime(z) for k, z in kits.items() if z}
     solo = fetch_naver_only(env, [it["slug"] for it in order if it["channel"] == "naver"])
-    return order, plan(order, fetch_reviews(env), kits, limit, naver_only=solo)
+    reviews = fetch_reviews(env)
+    kits = drop_prelink_naver_kits(order, reviews, kits, kit_time, naver_only=solo)
+    return order, plan(order, reviews, kits, limit, naver_only=solo, waited=kit_time)
 
 
 def notify_next(env, state, notify, log=print):
@@ -293,30 +365,59 @@ def notify_next(env, state, notify, log=print):
 GUIDE_MAX_TRY = 3
 
 
-def naver_guides_due(order, reviews, state):
-    """순수: 안내를 보낼 글(slug) — 운영표의 네이버 항목 중, 같은 글 본진이 접수·승인됐고
-    네이버는 아직 접수·승인 전이며, 안내를 보낸 적 없고, 실패 한도 전인 것."""
+def naver_guides_due(order, reviews, state, extra=()):
+    """순수: 안내를 보낼 글(slug) — 운영표의 네이버 항목 + extra(_네이버비공개 에 파일이 있는 글) 중,
+    같은 글 본진이 **승인되고 게시 URL(posted_url)이 생겼고**(PAIR1 — 그래야 📄 본진 링크가 살아 있다)
+    네이버는 아직 접수·승인 전이며, 안내를 보낸 적 없고, 실패 한도 전인 것.
+    본진 승인 전에 만들어 둔 비공개 파일(링크 없음)은 이 안내가 다시 조립한 파일로 갈음한다."""
     done = {(r["slug"], r["channel"]) for r in reviews if r.get("status") in DONE}
+    live = main_live(reviews)
     sent = state.get("naver_guide_sent") or {}
     fails = state.get("naver_guide_fail") or {}
     out = []
-    for it in order:
-        s = it["slug"]
-        if it["channel"] != "naver" or s in out:
+    for s in [it["slug"] for it in order if it["channel"] == "naver"] + list(extra):
+        if s in out:
             continue
-        if (s, "main") in done and (s, "naver") not in done and s not in sent and fails.get(s, 0) < GUIDE_MAX_TRY:
+        if s in live and (s, "naver") not in done and s not in sent and fails.get(s, 0) < GUIDE_MAX_TRY:
             out.append(s)
     return out
 
 
-def send_naver_guides(env, state, notify, log=print, build=None, send=None, server_factory=None):
-    """pams_auto 한 바퀴에서 부른다. 보낸 slug 목록을 돌려준다. 실패는 GUIDE_MAX_TRY 번까지 다음 바퀴에 다시."""
+def private_files_by_slug(files, issues=None):
+    """_네이버비공개 txt [(이름, 경로, mtime)] → {slug: [이름 …]}. issues 를 안 주면 configs/issue_numbers.json."""
+    if issues is None:
+        try:
+            with open(kit.ISSUES_JSON, encoding="utf-8") as fp:
+                issues = {k: v for k, v in json.load(fp).items() if isinstance(v, int)}
+        except FileNotFoundError:
+            issues = {}
+    out = {}
+    for name, _, _ in files:
+        m = PRIVATE_TXT.match(name)
+        slug = label_to_slug(m.group(1), issues) if m else None
+        if slug:
+            out.setdefault(slug, []).append(name)
+    return out
+
+
+def relink_message(art, res, old):
+    """본진 게시 뒤 다시 조립한 네이버 비공개 파일 알림 — 옛 파일(링크 없음)을 쓰지 않게."""
+    return (f"🔗 [한 쌍] {kit.title_label(art.get('title'), art['slug'])} — 본진 게시됨 → 네이버 비공개 파일을 "
+            f"📄 본진 링크 줄을 넣어 다시 만들었습니다: _네이버비공개\\{os.path.basename(res['txt'])}\n"
+            f"옛 파일({', '.join(sorted(old))})은 본진 링크가 없어 쓰지 않습니다. "
+            "이미 비공개로 올려 둔 글이 있으면 끝에 📄 줄을 넣고 PDF·상단 캡처를 다시 저장하세요.")
+
+
+def send_naver_guides(env, state, notify, log=print, build=None, send=None, server_factory=None, private_files=None):
+    """pams_auto 한 바퀴에서 부른다. 보낸 slug 목록을 돌려준다. 실패는 GUIDE_MAX_TRY 번까지 다음 바퀴에 다시.
+    대상 = 운영표 네이버 항목 + _네이버비공개 에 파일이 있는 글 — 본진이 승인·게시(posted_url)된 뒤에만(PAIR1)."""
     import naver_private_guide as g
     build = build or g.build
     send = send or g.send
     server_factory = server_factory or (lambda: kit.LocalServer(port=3944, log=log))
     _, order = load_queue()
-    due = naver_guides_due(order, fetch_reviews(env), state)
+    files = private_files_by_slug(list_private_files() if private_files is None else private_files)
+    due = naver_guides_due(order, fetch_reviews(env), state, extra=sorted(files))
     if not due:
         return []
     done = []
@@ -329,6 +430,9 @@ def send_naver_guides(env, state, notify, log=print, build=None, send=None, serv
                 send(env, res)
                 state.setdefault("naver_guide_sent", {})[slug] = datetime.now(kit.KST).isoformat(timespec="minutes")
                 log(f"네이버 비공개 게시 안내 발송: {kit.issue_label(slug)} ({os.path.basename(res['png'])})")
+                old = [n for n in files.get(slug, []) if n != os.path.basename(res["txt"])]
+                if old:   # 본진 승인 전에 만든 파일(📄 본진 링크 없음)이 남아 있다 — 헷갈리지 않게 한 줄
+                    notify(relink_message(art, res, old))
                 done.append(slug)
             except Exception as e:
                 n = (state.setdefault("naver_guide_fail", {}).get(slug, 0)) + 1
