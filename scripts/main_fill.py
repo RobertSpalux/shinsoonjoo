@@ -47,6 +47,8 @@ def build_patch(article, meta, main_md, replace=False):
     miss = [k for k in META_KEYS if not meta.get(k)]
     if miss:
         raise kit.KitError("meta 에 빠진 값: " + ", ".join(miss))
+    if len(meta["key_points"]) != 3:
+        raise kit.KitError(f"key_points 는 정확히 3개 — 본진 머리가 「핵심만 3줄」 고정이다 (지금 {len(meta['key_points'])}개)")
     if meta["slug"] != article.get("slug"):
         raise kit.KitError(f"slug 불일치 — meta {meta['slug']} / DB {article.get('slug')}")
     if kit.channel_locked(article, "main") or article.get("is_main_published"):
