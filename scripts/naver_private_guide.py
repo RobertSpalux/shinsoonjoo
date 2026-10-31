@@ -22,7 +22,6 @@ import re
 import html as htmllib
 import json
 import os
-import shutil
 import subprocess
 import sys
 
@@ -60,9 +59,6 @@ def keyword_of(title):
     return m.group(0) if m else "글제목"
 
 
-KAKAO_BANNER_SRC = r"D:\robert-os\shared\assets\kakao\kakao_chat_goodfinance.png"
-BANNER_STEP = "마지막 카톡 배너 — 채팅 링크 직접 걸기, 캡처 전에"
-
 # 블로그 분류 5개(SUP3, 로버트 10/25 「글 작성하면 분류도 알아서」). 규칙: 고지의무·가입 전 확인=실손·보장성 가이드 ·
 #   기존 계약 손보기=보험 리모델링 · 청구·지급=보험금 청구·보상 · 연금·노후·세금=연금·노후·세테크 · 보험료 절감=보험료 절약·꿀팁
 CATEGORY_UNSURE = "확인 필요"
@@ -94,28 +90,9 @@ def blog_category(title, keyword="", text="", db_category=None):
     return ranked[0][0]
 
 
-def banner_name(base):
-    return f"{base}_카톡배너.png"
-
-
-def copy_banner(out_dir, base, src=None):
-    """카톡 배너 원본을 같은 폴더에 복사 → 파일명. 원본이 없으면 KitError(링크는 넣지 않는다 — 로버트가 직접)."""
-    src = src or KAKAO_BANNER_SRC
-    if not os.path.isfile(src):
-        raise kit.KitError(f"카톡 배너 원본이 없습니다 — {src}")
-    name = banner_name(base)
-    shutil.copyfile(src, os.path.join(out_dir, name))
-    return name
-
-
-def append_banner(rich, name):
-    """html 맨 끝(진단 CTA 이미지 다음)에 배너 이미지 자리 — 링크(<a>) 없이 이미지만."""
-    return rich.rstrip("\n") + f'\n<img src="{htmllib.escape(name)}" width="800" style="width:100%;max-width:800px;height:auto;">\n'
-
-
 TITLE_BOX = "■ 제목 칸에 붙여 넣을 제목 — 이것 하나뿐"
-# 로버트 할 일 4가지(SUP3m) — ④ 는 10/25 연금·건강검진 반송 「비공개 상태임이 확인되도록 캡처 또는 비공개 증빙자료」 때문.
-ROBERT_TODO = "로버트 할 일: ① 카톡 배너 링크 걸기 ② 비공개 게시 ③ PDF 저장 ④ 글 상단 캡처 png 저장(비공개 표시 보이게)"
+# 로버트 할 일 3가지(SUP3m, KB0 에서 카톡 배너 항목 제거) — ③ 은 10/25 연금·건강검진 반송 「비공개 상태임이 확인되도록 캡처 또는 비공개 증빙자료」 때문.
+ROBERT_TODO = "로버트 할 일: ① 비공개 게시 ② PDF 저장 ③ 글 상단 캡처 png 저장(비공개 표시 보이게)"
 
 
 def title_box(title, naver_only=False):
@@ -150,18 +127,17 @@ def steps(issue, title, n_images, base):
         f"4. 사진 {n_images}장: html 안 [이미지N] 자리에 {base}_이미지N 이 이미 들어 있다(마지막 진단 카드는 링크 포함). "
         "붙여 넣은 뒤 빠진 사진이 있으면 그 자리에 넣고 남아 있는 자리표시 줄([이미지…])만 지운다 — 앞뒤 문장은 건드리지 않는다."
         if n_images else "4. 사진 없음 — [이미지] 자리표시 줄만 지운다.",
-        f"5. {BANNER_STEP}. (html 맨 끝 진단 카드 다음의 카톡 배너 사진에 로버트가 채팅 링크를 건다)",
-        "6. 필수안내사항의 심의필 줄은 공란(제_____호) 그대로 둔다 — 심의 전이다.",
-        "7. 공개 설정 = 「비공개」 → 발행.",
-        "8. 발행된 비공개 글 전체를 캡처한다 — 🔴 「비공개」 표시가 화면에 보이게(2025-07-14 시행 규칙).",
-        f"9. 비공개 글을 PDF 로 저장할 때 저장 위치를 Downloads\\PAMS접수\\ 로, 파일 이름에 「{issue}」 또는 글의 핵심어(예: {keyword})를 넣는다"
+        "5. 필수안내사항의 심의필 줄은 공란(제_____호) 그대로 둔다 — 심의 전이다.",
+        "6. 공개 설정 = 「비공개」 → 발행.",
+        "7. 발행된 비공개 글 전체를 캡처한다 — 🔴 「비공개」 표시가 화면에 보이게(2025-07-14 시행 규칙).",
+        f"8. 비공개 글을 PDF 로 저장할 때 저장 위치를 Downloads\\PAMS접수\\ 로, 파일 이름에 「{issue}」 또는 글의 핵심어(예: {keyword})를 넣는다"
         f"(예: {issue}.pdf · {keyword}.pdf). 압축은 하지 않는다 — zip 은 자동으로 만들어진다.",
         f"   · 🔴 글 상단(제목 옆 「· 비공개」 표시가 보이게) 화면 캡처를 png 로 같은 폴더에 저장한다 — 이름은 PDF 와 같게 시작"
         f"(예: {issue}_상단.png · {keyword}_상단.png). PDF 머리엔 「비공개」가 안 찍힌다(10/25 반송 사유).",
         "   → PDF·png 가 다 있으면 10분 안에 pams_auto 가 짝을 맞춰 네이버 키트(zip)를 만든다(png 없으면 만들지 않고 알림). 둘 다 캡처_처리됨\\ 으로 옮겨진다.",
         "   → PDF 첫 장 제목이 상자 제목과 다르거나 본문 첫 줄이 빠졌으면 zip 을 만들지 않고 텔레그램으로 알린다"
         f" — 글을 고친 뒤 다른 이름(예: {issue}_수정.pdf)으로 다시 저장한다.",
-        "10. 이 비공개 글이 곧 승인본이다 — 승인 뒤에는 심의필 줄만 채워 「전체공개」로 바꾼다(새로 올리지 않는다).",
+        "9. 이 비공개 글이 곧 승인본이다 — 승인 뒤에는 심의필 줄만 채워 「전체공개」로 바꾼다(새로 올리지 않는다).",
     ]
 
 
@@ -271,8 +247,6 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
         raise
     html_path = os.path.join(out_dir, base + ".html")
     title = check_title(body["title"])
-    banner = copy_banner(out_dir, base)
-    rich = append_banner(rich, banner)
     category = blog_category(title, naver_rules.keyword_for(slug) or "", body["text"], article.get("category"))
     # 탭 이름에도 제목을 쓰지 않는다 — 붙여 넣을 제목은 txt·png 맨 위 상자 하나뿐
     open(html_path, "w", encoding="utf-8").write(
@@ -289,7 +263,7 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
     render_png(page_html, png_path)
     os.remove(page_html)
     return {"txt": txt_path, "html": html_path, "png": png_path, "images": imgs, "title": title, "issue": issue,
-            "slug": slug, "banner": banner, "category": category}
+            "slug": slug, "category": category}
 
 
 def send(env, res):
