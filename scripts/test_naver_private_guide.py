@@ -120,22 +120,26 @@ class Steps(unittest.TestCase):
             g.check_rich_headings(text, old)
         self.assertIn("산출물을 만들지 않았습니다", str(cm.exception))
 
-    def test_banner_step_in_guide(self):
+    def test_no_banner_step_in_guide(self):
+        """KB0 — 카톡 채널 연결은 중복이라 안내에서 뺐다. 할 일 번호는 1부터 빠짐없이."""
         j = "\n".join(self.s)
-        self.assertIn("마지막 카톡 배너 — 채팅 링크 직접 걸기, 캡처 전에", j)
-        self.assertLess(j.index("카톡 배너"), j.index("캡처한다"))          # 캡처 전에
+        self.assertNotIn("카톡", j)
+        nums = [int(l.split(".")[0]) for l in self.s if l[:1].isdigit()]
+        self.assertEqual(nums, list(range(1, len(nums) + 1)))
+        self.assertFalse(hasattr(g, "copy_banner"))
+        self.assertFalse(hasattr(g, "append_banner"))
         h = g.one_page_html("7호", "slug", "제목", self.s, 3, "보험 리모델링")
-        self.assertIn("마지막 카톡 배너", h)
+        self.assertNotIn("카톡", h)
         self.assertIn("분류: 보험 리모델링", h)
         self.assertNotIn("분류:", g.one_page_html("7호", "slug", "제목", self.s, 3))
 
     def test_robert_todo_and_proof_png_step(self):
         """SUP3m — 10/25 반송 「비공개 상태임이 확인되도록 캡처」 → 글 상단 캡처 png 가 할 일 ④."""
-        self.assertEqual(g.ROBERT_TODO, "로버트 할 일: ① 카톡 배너 링크 걸기 ② 비공개 게시 ③ PDF 저장 "
-                                        "④ 글 상단 캡처 png 저장(비공개 표시 보이게)")
+        self.assertEqual(g.ROBERT_TODO, "로버트 할 일: ① 비공개 게시 ② PDF 저장 "
+                                        "③ 글 상단 캡처 png 저장(비공개 표시 보이게)")
         h = g.one_page_html("7호", "slug", "제목", self.s, 3)
         self.assertIn(g.ROBERT_TODO, h)
-        self.assertLess(h.index(g.ROBERT_TODO), h.index("<ol"), "할 일 4가지는 목록 위에")
+        self.assertLess(h.index(g.ROBERT_TODO), h.index("<ol"), "할 일 3가지는 목록 위에")
         j = "\n".join(self.s)
         self.assertIn("「· 비공개」 표시가 보이게", j)
         self.assertIn("7호_상단.png", j)
@@ -143,23 +147,6 @@ class Steps(unittest.TestCase):
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "naver_private_guide.py"), encoding="utf-8").read()
         self.assertIn('f"분류: {category}", ROBERT_TODO', src, "txt 머리에도 싣는다")
         self.assertIn('f"{ROBERT_TODO}\\n"', src, "텔레그램 캡션에도 싣는다")
-
-    def test_banner_copy_and_append(self):
-        import tempfile
-        d = tempfile.mkdtemp()
-        src = os.path.join(d, "src.png")
-        open(src, "wb").write(b"PNG")
-        base = "1026_30호_네이버비공개"
-        name = g.copy_banner(d, base, src)
-        self.assertEqual(name, base + "_카톡배너.png")
-        self.assertEqual(open(os.path.join(d, name), "rb").read(), b"PNG")
-        with self.assertRaises(kit.KitError):
-            g.copy_banner(d, base, os.path.join(d, "없음.png"))
-        out = g.append_banner('<p>x</p><img src="a_이미지5.png">\n', name)
-        self.assertTrue(out.rstrip().endswith(">"))
-        self.assertLess(out.index("a_이미지5.png"), out.index(name))     # 진단 CTA 이미지 다음
-        self.assertNotIn("<a ", out)                                     # 링크는 넣지 않는다
-        self.assertEqual(g.existing_outputs(d, base), [name])
 
     def test_blog_category(self):
         c = g.blog_category
