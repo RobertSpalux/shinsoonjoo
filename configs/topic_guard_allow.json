@@ -81,6 +81,10 @@
     {"new": "daily-liability-deductible-per-accident-policy", "existing": "daily-liability-nusu-own-home-tenant-landlord",
      "reason": "SUP1 — 일배책 누수(자가·임차·임대) 글과 「일상생활배상책임」 겹침. 새 글은 누수가 아니라 자기부담금"},
     {"new": "overseas-stay-silson-resume-after-return", "existing": "overseas-stay-3month-silson-premium-refund",
-     "reason": "SUP1 대기열(TR3 #2) — 기존 글은 체류 중 보험료 환급, 새 글은 귀국 「이후」 재개"}
+     "reason": "SUP1 대기열(TR3 #2) — 기존 글은 체류 중 보험료 환급, 새 글은 귀국 「이후」 재개"},
+    {"new": "pension-savings-insurance-tax-credit-check", "existing": "pension-savings-insurance-payout-differs-illustration",
+     "reason": "GFS28 28호(대기열 1순위 키워드) — 26호는 수령액이 설계서와 다른 이유(적용이율·배당금), 새 글은 세액공제 한도·공제 여부에 따른 적립금 구분. 겹친 말은 「연금저축」 상품명 한 낱말"},
+    {"new": "gastroscopy-silson-checkup-or-treatment", "existing": "pre-existing-condition-disclosure-exclusion-guide",
+     "reason": "GFS28 29호(대기열 2순위 키워드) — TOPIC-BANK G1(2호 통합)은 검진 뒤 보험 가입, 새 글은 이미 가입한 실손의 위내시경 보상 조건. 겹친 말은 「건강검진·검진」"}
   ]
 }
