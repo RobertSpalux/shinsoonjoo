@@ -24,5 +24,8 @@
   "car-accident-minor-injury-8week-future-treatment": 27,
   "pension-savings-insurance-tax-credit-check": 28,
   "gastroscopy-silson-checkup-or-treatment": 29,
-  "whole-life-maturity-premium-end-refund": 30
+  "whole-life-maturity-premium-end-refund": 30,
+  "savings-annuity-loading-refund-before-start": 31,
+  "annuity-payout-amount-type-rate-check": 32,
+  "silson-nonrenewal-premium-rejoin-cycle": 33
 }
