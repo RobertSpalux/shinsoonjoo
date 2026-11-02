@@ -33,8 +33,18 @@ jobs:
           tar -xzf "$file" gitleaks
           rm -f "$file" "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
 
-      - name: 이력 전체 검사
-        run: ./gitleaks git --log-opts="--all" --redact=100 --no-banner .
+      # PR 은 PR 범위(base..head)만 — main 에 이미 있는 과거 커밋은 검사 범위가 아니다.
+      # main 푸시·수동 실행은 이력 전체(.gitleaksignore 의 확인된 합성값 제외).
+      - name: 검사(PR 범위 / 그 외 이력 전체)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -n "$BASE_SHA" ]; then
+            ./gitleaks git --log-opts="${BASE_SHA}..${HEAD_SHA}" --redact=100 --no-banner .
+          else
+            ./gitleaks git --log-opts="--all" --redact=100 --no-banner .
+          fi
 
       - name: 파일명·주민등록번호 꼴 검사(현재 파일)
         run: |

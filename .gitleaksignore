@@ -1,0 +1,3 @@
+# 합성 주민번호 꼴 1건 — 퍼널 시험(「rrn 필드는 버린다」 검증용, 자리 1234567 순번). 2026-11-02.
+# 규칙 해제가 아니라 fingerprint 1건만.
+5170f90218fc21c25f58bbb234563ab3787c547f:src/lib/funnel/funnel.test.mts:kr-resident-registration-number:53
