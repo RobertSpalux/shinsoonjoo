@@ -27,5 +27,8 @@
   "whole-life-maturity-premium-end-refund": 30,
   "savings-annuity-loading-refund-before-start": 31,
   "annuity-payout-amount-type-rate-check": 32,
-  "silson-nonrenewal-premium-rejoin-cycle": 33
+  "silson-nonrenewal-premium-rejoin-cycle": 33,
+  "annuity-beneficiary-change-four-fields": 34,
+  "exclusion-release-coverage-after-release": 35,
+  "neuroplasty-silson-outpatient-inpatient-limit": 36
 }
