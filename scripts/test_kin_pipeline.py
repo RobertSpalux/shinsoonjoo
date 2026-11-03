@@ -778,6 +778,77 @@ class SyncWatcher(unittest.TestCase):
             self.assertEqual(regs, [("ida", "https://kin.naver.com/q/a")])   # 재실행 변화 0
             self.assertEqual(again, ["새 승인 없음"])
 
+    def _one_row(self, d, no="2026-11-1019"):
+        st, wp = os.path.join(d, "s.json"), os.path.join(d, "w.json")
+        kits = {"k": {"id": "k", "kin_answer_id": "u1", "status": "게시", "review_no": "2026-11-0900",
+                      "question_url": "https://kin.naver.com/q/k", "question_title": "질문", "question_summary": "",
+                      "answer": "답변", "answer_sha256": "h"}}
+        with open(st, "w", encoding="utf-8") as f:
+            json.dump({"kits": kits}, f)
+        with open(wp, "w", encoding="utf-8") as f:
+            json.dump({"행": [{"심의번호": no, "심의필일자": "2026-11-03", "유효기간": "2027-11-02", "키트id": "k"}]}, f)
+        return st, wp
+
+    def test_kin11_duplicate_approval_clones_row_and_alerts_once(self):
+        """KIN11 — 같은 원고 두 번째 승인(11/03 1019)은 409. 복제 kin_answers 로 기록하고 「중복 승인 — 대체 질문 필요」 1회."""
+        with tempfile.TemporaryDirectory() as d:
+            st, wp = self._one_row(d)
+            calls, saved, sent, have = [], [], [], set()
+
+            def rec_fn(e, r, n, f, t):
+                calls.append(r["kin_answer_id"])
+                if r["kin_answer_id"] == "u1":
+                    return None, f"ad_reviews 기록 못함(HTTP 409 {kp.DUP_CONSTRAINT}) — {kp.DUP_MARK}"
+                return "ad-new", "ad_reviews kin 행"
+
+            kw = dict(path=wp, state_path=st, record=rec_fn, existing_fn=lambda: have, mark_posted=lambda e, i: None,
+                      notify=sent.append, save_row=lambda e, r: saved.append(r["id"]) or ("u2", "kin_answers 초안"))
+            out = kp.cmd_sync_watcher({}, **kw)
+            self.assertEqual(calls, ["u1", "u2"])
+            self.assertEqual(saved, ["k"])
+            self.assertEqual(len(sent), 1)
+            self.assertIn("중복 승인 제2026-11-1019호 — 대체 질문 필요", sent[0])
+            self.assertFalse(any(l.startswith("기록 ") for l in out))   # pams_auto 의 「기록」 알림과 겹치지 않는다
+            k = kp.load_state(st)["kits"]["k"]
+            self.assertEqual((k["review_no"], k["kin_answer_id"], k["status"]), ("2026-11-0900", "u1", "게시"))  # 첫 승인 보존
+            self.assertEqual(k["dup_reviews"][0]["kin_answer_id"], "u2")
+            have.add("2026-11-1019")
+            self.assertEqual(kp.cmd_sync_watcher({}, **kw), ["새 승인 없음"])
+            self.assertEqual((len(sent), saved), (1, ["k"]))
+
+    def test_kin11_same_failure_alerts_once_per_review_no(self):
+        """같은 실패가 바퀴마다 「기록 실패」 줄로 나와 10분마다 텔레그램이 갔다. review_no 당 1회만, 이후는 조용히."""
+        with tempfile.TemporaryDirectory() as d:
+            st, wp = self._one_row(d)
+            saved = []
+            kw = dict(path=wp, state_path=st, existing_fn=set, mark_posted=lambda e, i: None, notify=self.fail,
+                      record=lambda *a: (None, f"ad_reviews 기록 못함(HTTP 409 {kp.DUP_CONSTRAINT}) — {kp.DUP_MARK}"),
+                      save_row=lambda e, r: saved.append(1) or (None, "kin_answers 기록 실패 HTTP 500"))
+            first = kp.cmd_sync_watcher({}, **kw)
+            self.assertEqual(len([l for l in first if l.startswith("기록 실패")]), 1)
+            self.assertIn("대체 질문 필요", first[0])
+            for _ in range(3):
+                again = kp.cmd_sync_watcher({}, **kw)
+                self.assertFalse(any(l.startswith("기록 ") for l in again))
+            self.assertEqual(saved, [1])   # 복제는 한 번만 — 바퀴마다 고아 행을 만들지 않는다
+            self.assertIn("2026-11-1019", kp.load_state(st)["alerted_fail"])
+
+    def test_kin11_409_message_is_not_sql006(self):
+        class R:
+            status_code, text = 409, ('{"code":"23505","message":"duplicate key value violates unique constraint '
+                                      '\\"ad_reviews_kin_answer_uniq\\""}')
+        orig = (kp.kit._rest, kp.requests.post)
+        kp.kit._rest = lambda env: ("https://x.supabase.co/rest/v1/premium_articles", {})
+        kp.requests.post = lambda *a, **k: R()
+        try:
+            rid, msg = kp.record_review({}, {"id": "k", "question_url": "q", "answer_sha256": "h", "kin_answer_id": "u1"},
+                                        "2026-11-1019", "2026-11-03", "2027-11-02")
+        finally:
+            kp.kit._rest, kp.requests.post = orig
+        self.assertIsNone(rid)
+        self.assertIn(kp.DUP_MARK, msg)
+        self.assertNotIn("sql/006", msg)
+
 
 class Kin1(unittest.TestCase):
     """KIN1(2026-10-29) — 멈춘 원인 둘(어제 아닌 소재 금지 · 401 무음) + 점수 · 승인 묶음."""
