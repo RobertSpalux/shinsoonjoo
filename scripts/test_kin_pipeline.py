@@ -850,6 +850,135 @@ class SyncWatcher(unittest.TestCase):
         self.assertNotIn("sql/006", msg)
 
 
+ALT_REAL = r"D:\robert-os\tmp\relay\work\2026-11-03\kin"
+
+
+def _alt_sec(n, no, url, body="답변 본문입니다.", check=True):
+    return "\n".join([f"■ {n}. 프라임에셋 심의필 제{no}호 (2026.11.03~2027.11.02)", f"질문 링크: {url}"]
+                     + ([kp.ALT_CHECK] if check else [])
+                     + ["────────── 아래 전체 복사 ──────────", body, "────────── 끝 ──────────", ""])
+
+
+class Kin12(unittest.TestCase):
+    """KIN12(2026-11-03) — 대체 질문 게시 묶음을 파일만이 아니라 텔레그램으로. 가짜 발송만 쓴다."""
+
+    def _dir(self, d, files):
+        folder = os.path.join(d, "alt")
+        os.makedirs(folder)
+        for name, text in files.items():
+            with open(os.path.join(folder, name), "w", encoding="utf-8") as f:
+                f.write(text)
+        return folder, os.path.join(d, "s.json")
+
+    def test_one_message_per_item_then_marked_sent(self):
+        with tempfile.TemporaryDirectory() as d:
+            text = (_alt_sec(1, "2026-11-0834", "https://kin.naver.com/qna/detail.naver?d=1")
+                    + _alt_sec(2, "2026-11-0023", "https://kin.naver.com/qna/detail.naver?d=2", check=False))
+            folder, st = self._dir(d, {"_묶음_1531.txt": text})
+            sent = []
+            out = kp.cmd_alt_bundles({}, folder=folder, state_path=st, notify=lambda t: sent.append(t) or True,
+                                     now=datetime(2026, 11, 3, 17, 5, tzinfo=kp.kit.KST))
+            self.assertEqual(len(sent), 2)
+            self.assertTrue(all(m.startswith(kp.ALT_HEAD) for m in sent))
+            self.assertIn("제2026-11-0834호", sent[0])
+            self.assertIn("https://kin.naver.com/qna/detail.naver?d=1", sent[0])
+            self.assertIn("답변 본문입니다.", sent[0])
+            self.assertIn(kp.ALT_CHECK, sent[1])          # 없던 「게시 전」 줄을 넣는다
+            self.assertEqual(sent[1].count("게시 전"), 1)
+            self.assertEqual(out, ["대체 질문 묶음 보냄 _묶음_1531.txt — 2건 2통 2026-11-03 17:05"])
+            self.assertEqual(sorted(os.listdir(folder)), ["_묶음_1531.보냄.txt"])
+            posts = kp.load_state(st)["alt_posts"]
+            self.assertEqual(posts["2026-11-0023"]["question_url"], "https://kin.naver.com/qna/detail.naver?d=2")
+            # 다음 바퀴 — 보낼 것 없음. 같은 내용을 새 이름으로 다시 둬도 칸 해시로 막는다(중복 발송 0)
+            self.assertEqual(kp.cmd_alt_bundles({}, folder=folder, state_path=st, notify=self.fail), [])
+            with open(os.path.join(folder, "again.txt"), "w", encoding="utf-8") as f:
+                f.write(text)
+            out = kp.cmd_alt_bundles({}, folder=folder, state_path=st, notify=self.fail)
+            self.assertIn("0통", out[0])
+
+    def test_partial_failure_resends_only_unsent(self):
+        with tempfile.TemporaryDirectory() as d:
+            text = _alt_sec(1, "2026-11-0834", "https://kin.naver.com/q/1") + _alt_sec(2, "2026-11-0836", "https://kin.naver.com/q/2")
+            folder, st = self._dir(d, {"b.txt": text})
+            sent = []
+            out = kp.cmd_alt_bundles({}, folder=folder, state_path=st,
+                                     notify=lambda t: sent.append(t) or len(sent) == 1)   # 둘째 통 실패
+            self.assertIn("발송 실패", out[0])
+            self.assertEqual(os.listdir(folder), ["b.txt"])
+            sent2 = []
+            kp.cmd_alt_bundles({}, folder=folder, state_path=st, notify=lambda t: sent2.append(t) or True)
+            self.assertEqual(len(sent2), 1)
+            self.assertIn("제2026-11-0836호", sent2[0])
+            self.assertEqual(os.listdir(folder), ["b.보냄.txt"])
+
+    def test_broken_file_not_sent_reported_once(self):
+        with tempfile.TemporaryDirectory() as d:
+            folder, st = self._dir(d, {"x.txt": "■ 1. 심의필 번호 없음\n질문 링크: https://kin.naver.com/q/1\n본문"})
+            for i in range(3):
+                out = kp.cmd_alt_bundles({}, folder=folder, state_path=st, notify=self.fail)
+                self.assertEqual(len(out), 1 if i == 0 else 0)
+                if out:
+                    self.assertIn("안 보냄", out[0])   # pams_auto 가 이 줄만 텔레그램으로 한 번 알린다
+            self.assertEqual(os.listdir(folder), ["x.txt"])
+
+    def test_dry_run_and_no_send(self):
+        with tempfile.TemporaryDirectory() as d:
+            folder, st = self._dir(d, {"a.txt": _alt_sec(1, "2026-11-0051", "https://kin.naver.com/q/5")})
+            out = kp.cmd_alt_bundles({}, folder=folder, state_path=st, notify=self.fail, dry=True)
+            self.assertIn("[dry-run]", out[0])
+            self.assertFalse(os.path.exists(st))
+            out = kp.cmd_alt_bundles({}, folder=folder, state_path=st, notify=self.fail, send=False)
+            self.assertIn("발송 없음", out[0])
+            self.assertEqual(kp.load_state(st)["alt_posts"]["2026-11-0051"]["question_url"], "https://kin.naver.com/q/5")
+
+    def test_long_item_split_under_limit(self):
+        long_body = "\n\n".join("가" * 900 for _ in range(6))
+        parts = kp.tg_split(f"{kp.ALT_HEAD}\n\n" + _alt_sec(1, "2026-11-0834", "https://kin.naver.com/q/1", long_body))
+        self.assertGreater(len(parts), 1)
+        self.assertTrue(all(len(p) <= kp.TG_MAX + 10 for p in parts))
+        self.assertTrue(parts[0].startswith(f"(1/{len(parts)}) "))
+        self.assertEqual(kp.tg_split("짧다"), ["짧다"])
+
+    @unittest.skipUnless(os.path.isdir(ALT_REAL), "11/03 실물 묶음 없음")
+    def test_real_1103_files_parse(self):
+        """관제탑이 만든 실물 두 파일 — 4칸, 칸마다 번호·질문 링크·「게시 전」, 4096 미만 한 통."""
+        items = []
+        for name in ("_묶음_1531_게시3건.txt", "_묶음_1607_0836.txt"):
+            with open(os.path.join(ALT_REAL, name), encoding="utf-8-sig") as f:
+                items += kp.alt_items(f.read())
+        self.assertEqual(sorted(i["no"] for i in items), ["2026-11-0023", "2026-11-0051", "2026-11-0834", "2026-11-0836"])
+        for it in items:
+            self.assertTrue(it["url"].startswith("https://kin.naver.com/"))
+            self.assertEqual(it["text"].count("게시 전"), 1)
+            self.assertIn("필수안내사항", it["text"])
+            self.assertEqual(len(kp.tg_split(f"{kp.ALT_HEAD} 1/4 — 제{it['no']}호\n\n{it['text']}")), 1)
+
+    def test_sync_uses_alt_question_url_not_kit(self):
+        """감시기 행의 키트는 원래 질문이다 — 대체 질문 심의필은 alt_posts 의 URL 로 등록하고 키트는 건드리지 않는다."""
+        with tempfile.TemporaryDirectory() as d:
+            st, wp = os.path.join(d, "s.json"), os.path.join(d, "w.json")
+            with open(st, "w", encoding="utf-8") as f:
+                json.dump({"kits": {"k": {"id": "k", "kin_answer_id": "u-kit", "status": "게시",
+                                          "question_url": "https://kin.naver.com/q/original"}},
+                           "alt_posts": {"2026-11-0834": {"question_url": "https://kin.naver.com/q/alt"}}}, f)
+            with open(wp, "w", encoding="utf-8") as f:
+                json.dump({"행": [{"심의번호": "2026-11-0834", "게시위치등록됨": True, "키트id": "k"}]}, f)
+            regs, posted = [], []
+            kw = dict(path=wp, state_path=st, record=lambda *a: self.fail("새 행 금지"),
+                      existing_fn=lambda: {"2026-11-0834"}, pending_fn=lambda: {"2026-11-0834": "ad-0834"},
+                      register_url=lambda e, i, u: regs.append((i, u)) or True,
+                      mark_posted=lambda e, i: posted.append(i), kin_answer_fn=lambda n: "u-alt")
+            out = kp.cmd_sync_watcher({}, **kw)
+            self.assertEqual(regs, [("ad-0834", "https://kin.naver.com/q/alt")])
+            self.assertEqual(posted, ["u-alt"])
+            self.assertIn("대체 질문", out[0])
+            s = kp.load_state(st)
+            self.assertEqual(s["kits"]["k"]["status"], "게시")
+            self.assertTrue(s["alt_posts"]["2026-11-0834"]["registered"])
+            self.assertEqual(kp.cmd_sync_watcher({}, **kw), ["새 승인 없음"])   # 재실행 변화 0
+            self.assertEqual(len(regs), 1)
+
+
 class Kin1(unittest.TestCase):
     """KIN1(2026-10-29) — 멈춘 원인 둘(어제 아닌 소재 금지 · 401 무음) + 점수 · 승인 묶음."""
 

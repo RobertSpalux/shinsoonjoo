@@ -33,6 +33,19 @@ kin_pipeline.py weekly   성적표 한 줄
 `run --n` 기본 5 · `sync-watcher` 가 DB 등록이 이미 된 행도 상태 파일·kin_answers 를 맞춤 · 새 승인 = 「게시할 묶음」 텔레그램 ·
 `scripts/kin_daily_cron.py`(main 확인 → sync-watcher → run) · 월요일 성적표 ⑤ 지식인 줄.
 
+## KIN12 (2026-11-03) — 대체 질문 게시 묶음도 텔레그램으로
+
+중복 승인·답변불가 질문의 심의필을 다른 질문에 쓰는 묶음(「대체 질문 게시(승인 재활용)」)은 파일만 만들어지고 있었다.
+- 관제탑이 `kin_pipeline.ALT_DIR`(기본 `D:\robert-os\finance\state\kin_대체질문`, 환경변수 `KIN_ALT_DIR`)에 txt 를 둔다.
+  형식은 11/03 `_묶음_1531_게시3건.txt` 실물 — 칸마다 `■ N. 프라임에셋 심의필 제…호 (…)` · `질문 링크: <URL>` · 최종본 전체.
+- pams_auto 바퀴가 `cmd_alt_bundles` 로 **한 칸당 한 통**(승인 묶음과 같은 `pams_auto.telegram`·같은 방) 보낸다.
+  「게시 전」 확인 줄이 없으면 질문 링크 아래에 넣는다. 4000자를 넘으면 줄 경계로 `(k/m)` 분할.
+- 보낸 칸은 원고 해시로 `kin_state.json` `alt_sent` 에 남아 다시 안 간다. 다 보낸 파일은 `.보냄.txt` 로 이름이 바뀐다.
+  번호·링크를 못 찾은 칸이 있는 파일은 보내지 않고 「⚠️ … 안 보냄」 한 번.
+- 보낸 칸의 심의필 → 질문 링크는 `alt_posts` 에 남는다. `sync-watcher` 는 게시위치 등록된 그 심의필의 posted_url 을
+  **키트의 원래 질문이 아니라 이 링크로** 쓰고, 키트 상태는 건드리지 않는다(예전엔 원래 질문 URL 이 들어갈 자리였다).
+- 이미 손으로 게시한 묶음: `kin_pipeline.py alt-bundles --no-send` — 발송 없이 `alt_posts`·보냄 표시만.
+
 ## 규칙의 근거
 
 - 지식인·카페·커뮤니티 댓글 = 업무광고, 회사 기준은 전부 사전심의(GA협회 공문 2025-08-18, CLAUDE.md §6.2).
