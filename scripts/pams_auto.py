@@ -596,6 +596,15 @@ def main():
                 telegram(env, "📝 지식iN 승인 기록\n" + "\n".join(kin_lines))
         except Exception as e:
             log(f"지식iN 승인 기록 실패: {e}")
+        # 대체 질문 게시 묶음(KIN12) — 관제탑이 kin_pipeline.ALT_DIR 에 둔 txt 를 한 건당 한 통, 보낸 파일은 「.보냄.txt」.
+        try:
+            import kin_pipeline
+            for line in kin_pipeline.cmd_alt_bundles(env, notify=lambda t: telegram(env, t)):
+                log(line)
+                if "안 보냄" in line:   # 형식이 틀린 파일 — 파일 내용당 한 번만 나온다
+                    telegram(env, "⚠️ " + line)
+        except Exception as e:
+            log(f"대체 질문 묶음 발송 실패: {e}")
         save_state(state)
         upload_submitted_threads(env, notify=lambda t: telegram(env, t))
         # 심의 승인 → 게시(본진 자동 공개·posted_url, 네이버 공개 전환 안내·RSS URL, 배포 체크, 만료 알림).

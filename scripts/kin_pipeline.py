@@ -10,6 +10,7 @@
     python scripts/kin_pipeline.py approve <키트id> --review-no 2026-10-1234 --from 2026-10-09 --to 2027-10-08 \\
                                            --notice-file <「심의내용」 돋보기 화면 복사본.txt>
     python scripts/kin_pipeline.py posted <키트id> --url <지식iN 답변 URL>
+    python scripts/kin_pipeline.py alt-bundles [--dry-run] [--no-send]  # 대체 질문 묶음 폴더 → 텔레그램(pams_auto 바퀴가 부른다)
     python scripts/kin_pipeline.py weekly [--profile N] [--kakao N]   # 주간 성적표 한 줄
 
 🔴 이 스크립트가 하지 않는 것
@@ -1069,9 +1070,19 @@ def mark_answer_posted(env, kin_answer_id):
     return r.status_code < 300
 
 
+def review_kin_answer_id(env, review_no):
+    """ad_reviews(kin) review_no → kin_answer_id. 대체 질문 행은 키트의 kin_answer_id 와 다르다(복제 행)."""
+    url, h = _rest(env, "ad_reviews")
+    r = requests.get(url, params=[("select", "kin_answer_id"), ("channel", "eq.kin"), ("review_no", f"eq.{review_no}")],
+                     headers=h, timeout=30)
+    if r.status_code >= 300:
+        raise KinError(f"ad_reviews 조회 실패 HTTP {r.status_code}")
+    return next((x["kin_answer_id"] for x in r.json() if x.get("kin_answer_id")), None)
+
+
 def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=record_review, existing_fn=None,
                      mark_posted=mark_answer_posted, dry=False, pending_fn=None, register_url=register_posted_url,
-                     notify=None, save_row=save_draft_row):
+                     notify=None, save_row=save_draft_row, kin_answer_fn=None):
     """감시기(robert-os pams_지식인행.json) 승인 행 → ad_reviews(kin) 자동 기록. review_no 가 이미 있으면 새 행은 안 만든다(중복 0).
     게시위치등록됨 이면 kin_answers 를 게시완료로. 사람이 approvals/approve 를 돌릴 필요가 없다.
     이미 있는 행이라도 게시위치등록됨=True 인데 url_registered_at 이 비었으면 posted_url(질문 URL)·url_registered_at 을
@@ -1090,6 +1101,34 @@ def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=recor
             continue   # 심사중·반송
         kid = row.get("키트id") or row.get("키트")
         rec = state["kits"].get(kid)
+        alt = (state.get("alt_posts") or {}).get(no)
+        if no in have and alt:
+            # KIN12 — 대체 질문에 게시한 심의필. 감시기 행의 키트는 원래 질문이라 그 URL 을 쓰면 틀린 posted_url 이 된다.
+            # 키트 상태·키트 kin_answers 는 건드리지 않는다(그 키트의 첫 승인은 따로 있다).
+            if not row.get("게시위치등록됨") or alt.get("registered"):
+                continue
+            if pending is None:
+                pending = (pending_fn or (lambda: unregistered_review_ids(env)))()
+            ad_id = pending.get(no)
+            if dry:
+                out.append(f"[dry-run] 게시 반영 예정(대체 질문) {no} → {alt['question_url']}")
+                continue
+            if ad_id:
+                if not register_url(env, ad_id, alt["question_url"]):
+                    out.append(f"게시 반영 실패(대체 질문) {no}")
+                    continue
+                del pending[no]
+            try:
+                kaid = (kin_answer_fn or (lambda n: review_kin_answer_id(env, n)))(no)
+            except KinError as e:
+                kaid = None
+                out.append(f"대체 질문 {no} kin_answers 조회 실패: {e}")
+            if kaid:
+                mark_posted(env, kaid)
+            alt["registered"] = datetime.now(kit.KST).isoformat()
+            changed = True
+            out.append(f"게시 반영(대체 질문) {no} → {alt['question_url']}" + ("" if ad_id else " (DB 등록은 이미 됨)"))
+            continue
         if no in have:
             if not (row.get("게시위치등록됨") and rec and rec.get("question_url")) or rec.get("status") == "게시":
                 continue
@@ -1187,6 +1226,119 @@ def post_bundle(rec):
     ])
 
 
+# ── 대체 질문 게시 묶음(KIN12) ───────────────────────────────
+# 중복 승인·답변불가 질문의 심의필을 다른 질문에 쓰는 묶음. 관제탑이 이 폴더에 txt 를 두면 pams_auto 바퀴가
+# 텔레그램(승인 묶음과 같은 방·같은 함수)으로 한 건당 한 통 보내고 파일 이름을 「.보냄.txt」로 바꾼다.
+# 파일 형식(11/03 _묶음_1531_게시3건.txt 실물): 칸마다 「■ N. 프라임에셋 심의필 제…호 (…)」 줄로 시작,
+# 「질문 링크: <URL>」 줄, 본문(최종본 전체). 「게시 전」 확인 줄이 없으면 질문 링크 아래에 넣는다.
+ALT_DIR = os.environ.get("KIN_ALT_DIR", r"D:\robert-os\finance\state\kin_대체질문")
+ALT_SENT_SUFFIX = ".보냄.txt"
+ALT_HEAD = "🔁 대체 질문 게시(승인 재활용)"
+ALT_CHECK = "게시 전: 질문이 아직 열려 있고(마감·삭제 아님) 채택된 답변이 없는지 화면에서 확인. 닫혔으면 붙이지 말 것."
+ALT_NO_RX = re.compile(r"심의필\s*제\s*(\d{4}-\d{2}-\d{4,5})\s*호")
+ALT_URL_RX = re.compile(r"질문\s*링크\s*:\s*(https://(?:m\.)?kin\.naver\.com/\S+)")
+TG_MAX = 4000   # 텔레그램 한 통 4096자 — 머리말 여유
+
+
+def alt_items(text):
+    """묶음 파일 → [{no, url, text}]. 「■」 줄로 칸을 나눈다(앞 머리말은 버린다). 칸이 없으면 파일 전체가 한 칸."""
+    parts = re.split(r"(?m)^(?=■)", text.replace("\r\n", "\n"))
+    secs = [p.strip() for p in parts if p.strip().startswith("■")] or [text.strip()]
+    out = []
+    for s in secs:
+        no = ALT_NO_RX.search(s)
+        url = ALT_URL_RX.search(s)
+        if url and "게시 전" not in s:
+            line_end = s.index("\n", url.end()) if "\n" in s[url.end():] else len(s)
+            s = s[:line_end] + "\n" + ALT_CHECK + s[line_end:]
+        out.append({"no": normalize_review_no(no.group(1)) if no else None, "url": url.group(1) if url else None, "text": s})
+    return out
+
+
+def tg_split(text, limit=TG_MAX):
+    """줄 경계로 limit 이하 조각. 한 줄이 limit 보다 길면 그 줄만 글자로 자른다. 2조각 이상이면 「(k/m)」 머리."""
+    chunks, cur = [], ""
+    for line in text.split("\n"):
+        while len(line) > limit:
+            if cur:
+                chunks.append(cur)
+                cur = ""
+            chunks.append(line[:limit])
+            line = line[limit:]
+        cand = line if not cur else cur + "\n" + line
+        if len(cand) > limit:
+            chunks.append(cur)
+            cur = line
+        else:
+            cur = cand
+    if cur:
+        chunks.append(cur)
+    return chunks if len(chunks) == 1 else [f"({i}/{len(chunks)}) {c}" for i, c in enumerate(chunks, 1)]
+
+
+def cmd_alt_bundles(env, folder=ALT_DIR, state_path=STATE_PATH, notify=None, dry=False, now=None, send=True):
+    """폴더의 새 묶음 txt 를 칸마다 한 통씩 보낸다. 보낸 칸은 원고 해시로 상태 파일에 남겨 두 번 보내지 않고,
+    다 보낸 파일은 「.보냄.txt」로 이름을 바꾼다. 보낸 칸의 심의필 → 질문 링크는 alt_posts 에 남겨
+    cmd_sync_watcher 가 게시위치 등록 때 원래 키트 질문 대신 이 URL 을 posted_url 로 쓴다.
+    send=False: 텔레그램 없이 alt_posts·보냄 표시만(로버트가 이미 손으로 게시한 묶음)."""
+    if not os.path.isdir(folder):
+        return []
+    names = sorted(n for n in os.listdir(folder) if n.endswith(".txt") and not n.endswith(ALT_SENT_SUFFIX))
+    if not names:
+        return []
+    now = now or datetime.now(kit.KST)
+    state = load_state(state_path)
+    sent, posts, bad = state.setdefault("alt_sent", {}), state.setdefault("alt_posts", {}), state.setdefault("alt_bad", {})
+    out = []
+    for name in names:
+        path = os.path.join(folder, name)
+        with open(path, encoding="utf-8-sig") as f:
+            raw = f.read()
+        items = alt_items(raw)
+        broken = [i for i in items if not (i["no"] and i["url"])]
+        if broken:
+            key = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+            if bad.get(name) != key:   # 같은 파일은 한 번만 알린다
+                bad[name] = key
+                out.append(f"대체 질문 묶음 {name} 안 보냄 — 심의필 번호·질문 링크를 못 찾은 칸 {len(broken)}/{len(items)}")
+                if not dry:
+                    save_state(state, state_path)
+            continue
+        n_msgs, ok_all = 0, True
+        for i, it in enumerate(items, 1):
+            key = hashlib.sha256(it["text"].encode("utf-8")).hexdigest()
+            if key in sent:
+                continue
+            parts = tg_split(f"{ALT_HEAD} {i}/{len(items)} — 제{it['no']}호\n\n{it['text']}")
+            if dry:
+                n_msgs += len(parts) if send else 0
+                continue
+            if send:
+                say = notify or notify_fn(env, dry)
+                if not all(say(p) is not False for p in parts):   # pams_auto.telegram 은 실패면 False
+                    ok_all = False
+                    break
+                n_msgs += len(parts)
+            sent[key] = {"file": name, "review_no": it["no"], "at": now.isoformat(), "messages": len(parts) if send else 0}
+            posts[it["no"]] = {"question_url": it["url"], "file": name, "at": now.isoformat()}
+            save_state(state, state_path)   # 칸마다 — 중간 실패에도 보낸 칸은 다시 안 보낸다
+        if dry:
+            out.append(f"[dry-run] 대체 질문 묶음 {name} — {len(items)}건 {n_msgs}통 예정")
+            continue
+        if not ok_all:
+            out.append(f"대체 질문 묶음 {name} 발송 실패 — 다음 바퀴에 남은 칸만 다시")
+            continue
+        dest = path[:-4] + ALT_SENT_SUFFIX
+        if os.path.exists(dest):
+            dest = path[:-4] + f"_{now:%H%M%S}" + ALT_SENT_SUFFIX
+        os.replace(path, dest)
+        bad.pop(name, None)
+        save_state(state, state_path)
+        out.append(f"대체 질문 묶음 {'보냄' if send else '보냄 표시만(발송 없음)'} {name} — {len(items)}건 {n_msgs}통 "
+                   f"{now:%Y-%m-%d %H:%M}")
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description="지식iN 답변 파이프라인")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1204,6 +1356,10 @@ def main():
     ap_.add_argument("--xls", help="PAMS 「지식인&댓글 엑셀변환」 내려받은 파일")
     sw = sub.add_parser("sync-watcher")
     sw.add_argument("--dry-run", action="store_true")
+    ab = sub.add_parser("alt-bundles")
+    ab.add_argument("--dry-run", action="store_true")
+    ab.add_argument("--no-send", action="store_true", help="텔레그램 없이 보냄 표시·alt_posts 만(이미 손으로 게시한 묶음)")
+    ab.add_argument("--dir", default=ALT_DIR)
     p = sub.add_parser("posted")
     p.add_argument("kit")
     p.add_argument("--url", required=True)
@@ -1225,6 +1381,9 @@ def main():
             print("\n".join(cmd_approvals(env, xls=args.xls)))
         elif args.cmd == "sync-watcher":
             print("\n".join(cmd_sync_watcher(env, dry=args.dry_run)))
+        elif args.cmd == "alt-bundles":
+            print("\n".join(cmd_alt_bundles(env, folder=args.dir, dry=args.dry_run, send=not args.no_send))
+                  or "새 대체 질문 묶음 없음")
         elif args.cmd == "posted":
             print("\n".join(cmd_posted(env, args.kit, args.url)))
         elif args.cmd == "weekly":
