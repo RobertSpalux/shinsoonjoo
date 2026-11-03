@@ -862,6 +862,14 @@ class Kin1(unittest.TestCase):
             self.assertIn(t, kh.TOPICS)
             self.assertLessEqual(len(kp.special_note(t).encode("utf-8")), kp.NOTE_MAX_BYTES)
         self.assertEqual(kp.CATEGORY["연금수령"], "변액/연금보험")
+        # KIN10: 카테고리마다 PAMS 폼이 고르는 손보/생보와 키트가 같아야 한다(다르면 무한 재채움)
+        for c in (*kp.CATEGORY.values(), kp.CATEGORY_ETC):
+            self.assertIn(c, kp.INSURER_KIND)
+        self.assertEqual(kp.INSURER_KIND["변액/연금보험"], "생보")
+        self.assertEqual(kp.INSURER_KIND[kp.CATEGORY_ETC], "손보")
+        rec = {"category": "변액/연금보험", "note": "n", "question_url": "u", "answer_sha256": "h", "topic": "연금수령",
+               "id": "1103_지식인_1", "question_title": "t", "question_summary": "s", "answer": "a"}
+        self.assertIn("손보/생보: 생보\n", kp.kit_text(rec))
         i, _ = kp.question_intent("연금보험 수령 시작하면 일시금이 나을까요?", "가입한 지 10년 됐어요")
         self.assertIn("연금 수령", i["situations"])
 
