@@ -730,8 +730,7 @@ def save_draft_row(env, rec):
 
 
 def record_review(env, rec, review_no, f, t):
-    """ad_reviews 에 channel='kin' 행. 🔴 article_id 가 NOT NULL·FK 라 지식인 답변(글이 아님)은 지금 넣을 수 없다
-    (2026-10-09 OpenAPI 실측). sql/006_ad_reviews_kin.sql 적용 전에는 실패를 돌려주고 상태 파일에만 남긴다."""
+    """ad_reviews 에 channel='kin' 행(sql/006 — article_id 없이 kin_answer_id 로 묶는다). 실패는 (None, 사유)."""
     url, h = _rest(env, "ad_reviews")
     # channel='kin' = 지식iN 행의 유일한 식별 키(sql/006 체크·NOT_KIN 필터). review_type 은 PAMS 심의유형 — 기존 값 'jisikin'
     # (src/app/api/admin/ad-review/route.ts REVIEW_TYPES). 'kin' 은 review_type 체크에 없다.
@@ -746,9 +745,17 @@ def record_review(env, rec, review_no, f, t):
     body["kin_answer_id"] = rec["kin_answer_id"]
     r = requests.post(url, json=body, headers={**h, "Content-Type": "application/json",
                                                "Prefer": "return=representation"}, timeout=30)
+    if r.status_code == 409 and DUP_CONSTRAINT in (getattr(r, "text", "") or ""):
+        # KIN11 — kin_answer_id 유일(ad_reviews_kin_answer_uniq) 충돌 = 같은 원고가 이미 다른 심의필로 승인됐다(중복 접수).
+        # 예전 안내 「sql/006 미적용이면 정상」은 틀렸다(006 은 적용돼 있다). cmd_sync_watcher 가 복제 행으로 다시 넣는다.
+        return None, f"ad_reviews 기록 못함(HTTP 409 {DUP_CONSTRAINT}) — {DUP_MARK}"
     if r.status_code >= 300:
-        return None, f"ad_reviews 기록 못함(HTTP {r.status_code}) — sql/006 미적용이면 정상. 상태 파일에만 남김"
+        return None, f"ad_reviews 기록 못함(HTTP {r.status_code}) {(getattr(r, 'text', '') or '')[:120]}".rstrip()
     return r.json()[0]["id"], "ad_reviews kin 행"
+
+
+DUP_CONSTRAINT = "ad_reviews_kin_answer_uniq"
+DUP_MARK = "같은 원고 중복 승인"
 
 
 EXPIRY_WARN_DAYS = 30
@@ -1064,7 +1071,7 @@ def mark_answer_posted(env, kin_answer_id):
 
 def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=record_review, existing_fn=None,
                      mark_posted=mark_answer_posted, dry=False, pending_fn=None, register_url=register_posted_url,
-                     notify=None):
+                     notify=None, save_row=save_draft_row):
     """감시기(robert-os pams_지식인행.json) 승인 행 → ad_reviews(kin) 자동 기록. review_no 가 이미 있으면 새 행은 안 만든다(중복 0).
     게시위치등록됨 이면 kin_answers 를 게시완료로. 사람이 approvals/approve 를 돌릴 필요가 없다.
     이미 있는 행이라도 게시위치등록됨=True 인데 url_registered_at 이 비었으면 posted_url(질문 URL)·url_registered_at 을
@@ -1114,9 +1121,40 @@ def cmd_sync_watcher(env, path=WATCHER_JSON, state_path=STATE_PATH, record=recor
             out.append(f"[dry-run] 기록 예정 {no} ← {kid}")
             continue
         ad_id, msg = record(env, rec, no, f, t)
+        alerted = state.setdefault("alerted_fail", {})
+        dup = not ad_id and DUP_MARK in msg
+        if dup and not alerted.get(no, {}).get("clone_tried"):
+            # KIN11 — 같은 원고가 두 번 승인됐다(11/03 1019). 원고 복제 kin_answers 행을 새로 만들어 그 id 로 기록한다
+            # (0834·0836 수동 처리와 같은 경로). 키트의 첫 승인(review_no·kin_answer_id)은 그대로 두고 dup_reviews 에 남긴다.
+            # 복제는 review_no 당 한 번만 — 실패하면 바퀴마다 고아 kin_answers 행이 쌓인다.
+            new_kid, save_msg = save_row(env, rec)
+            if new_kid:
+                ad_id, msg = record(env, {**rec, "kin_answer_id": new_kid}, no, f, t)
+            else:
+                msg = f"{DUP_MARK} — 복제 행 실패: {save_msg}"
+            if ad_id:
+                have.add(no)
+                rec.setdefault("dup_reviews", []).append({"review_no": no, "review_from": f, "review_to": t,
+                                                          "ad_review_id": ad_id, "kin_answer_id": new_kid})
+                alerted.pop(no, None)
+                changed = True
+                out.append(f"중복 승인 {no} ← {kid} — 복제 kin_answers {new_kid} 로 기록")
+                (notify or notify_fn(env, dry))(
+                    f"🔁 지식인 중복 승인 제{no}호 — 대체 질문 필요\n키트 {kid} 의 같은 원고가 이미 다른 심의필로 승인돼 있다"
+                    f"(첫 승인 제{rec.get('review_no') or '?'}호). 같은 질문에 두 번 올릴 수 없으니 이 심의필은 다른 질문에 쓴다.\n"
+                    f"ad_reviews 는 복제 kin_answers {new_kid} 로 기록함.\n원 질문: {rec.get('question_url', '')}")
+                continue
         if not ad_id:
-            out.append(f"기록 실패 {no} ← {kid}: {msg}")
+            if no in alerted:   # KIN11 — 같은 실패는 review_no 당 1회만 알린다(11/03 10분마다 같은 알림 반복)
+                out.append(f"(알림 끝남) 기록 실패 반복 {no} ← {kid}")
+                continue
+            alerted[no] = {"kit": kid, "msg": msg, "at": datetime.now(kit.KST).isoformat(), "clone_tried": dup}
+            changed = True
+            out.append(f"기록 실패 {no} ← {kid}: {msg}"
+                       + (" — 대체 질문 필요, 복제 kin_answers 로 손 기록" if dup else ""))
             continue
+        if alerted.pop(no, None):
+            changed = True
         have.add(no)
         rec.update({"review_no": no, "review_from": f, "review_to": t, "ad_review_id": ad_id,
                     "status": "게시" if row.get("게시위치등록됨") else "승인"})
