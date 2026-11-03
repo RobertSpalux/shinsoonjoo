@@ -8,10 +8,10 @@
 
 산출물 — Downloads\\PAMS접수\\_네이버비공개\\  (🔴 PAMS접수 바로 아래에 두지 않는다 — pams_auto 가 거기 png/pdf 를
     네이버 캡처로 짝지어 키트를 만든다. 사진·안내 png 가 캡처로 오인된다.)
-    MMDD_N호_네이버비공개.txt      — 할 일 순서 + 제목 + 본문(조립본, 심의용)
-    MMDD_N호_네이버비공개.html     — 서식 참고본(configs/naver-format.json 규격 · 어드민 [게시용 복사]와 같은 변환)
+    MMDD_N호_네이버비공개.txt      — 로버트용 카드: 제목 상자 · 분류 상자 · 할 일 3줄(본문 없음)
+    MMDD_N호_네이버비공개.html     — 본문(configs/naver-format.json 규격 · 어드민 [게시용 복사]와 같은 변환)
     MMDD_N호_네이버비공개_이미지N  — 네이버 사진(assets/naver/<slug>/, 게시 순서)
-    MMDD_N호_네이버비공개_안내.png — 한 장 요약(텔레그램용)
+    _내부\\MMDD_N호_네이버비공개_본문.txt · _안내.png — 조립본·텔레그램용 한 장(로버트는 열지 않는다)
 
 본문은 어드민 compose(mode=submission) — 심의 제출용 조립본(심의필 줄은 공란 예시). 조립 기록(naver_composed_hash)도
     남는다(= 어드민 복사 버튼 1회, preflight 「네이버 osmu」 근거).
@@ -41,6 +41,7 @@ import naver_rules  # noqa: E402
 OUT_DIR = os.path.join(kit.KIT_DIR, "_네이버비공개")
 FORMAT_JSON = os.path.join(kit.ROOT, "configs", "naver-format.json")
 STEP_NO = re.compile(r"^\d+\.\s*")
+INNER_DIR = "_내부"   # 로버트가 열지 않는 내부 산출물(_본문.txt · _안내.png) — OUT_DIR 아래 하위 폴더
 
 
 def format_line():
@@ -141,6 +142,25 @@ def steps(issue, title, n_images, base):
     ]
 
 
+def category_box(category):
+    bar = "━" * 40
+    return ["■ 네이버 블로그 분류 — 글쓰기 화면의 분류 칸에서 이것 하나를 고른다", bar, f"  {category}", bar]
+
+
+def card_text(issue, slug, title, category, n_images, naver_only, keyword):
+    """로버트용 txt — ①제목 상자 ②분류 상자 ③할 일 3줄뿐(NP1). 본문·필수안내·긴 안내는 넣지 않는다.
+    첫 줄은 pams_folder_tidy 가 slug 를 읽는 머리줄. 순수 함수(테스트 대상)."""
+    lines = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", ""]
+    lines += title_box(title, naver_only) + [""] + category_box(category) + [""]
+    lines += [
+        "할 일:",
+        f"  1. 비공개로 발행한다 — 본문은 같은 폴더 .html 을 크롬으로 열어 복사, 사진 {n_images}장은 _이미지N.",
+        f"  2. PDF 로 저장한다 — Downloads\\PAMS접수\\{issue}.pdf",
+        f"  3. 글 상단(제목 옆 「· 비공개」가 보이게) 캡처를 Downloads\\PAMS접수\\{issue}_상단.png 로 저장한다.",
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def one_page_html(issue, slug, title, step_lines, n_images, category=None):
     # 번호는 <ol> 이 붙인다 — 문장 앞 「N. 」을 떼서 「1. 1.」 이중 번호를 막는다
     items = [htmllib.escape(STEP_NO.sub("", s)) for s in step_lines if not s.startswith(" ")]
@@ -205,11 +225,12 @@ def check_rich_headings(text, rich):
 
 
 def existing_outputs(out_dir, base):
-    """이미 있는 같은 이름 산출물(MMDD_N호_네이버비공개.* · _본문 · _이미지N · _안내) — 순수 함수(테스트 대상)."""
-    if not os.path.isdir(out_dir):
-        return []
-    return sorted(n for n in os.listdir(out_dir)
-                  if n.startswith(base) and n[len(base):len(base) + 1] in (".", "_"))
+    """이미 있는 같은 이름 산출물(MMDD_N호_네이버비공개.* · _이미지N, 그리고 _내부\\ 의 _본문 · _안내) — 순수 함수(테스트 대상)."""
+    names = []
+    for d in (out_dir, os.path.join(out_dir, INNER_DIR)):
+        if os.path.isdir(d):
+            names += [n for n in os.listdir(d) if n.startswith(base) and n[len(base):len(base) + 1] in (".", "_")]
+    return sorted(names)
 
 
 def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
@@ -219,6 +240,7 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
     # 🔴 같은 이름 파일이 있으면 덮어쓰기 전에 멈춘다 — 관제탑이 손으로 만든 안내(SH16 18·19·20호)를 지우지 않게.
     #    compose 를 부르기 전에 본다(조립 기록 naver_composed_hash 도 남기지 않는다).
     taken = existing_outputs(out_dir, base)
+    inner_dir = os.path.join(out_dir, INNER_DIR)
     if taken and not force:
         raise kit.KitError(f"{out_dir} 에 같은 이름 파일이 이미 있습니다 — {', '.join(taken[:4])}"
                            + (f" 외 {len(taken) - 4}개" if len(taken) > 4 else "")
@@ -230,18 +252,19 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
         raise kit.KitError("네이버 근거 문장 게이트 — 산출물을 만들지 않았습니다:\n  · " + "\n  · ".join(fails))
     body = pa.admin_post(server, env, "/api/admin/compose",
                          {"articleId": article["id"], "channel": "naver", "mode": "submission"})
-    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(inner_dir, exist_ok=True)
     imgs = pa.copy_images(slug, out_dir, base)
-    body_path = os.path.join(out_dir, base + "_본문.txt")
+    # 조립 본문은 로버트가 열지 않는다(html 이 본문) — 내부 하위 폴더에만 둔다(NP1)
+    body_path = os.path.join(inner_dir, base + "_본문.txt")
     open(body_path, "w", encoding="utf-8", newline="\n").write(body["text"])
     rich = pa.rich_html(body_path, imgs)
     try:
         check_rich_headings(body["text"], rich)
     except kit.KitError:
         # 틀린 파일을 남기지 않는다 — 방금 쓴 본문·사진을 거둔다
-        for n in [base + "_본문.txt", *imgs]:
+        for p in [body_path, *(os.path.join(out_dir, n) for n in imgs)]:
             try:
-                os.remove(os.path.join(out_dir, n))
+                os.remove(p)
             except OSError:
                 pass
         raise
@@ -253,13 +276,12 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
         f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(issue)} 네이버 본문 (제목 아님)</title>"
         f"<body style='max-width:860px;margin:24px auto;padding:0 16px'>\n{rich}</body>")
     st = steps(issue, title, len(imgs), base)
-    head = [f"[네이버 심의용 비공개 게시] {issue} · {slug}", f"분류: {category}", ROBERT_TODO, ""] + title_box(title, kit.naver_only(article)) + ["", "할 일:"] + ["  " + s for s in st] + [
-        "", format_line(), f"사진 {len(imgs)}장: " + (", ".join(imgs) or "없음"), "", "── 본문(조립본 · 심의 제출용) ──"]
     txt_path = os.path.join(out_dir, base + ".txt")
-    open(txt_path, "w", encoding="utf-8", newline="\n").write("\n".join(head) + "\n" + body["text"] + "\n")
-    page_html = os.path.join(out_dir, base + "_안내.html")
+    open(txt_path, "w", encoding="utf-8", newline="\n").write(
+        card_text(issue, slug, title, category, len(imgs), kit.naver_only(article), keyword_of(title)))
+    page_html = os.path.join(inner_dir, base + "_안내.html")
     open(page_html, "w", encoding="utf-8").write(one_page_html(issue, slug, title, st, len(imgs), category))
-    png_path = os.path.join(out_dir, base + "_안내.png")
+    png_path = os.path.join(inner_dir, base + "_안내.png")
     render_png(page_html, png_path)
     os.remove(page_html)
     return {"txt": txt_path, "html": html_path, "png": png_path, "images": imgs, "title": title, "issue": issue,
