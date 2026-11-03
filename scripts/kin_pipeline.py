@@ -62,6 +62,11 @@ PLACEHOLDER_RX = re.compile(r"제\s*0{3,5}\s*호\s*\(\s*\d{4}\.00\.00\s*~\s*\d{4
 # 칸의 name/value 는 아직 재지 않았다 — 글자(라벨)만 적는다.
 CATEGORY_ETC = "그외 기타(건강,화재,펫 보험 등)"
 CATEGORY = {"간편심사": "유병자보험", "연금수령": "변액/연금보험"}   # 나머지 소재는 전부 CATEGORY_ETC
+# 카테고리 → 손보/생보. PAMS 폼이 라디오를 누르면 #insuregbn 을 스스로 바꾼다(robert-os pams_apply 실측:
+# value 0·1·4 → 손보, 그 밖 → 생보). 키트가 다르게 적으면 채우기가 ok=false(경고)가 되고, 그 키트가
+# 바퀴마다 다시 채워져 같은 글이 세 번 더 접수됐다(KIN10, 2026-11-03 0834·0836).
+INSURER_KIND = {"운전자보험": "손보", "유병자보험": "손보", CATEGORY_ETC: "손보",
+                "종신보험": "생보", "변액/연금보험": "생보", "태아보험": "생보"}
 POSTING_LOCATION = "네이버 지식인"             # 폼 기본값(실물). 고치지 않는다.
 NOTICE_MARK = "※ 유의사항"                     # src/lib/compliance/kin-terms.ts KIN_NOTICE_MARK 와 같다
 
@@ -255,7 +260,7 @@ def kit_text(rec):
     폼 칸 순서: 카테고리를 **먼저** 고른다(자동생성 칸이 채워짐) → 원고. 「저장」·「제출」·자가점검은 기계 금지."""
     fields = {
         "심의유형": "지식인",
-        "손보/생보": "손보",
+        "손보/생보": INSURER_KIND[rec["category"]],
         "광고형태": "바이럴(지식in)",
         "게시위치": POSTING_LOCATION,
         "카테고리": rec["category"],
