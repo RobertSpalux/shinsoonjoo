@@ -42,6 +42,7 @@ import pams_kit as kit  # noqa: E402
 import review_lock  # noqa: E402
 
 DONE_ROOT = "_접수완료"
+INNER_DIR = "_내부"   # naver_private_guide.INNER_DIR 와 같은 이름(import 순환을 피해 중복 선언)
 ACTIVE = ("submitted", "under_review")
 LABEL_CH = {v: k for k, v in kit.CH_LABEL.items()}   # 본진 → main …
 HEAD_RX = re.compile(r"^\[(PAMS 접수 문자열|네이버 심의용 비공개 게시|네이버 승인 — 공개 전환)\]\s*(.+?)\s*$")
@@ -98,6 +99,8 @@ def decide(kind, slug, channel, rows):
     st = last.get("status")
     if channel == "threads" and any(r.get("status") in ACTIVE for r in mine):
         return False, "심사중 스레드 행 있음"
+    if kind == "네이버 심의용 비공개 게시" and st in ACTIVE:
+        return True, "접수 완료(심사중) — 비공개 세트는 더 안 쓴다"   # NP1: 제출 기록이 있으면 옮긴다
     if st != "approved":
         return False, {"submitted": "심사중", "under_review": "심사중", "rejected": "반송(보완 대상)"}.get(st, f"상태 {st}")
     if kind == "네이버 승인 — 공개 전환":
@@ -139,6 +142,11 @@ def plan(kit_dir, rows, captures=None, read_head=None):
             for m in members:
                 taken.add(m)
                 out.append((os.path.join(src_dir, m), os.path.join(target, m) if ok else None, label))
+            # 내부 하위 폴더(_내부\ — 조립 본문·안내 png)의 같은 줄기도 함께(NP1)
+            inner = os.path.join(src_dir, INNER_DIR)
+            if kind == "네이버 심의용 비공개 게시" and os.path.isdir(inner):
+                for m in group_members(os.listdir(inner), stem):
+                    out.append((os.path.join(inner, m), os.path.join(target, INNER_DIR, m) if ok else None, label))
     cap_dir = os.path.join(kit_dir, CAPTURE_SRC)
     if os.path.isdir(cap_dir):
         for n in sorted(os.listdir(cap_dir)):

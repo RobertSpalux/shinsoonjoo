@@ -87,6 +87,23 @@ class DecideTest(unittest.TestCase):
         self.assertFalse(tidy.decide(k, A, "naver", [row(A, "naver", "approved", notes=H)])[0])
         self.assertTrue(tidy.decide(k, A, "naver", [row(A, "naver", "approved", naver_pub=True)])[0])
 
+    def test_private_set_moves_once_submitted(self):
+        """NP1 — 비공개 세트는 접수(제출) 끝나면 옮긴다. 반송·미접수는 남긴다."""
+        k = "네이버 심의용 비공개 게시"
+        for st in ("submitted", "under_review", "approved"):
+            self.assertTrue(tidy.decide(k, A, "naver", [row(A, "naver", st)])[0], st)
+        self.assertFalse(tidy.decide(k, A, "naver", [row(A, "naver", "rejected")])[0])
+        self.assertFalse(tidy.decide(k, A, "naver", [])[0])
+        self.assertFalse(tidy.decide("PAMS 접수 문자열", A, "naver", [row(A, "naver", "submitted")])[0])
+
+    def test_inner_dir_moves_with_private_set(self):
+        d = tempfile.mkdtemp()
+        put(d, "_네이버비공개/0930_7호_네이버비공개.txt", "[네이버 심의용 비공개 게시] 7호 · " + A + "\n")
+        put(d, "_네이버비공개/_내부/0930_7호_네이버비공개_본문.txt")
+        moves = tidy.plan(d, [row(A, "naver", "submitted")])
+        dst = [os.path.relpath(m[1], d) for m in moves if m[1]]
+        self.assertIn(os.path.join("_접수완료", "네이버비공개", "_내부", "0930_7호_네이버비공개_본문.txt"), dst)
+
     def test_other_article_rows_ignored(self):
         self.assertFalse(tidy.decide("PAMS 접수 문자열", A, "main", [row(B, "main", "approved", notes=H)])[0])
 

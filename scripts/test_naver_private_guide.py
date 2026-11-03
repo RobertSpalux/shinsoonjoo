@@ -145,8 +145,29 @@ class Steps(unittest.TestCase):
         self.assertIn("7호_상단.png", j)
         self.assertIn("png 없으면 만들지 않고 알림", j)
         src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "naver_private_guide.py"), encoding="utf-8").read()
-        self.assertIn('f"분류: {category}", ROBERT_TODO', src, "txt 머리에도 싣는다")
         self.assertIn('f"{ROBERT_TODO}\\n"', src, "텔레그램 캡션에도 싣는다")
+
+    def test_card_text_only_robert_card(self):
+        """NP1 — txt 는 제목 상자 · 분류 상자 · 할 일 3줄뿐. 본문·필수안내·긴 안내 없음."""
+        t = g.card_text("33호", "some-slug", "연금보험 수익자", "연금·노후·세테크", 5, True, "연금보험")
+        self.assertEqual(t.split("\n")[0], "[네이버 심의용 비공개 게시] 33호 · some-slug")   # tidy 머리줄
+        self.assertEqual(t.count("연금보험 수익자"), 1)
+        self.assertIn("  연금·노후·세테크", t)
+        self.assertIn("분류", t.split("할 일:")[0])
+        todo = [l for l in t.split("할 일:")[1].split("\n") if l.strip()]
+        self.assertEqual(len(todo), 3)
+        self.assertIn("33호.pdf", t)
+        self.assertIn("33호_상단.png", t)
+        for bad in ("필수안내", "심의필", "본문(조립본", "서식 규격"):
+            self.assertNotIn(bad, t)
+        self.assertLess(len(t), 1200)
+
+    def test_inner_dir_and_existing_outputs(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, g.INNER_DIR))
+        open(os.path.join(d, g.INNER_DIR, "0101_1호_네이버비공개_본문.txt"), "w").write("x")
+        self.assertEqual(g.existing_outputs(d, "0101_1호_네이버비공개"), ["0101_1호_네이버비공개_본문.txt"])
 
     def test_blog_category(self):
         c = g.blog_category
