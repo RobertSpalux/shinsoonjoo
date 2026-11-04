@@ -68,7 +68,7 @@ CATEGORY = {"간편심사": "유병자보험", "연금수령": "변액/연금보
 CATEGORY_KEYWORDS = (
     ("종신보험", ("종신",)),
     ("태아보험", ("태아",)),
-    ("운전자보험", ("운전자",)),
+    ("운전자보험", ("운전자보험", "운전자 보험")),
     ("변액/연금보험", ("변액", "연금")),
     ("유병자보험", ("유병자", "간편심사", "간편보험", "간편 심사")),
 )
@@ -80,9 +80,9 @@ INSURER_KIND = {"운전자보험": "손보", "유병자보험": "손보", CATEGO
 def category_for(topic, title="", summary=""):
     if topic in CATEGORY:
         return CATEGORY[topic]
-    text = f"{title or ''} {summary or ''}"
+    # 요약(summary)에는 남의 답변 조각이 섞여 「운전자보험이나…」 같은 말이 들어온다 — 질문자가 쓴 제목만 본다.
     for cat, words in CATEGORY_KEYWORDS:
-        if any(w in text for w in words):
+        if any(w in (title or "") for w in words):
             return cat
     return CATEGORY_ETC
 

@@ -1081,7 +1081,8 @@ class CategoryFor(unittest.TestCase):
         self.assertEqual(kp.category_for("리모델링점검", "20대 부부 종신보험 가입하는게 맞을까요?", ""), "종신보험")
 
     def test_keywords_in_summary_and_priority(self):
-        self.assertEqual(kp.category_for("보장공백", "보험 문의", "태아보험 들려고요"), "태아보험")
+        self.assertEqual(kp.category_for("보장공백", "태아보험 들려고요", ""), "태아보험")
+        self.assertEqual(kp.category_for("보장공백", "오토바이 과실100", "운전자보험이나 실손"), kp.CATEGORY_ETC)   # 요약은 보지 않는다
         self.assertEqual(kp.category_for("보장공백", "운전자보험 필요할까요", ""), "운전자보험")
         self.assertEqual(kp.category_for("갱신보험료", "종신보험이랑 연금보험 중 뭐가 나을까요", ""), "종신보험")
         self.assertEqual(kp.category_for("실손청구", "변액보험 해지 문의", ""), "변액/연금보험")
