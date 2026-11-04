@@ -93,5 +93,83 @@ class Pending(unittest.TestCase):
         self.assertLess(i, src.index("review_lock.stamp(env, state"), "행을 먼저 만들어야 같은 바퀴에 원고해시가 기록된다")
 
 
+TITLE32 = "연금보험 수령액, 어떻게 정해지나요? 종신형 확정기간형과 공시이율 기준"
+# 2026-11-04 감시기 실제 기록 모양(게시명은 공백·문장부호가 떨어져 있다)
+ROW32 = {"게시명": "연금보험수령액어떻게정해지나요종신형확정기간형과공시이율기준", "진행사항": "반송",
+         "신청일시": "2026-11-03 09:52", "seq": "682637"}
+ART32 = {"slug": "annuity-payout-amount-type-rate-check", "title": "연금 수령액 기준", "naver_title": TITLE32, "ad_reviews": []}
+OTHER = {"slug": "other-article", "title": "전혀 다른 글 제목입니다 보험 점검", "naver_title": "다른 네이버 제목입니다 점검", "ad_reviews": []}
+NOW32 = datetime(2026, 11, 4, 10, 0, tzinfo=kit.KST)
+
+
+class Unmatched(unittest.TestCase):
+    """LG1 — 신청서 채우기 실패(ok:false) 후 손으로 낸 접수는 pams_apply_대기.json 에 없다. 감시기 짝없음 기록으로 덮는다."""
+
+    def test_title_match_creates_naver_row(self):
+        todo, bad = ps.pending_unmatched([ROW32], [], [ART32, OTHER], [], NOW32)
+        self.assertEqual(bad, [])
+        self.assertEqual([(p["slug"], p["channel"], p["seq"]) for p in todo],
+                         [("annuity-payout-amount-type-rate-check", "naver", "682637")])
+        self.assertEqual(todo[0]["게시명"], "", "PAMS 목록 게시명(공백 없음)을 행 제목으로 쓰지 않는다")
+        self.assertIn("PAMS seq 682637", ps.note_for(todo[0]))
+
+    def test_kit_txt_match_wins(self):
+        kits = [("annuity-payout-amount-type-rate-check", "naver", TITLE32.replace("?", ""))]
+        todo, _ = ps.pending_unmatched([ROW32], [], [OTHER], kits, NOW32)
+        self.assertEqual([(p["slug"], p["channel"]) for p in todo], [("annuity-payout-amount-type-rate-check", "naver")])
+        self.assertEqual(todo[0]["via"], "키트 txt 게시명")
+
+    def test_no_duplicate_of_manual_row_245f6e3b(self):
+        """관제탑 수동 행(notes 에 seq 682637)이 있으면 — 상태가 무엇이든 — 새 행을 만들지 않는다."""
+        for st in ("submitted", "rejected", "approved"):
+            rv = [{"slug": ART32["slug"], "channel": "naver", "status": st, "notes": "관제탑 수동 연결 · PAMS seq 682637"}]
+            self.assertEqual(ps.pending_unmatched([ROW32], rv, [ART32], [], NOW32), ([], []), st)
+
+    def test_seq_prefix_is_not_a_match(self):
+        rv = [{"slug": "x", "channel": "main", "status": "submitted", "notes": "PAMS seq 6826370"}]
+        todo, _ = ps.pending_unmatched([ROW32], rv, [ART32], [], NOW32)
+        self.assertEqual(len(todo), 1)
+
+    def test_active_row_without_seq_is_reported_not_duplicated(self):
+        rv = [{"slug": ART32["slug"], "channel": "naver", "status": "submitted", "notes": ""}]
+        todo, bad = ps.pending_unmatched([ROW32], rv, [ART32], [], NOW32)
+        self.assertEqual(todo, [])
+        self.assertIn("진행 중 행", bad[0]["사유"])
+
+    def test_no_candidate_and_ambiguous_are_reported(self):
+        _, bad = ps.pending_unmatched([ROW32], [], [OTHER], [], NOW32)
+        self.assertEqual(bad[0]["사유"], "후보 없음")
+        twin = dict(ART32, slug="twin")
+        todo, bad = ps.pending_unmatched([ROW32], [], [ART32, twin], [], NOW32)
+        self.assertEqual(todo, [])
+        self.assertIn("후보 2개", bad[0]["사유"])
+
+    def test_old_rows_ignored(self):
+        later = datetime(2026, 12, 1, tzinfo=kit.KST)
+        self.assertEqual(ps.pending_unmatched([ROW32], [], [ART32], [], later), ([], []))
+
+    def test_alert_once_by_fingerprint(self):
+        import tempfile, json as js
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "u.json")
+            js.dump({"행": [ROW32]}, open(path, "w", encoding="utf-8"), ensure_ascii=False)
+            sent, state = [], {}
+            for _ in range(3):   # 바퀴가 여러 번 돌아도 같은 건은 한 번만
+                ps.unmatched_todo({}, state, sent.append, lambda m: None, path=path, reviews=[], articles=[OTHER], kits=[])
+            self.assertEqual(len(sent), 1)
+            self.assertIn("682637", sent[0])
+
+    def test_missing_or_empty_file(self):
+        self.assertEqual(ps.unmatched_todo({}, {}, print, print, path=r"Z:\none\x.json", reviews=[], articles=[], kits=[]), [])
+
+    def test_kit_titles_reads_header_and_title(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            os.makedirs(os.path.join(d, "_접수완료"))
+            open(os.path.join(d, "_접수완료", "k.txt"), "w", encoding="utf-8").write(
+                "[PAMS 접수 문자열] 32호 · 네이버 · annuity-payout-amount-type-rate-check\n\n게시명: 제목 하나\n광고형태: 바이럴\n")
+            self.assertEqual(ps.kit_titles([d]), [("annuity-payout-amount-type-rate-check", "naver", "제목 하나")])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
