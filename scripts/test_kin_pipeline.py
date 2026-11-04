@@ -1074,6 +1074,30 @@ class Kin1(unittest.TestCase):
         self.assertIn("연금 수령", i["situations"])
 
 
+class CategoryFor(unittest.TestCase):
+    """LG2 — 질문에 상품군이 분명하면 소재와 무관하게 그 카테고리(1030_지식인_495751844 「종신보험으로 선택해주세요」 반송)."""
+
+    def test_whole_life_question_is_not_etc(self):
+        self.assertEqual(kp.category_for("리모델링점검", "20대 부부 종신보험 가입하는게 맞을까요?", ""), "종신보험")
+
+    def test_keywords_in_summary_and_priority(self):
+        self.assertEqual(kp.category_for("보장공백", "태아보험 들려고요", ""), "태아보험")
+        self.assertEqual(kp.category_for("보장공백", "오토바이 과실100", "운전자보험이나 실손"), kp.CATEGORY_ETC)   # 요약은 보지 않는다
+        self.assertEqual(kp.category_for("보장공백", "운전자보험 필요할까요", ""), "운전자보험")
+        self.assertEqual(kp.category_for("갱신보험료", "종신보험이랑 연금보험 중 뭐가 나을까요", ""), "종신보험")
+        self.assertEqual(kp.category_for("실손청구", "변액보험 해지 문의", ""), "변액/연금보험")
+
+    def test_topic_wins_and_etc_fallback(self):
+        self.assertEqual(kp.category_for("연금수령", "종신보험 얘기", ""), "변액/연금보험")
+        self.assertEqual(kp.category_for("간편심사", "그냥", ""), "유병자보험")
+        self.assertEqual(kp.category_for("실손청구", "실손 청구 서류", "치과"), kp.CATEGORY_ETC)
+        self.assertEqual(kp.category_for("실손청구", None, None), kp.CATEGORY_ETC)
+
+    def test_every_keyword_category_has_insurer_kind(self):
+        for cat, _ in kp.CATEGORY_KEYWORDS:
+            self.assertIn(cat, kp.INSURER_KIND)
+
+
 class Kin1Weekly(unittest.TestCase):
     def test_weekly_kin_line(self):
         import weekly_lead_report as wl
