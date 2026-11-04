@@ -62,13 +62,32 @@ PLACEHOLDER_RX = re.compile(r"제\s*0{3,5}\s*호\s*\(\s*\d{4}\.00\.00\s*~\s*\d{4
 # 변액/연금보험 · 그외 기타(건강,화재,펫 보험 등) · 태아보험. 고르면 「답변내용」 아래 칸에 안내문구+필수안내사항 자동생성.
 # 칸의 name/value 는 아직 재지 않았다 — 글자(라벨)만 적는다.
 CATEGORY_ETC = "그외 기타(건강,화재,펫 보험 등)"
-CATEGORY = {"간편심사": "유병자보험", "연금수령": "변액/연금보험"}   # 나머지 소재는 전부 CATEGORY_ETC
+CATEGORY = {"간편심사": "유병자보험", "연금수령": "변액/연금보험"}   # 소재(topic)가 정하는 카테고리. 없으면 질문 글자로 본다(category_for)
+# 질문 제목·요약에 상품군이 분명하면 그 카테고리를 고른다 — 소재가 「리모델링점검」이어도 질문이 「종신보험 가입」이면 종신보험이다
+# (LG2 2026-11-04: 1030_지식인_495751844 가 「그외 기타」로 접수돼 11/2 「종신보험으로 선택해주세요」 반송). 앞에 둔 것이 먼저 맞는다.
+CATEGORY_KEYWORDS = (
+    ("종신보험", ("종신",)),
+    ("태아보험", ("태아",)),
+    ("운전자보험", ("운전자",)),
+    ("변액/연금보험", ("변액", "연금")),
+    ("유병자보험", ("유병자", "간편심사", "간편보험", "간편 심사")),
+)
 # 카테고리 → 손보/생보. PAMS 폼이 라디오를 누르면 #insuregbn 을 스스로 바꾼다(robert-os pams_apply 실측:
 # value 0·1·4 → 손보, 그 밖 → 생보). 키트가 다르게 적으면 채우기가 ok=false(경고)가 되고, 그 키트가
 # 바퀴마다 다시 채워져 같은 글이 세 번 더 접수됐다(KIN10, 2026-11-03 0834·0836).
 INSURER_KIND = {"운전자보험": "손보", "유병자보험": "손보", CATEGORY_ETC: "손보",
                 "종신보험": "생보", "변액/연금보험": "생보", "태아보험": "생보"}
-POSTING_LOCATION = "네이버 지식인"             # 폼 기본값(실물). 고치지 않는다.
+def category_for(topic, title="", summary=""):
+    if topic in CATEGORY:
+        return CATEGORY[topic]
+    text = f"{title or ''} {summary or ''}"
+    for cat, words in CATEGORY_KEYWORDS:
+        if any(w in text for w in words):
+            return cat
+    return CATEGORY_ETC
+
+
+POSTING_LOCATION = "네이버 지식인"           # 폼 기본값(실물). 고치지 않는다.
 NOTICE_MARK = "※ 유의사항"                     # src/lib/compliance/kin-terms.ts KIN_NOTICE_MARK 와 같다
 
 
@@ -941,7 +960,7 @@ def cmd_run(env, n, dry, harvest_fn=None, make_fn=None, notify=None, state_path=
         rec = {"id": kit_id(c["url"], today), "day": today, "created": now.isoformat(), "topic": c["topic"],
                "question_url": c["url"], "question_title": c["title"], "question_summary": c["summary"],
                "answer": answer, "answer_sha256": hashlib.sha256(answer.encode("utf-8")).hexdigest(),
-               "category": CATEGORY.get(c["topic"], CATEGORY_ETC),
+               "category": category_for(c["topic"], c["title"], c.get("summary", "")),
                "note": special_note(c["topic"]), "status": "심의대기", "score": c.get("score_note", "")}
         if not dry:
             rec["kin_answer_id"], _ = save_row(env, rec)
