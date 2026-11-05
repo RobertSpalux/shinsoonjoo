@@ -91,6 +91,8 @@
     {"new": "silson-nonrenewal-premium-rejoin-cycle", "existing": "whole-life-cancel-refund-keep-options",
      "reason": "GFS31 33호(대기열 키워드) — 실손 보험료 갱신·재가입 주기 vs 종신보험 해약환급금, 상품·제도가 다르다. 겹친 말은 「보험료」 일반어 한 낱말"},
     {"new": "annuity-beneficiary-change-four-fields", "existing": "corporate-policy-owner-beneficiary-check",
-     "reason": "GFS34 34호(대기열 키워드) — 기존 글은 법인 계약의 세 칸, 새 글은 개인 연금보험의 수익자 변경 절차·미지정 기준. 겹친 말은 「계약·계약자·피보험자·수익자」 계약 칸 이름"}
+     "reason": "GFS34 34호(대기열 키워드) — 기존 글은 법인 계약의 세 칸, 새 글은 개인 연금보험의 수익자 변경 절차·미지정 기준. 겹친 말은 「계약·계약자·피보험자·수익자」 계약 칸 이름"},
+    {"new": "death-benefit-liquidation-remaining-coverage", "existing": "whole-life-death-benefit-sum-by-cause",
+     "reason": "GF37 38호 — 새 글은 사망보험금 유동화 제도(신청 요건·유동화 비율·철회권·남는 사망보험금), 기존 글은 여러 계약의 사망보장을 원인별로 합산하는 점검. 겹친 말은 「사망보험금」 담보 이름 한 낱말"}
   ]
 }
