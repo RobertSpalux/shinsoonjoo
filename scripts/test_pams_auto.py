@@ -283,6 +283,48 @@ class CaptureTest(unittest.TestCase):
         h.run()
         self.assertEqual(len(h.notes), 1, "같은 이유로 두 번 묻지 않는다")
 
+    def _four_waiting(self):
+        return [art(slug=f"s{i}", naver_title=f"다른 제목{i}") for i in range(4)]
+
+    def test_capture_issue_with_existing_kit_is_quiet(self):
+        """CAP1 — 31호 캡처인데 31호는 보완이라 대기 후보가 아님. 키트 zip 이 이미 있으면 알림 없이 처리됨."""
+        h = Harness(main=[], naver=self._four_waiting())
+        open(os.path.join(h.dir, "1104_31호_네이버_보완.zip"), "w").write("z")
+        p = self.cap(h, "31호.pdf")
+        h.run()
+        h.run()
+        self.assertEqual(h.notes, [])
+        self.assertTrue(os.path.exists(p), "캡처_처리됨 이동은 하지 않는다")
+
+    def test_capture_issue_with_handled_review_is_quiet(self):
+        h = Harness(main=[], naver=self._four_waiting())
+        self.cap(h, "31호.pdf")
+        auto.run_once({}, h.state, h.fetch, h.build, h.notes.append, kit_dir=h.dir, issue_status=lambda n: "approved,submitted")
+        self.assertEqual(h.notes, [])
+
+    def test_capture_issue_unknown_gives_accurate_reason_once_a_day(self):
+        h = Harness(main=[], naver=self._four_waiting())
+        self.cap(h, "31호.pdf")
+        run = lambda: auto.run_once({}, h.state, h.fetch, h.build, h.notes.append, kit_dir=h.dir, issue_status=lambda n: "rejected")
+        run()
+        self.assertEqual(len(h.notes), 1)
+        self.assertIn("31호 글이 네이버 대기 목록에 없음(상태: rejected)", h.notes[0])
+        self.assertNotIn("호수 없음", h.notes[0])
+        h.drafts["naver"] = self._four_waiting()[:3]   # 대기 글 수가 바뀌어도
+        run()
+        self.assertEqual(len(h.notes), 1, "같은 파일은 하루 한 번만 묻는다")
+
+    def test_no_issue_in_filename_keeps_old_wording(self):
+        h = Harness(main=[], naver=self._four_waiting())
+        self.cap(h, "캡처.pdf")
+        h.run()
+        self.assertIn("파일명에 호수 없음", h.notes[0])
+
+    def test_issue_in_filename_not_waiting_does_not_pair_with_single_candidate(self):
+        a, why = auto.match_capture("31호.pdf", [art()])
+        self.assertIsNone(a)
+        self.assertIn("31호", why)
+
     def test_no_waiting_article_asks(self):
         h = Harness(main=[], naver=[])
         self.cap(h, "캡처.pdf")

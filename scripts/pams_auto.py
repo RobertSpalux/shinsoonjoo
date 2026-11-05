@@ -210,11 +210,54 @@ def match_capture(filename, candidates):
         return by_word[0], "파일명 핵심어 일치"
     if len(by_word) > 1:
         return None, f"파일명 핵심어가 여러 글과 맞음({', '.join(kit.issue_label(a['slug']) for a in by_word)})"
+    n = capture_issue(stem)
+    if n:   # 파일명에 호수가 있는데 그 호수 글이 대기 후보에 없다 — 엉뚱한 단독 후보와 짝짓지 않고 「호수 없음」이라 말하지도 않는다(CAP1)
+        return None, f"{n}호 글이 네이버 대기 목록에 없음(대기 {len(candidates)}편)"
     if len(candidates) == 1:
         return candidates[0], "네이버 대기 글 1편"
     if not candidates:
         return None, "네이버 대기 글이 없음"
     return None, f"네이버 대기 글 {len(candidates)}편 — 파일명에 호수 없음"
+
+
+def capture_issue(stem):
+    """캡처 파일명의 호수(「31호.pdf」→31). 없으면 None. 「131호」의 31 은 잡지 않는다."""
+    m = re.search(r"(?<!\d)(\d{1,4})\s*호", stem)
+    return int(m.group(1)) if m else None
+
+
+def issue_kit_exists(kit_dir, n):
+    """그 호수의 네이버 키트 zip(MMDD_N호_네이버[_보완].zip)이 PAMS접수 폴더(하위 포함, 캡처_처리됨 제외)에 있는가."""
+    rx = re.compile(rf"(?<!\d){n}호_네이버.*\.zip$")
+    for root, dirs, files in os.walk(kit_dir):
+        dirs[:] = [d for d in dirs if d != DONE_DIR_NAME]
+        if any(rx.search(f) for f in files):
+            return True
+    return False
+
+
+# 접수·심사·승인 중이면 캡처를 더 처리할 일이 없다(보완 접수도 submitted/under_review 로 들어온다)
+HANDLED_STATUSES = ("submitted", "under_review", "approved")
+
+
+def issue_status_lookup(env):
+    """호수 → 그 글 네이버 ad_reviews 상태 요약(str) | None. 읽기 전용. 실패하면 None(알 수 없음)."""
+    try:
+        issues = json.load(open(kit.ISSUES_JSON, encoding="utf-8"))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return lambda n: None
+    by_no = {v: k for k, v in issues.items() if isinstance(v, int)}
+
+    def lookup(n):
+        slug = by_no.get(n)
+        if not slug:
+            return None
+        try:
+            rows = kit.fetch_article(env, slug).get("ad_reviews") or []
+        except Exception:
+            return None
+        return ",".join(sorted({r.get("status") or "?" for r in rows if r.get("channel") == "naver"})) or "naver 행 없음"
+    return lookup
 
 
 def list_captures(kit_dir, state):
@@ -319,7 +362,7 @@ def scan_zips(kit_dir, state, notify, now=None, days=3):
 
 
 def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, server_factory=None,
-             file_exists=os.path.exists, hold_alerts=False):
+             file_exists=os.path.exists, hold_alerts=False, issue_status=None):
     """테스트를 위해 DB·빌드·알림·서버를 주입받는다. 만든 키트 목록을 돌려준다.
     hold_alerts — 업무광고 칸 3개가 모두 심사중이면 True. 키트는 만들되 「준비됨」·「실패」 알림은 보내지 않고
     state["held_kits"] 에 적어 둔다 → 칸이 비면 접수 순서 알림(pams_queue)의 「다음 접수」 한 통에 실린다.
@@ -340,10 +383,23 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
         art, why = match_capture(fn, naver_waiting)
         rec = state["captures"].get(fn, {})
         if not art:
-            if rec.get("asked") != why:
-                notify(f"[PAMS 캡처] {fn} — 짝을 못 정했습니다({why}). "
-                       f"파일명에 글의 핵심어(예: 백내장)나 호수(예: 7호)를 넣어 다시 저장해 주세요. 키트는 만들지 않았습니다.")
-                state["captures"][fn] = {"status": "asked", "asked": why}
+            sig, today = file_sig(cap), datetime.now(kit.KST).date().isoformat()
+            n = capture_issue(os.path.splitext(fn)[0])
+            if n:   # CAP1 — 호수가 있는데 대기 후보가 아님: 키트가 있거나 접수·승인 상태면 조용히 처리됨(알림 없음·파일 이동 없음)
+                st = issue_status(n) if issue_status else None
+                if issue_kit_exists(kit_dir, n) or any(x in (st or "").split(",") for x in HANDLED_STATUSES):
+                    log(f"캡처 {fn} — {n}호는 이미 키트/접수 있음({st or '키트 zip'}) · 알림 없이 처리됨 표시")
+                    state["captures"][fn] = {"status": "done", "sig": sig, "quiet": True}
+                    continue
+                why = f"{n}호 글이 네이버 대기 목록에 없음(상태: {st or '알 수 없음'})"
+            # 하루 한 번 — 사유 문구(대기 글 수)가 바뀌어도 같은 파일은 다시 묻지 않는다
+            if rec.get("status") == "asked" and rec.get("sig") in (None, sig) and rec.get("asked_day") in (None, today):
+                if not rec.get("asked_day"):
+                    rec.update(asked_day=today, sig=sig)   # 옛 기록(asked_day 없음)은 오늘 물은 것으로 이어받는다
+                continue
+            notify(f"[PAMS 캡처] {fn} — 짝을 못 정했습니다({why}). "
+                   f"파일명에 글의 핵심어(예: 백내장)나 호수(예: 7호)를 넣어 다시 저장해 주세요. 키트는 만들지 않았습니다.")
+            state["captures"][fn] = {"status": "asked", "asked": why, "asked_day": today, "sig": sig}
             continue
         if state["gate_blocked"].get(f"{art['slug']}|naver") == gate_key(art, "naver") and rec.get("slug") == art["slug"]:
             continue  # 확인 미완료 그대로 — 서버를 다시 띄우지 않는다
@@ -548,7 +604,7 @@ def main():
             log(f"칸 수 조회 실패 — 키트 알림 그대로 보냄: {e}")
             full = False
         made = run_once(
-            env, state, hold_alerts=full,
+            env, state, hold_alerts=full, issue_status=issue_status_lookup(env),
             fetch_drafts=lambda ch: kit.fetch_drafts(env, ch),
             build=lambda *x, **kw: kit.build_kit(*x, **kw, log=log),
             notify=lambda t: telegram(env, t),
