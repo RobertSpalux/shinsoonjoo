@@ -22,7 +22,9 @@
     "silson-nonrenewal-premium-rejoin-cycle": "실비보험 비갱신",
     "annuity-beneficiary-change-four-fields": "연금보험 수익자",
     "exclusion-release-coverage-after-release": "부담보 해제",
-    "neuroplasty-silson-outpatient-inpatient-limit": "신경성형술 실비"
+    "neuroplasty-silson-outpatient-inpatient-limit": "신경성형술 실비",
+    "insurance-remodeling-coverage-sum-by-rider": "보험 리모델링",
+    "death-benefit-liquidation-remaining-coverage": "사망보험금 유동화"
   },
   "plan": [
     {"no": 1, "keyword": "건강검진 재검 고지", "title": "건강검진 재검 고지, 재검 결과가 정상이면 보험 가입 때 알려야 하나요"},

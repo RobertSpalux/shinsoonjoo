@@ -30,5 +30,7 @@
   "silson-nonrenewal-premium-rejoin-cycle": 33,
   "annuity-beneficiary-change-four-fields": 34,
   "exclusion-release-coverage-after-release": 35,
-  "neuroplasty-silson-outpatient-inpatient-limit": 36
+  "neuroplasty-silson-outpatient-inpatient-limit": 36,
+  "insurance-remodeling-coverage-sum-by-rider": 37,
+  "death-benefit-liquidation-remaining-coverage": 38
 }
