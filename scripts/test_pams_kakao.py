@@ -113,6 +113,22 @@ class CtaPassThroughTest(unittest.TestCase):
     def test_real_approved_config_unchanged(self):
         self.assertIsNone(pub.cta_url_for("csection-silson-childbirth-280day"))
 
+    def test_track_slug_only_for_new_diagnosis_config(self):
+        """FN2 — ref/utm 꼬리표는 `cta_ref: true` 새 원고만. 옛 글·카톡 CTA·없는 글은 None."""
+        with tempfile.TemporaryDirectory() as d:
+            for slug, cfg in {
+                "new": {"cta_url": "goodfinance.kr/diagnosis", "cta_ref": True},
+                "old": {"cta_url": "goodfinance.kr/diagnosis"},
+                "kakao": {"cta_url": "pf.kakao.com/_xoxdBwX", "cta_ref": True},
+            }.items():
+                with open(os.path.join(d, f"{slug}.json"), "w", encoding="utf-8") as fp:
+                    json.dump(cfg, fp)
+            self.assertEqual(pub.track_slug_for("new", d), "new")
+            self.assertIsNone(pub.track_slug_for("old", d))
+            self.assertIsNone(pub.track_slug_for("kakao", d))
+            self.assertIsNone(pub.track_slug_for("missing", d))
+        self.assertIsNone(pub.track_slug_for("csection-silson-childbirth-280day"))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1)

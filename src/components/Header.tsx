@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { gaEvent } from "@/lib/ga";
 
 const NAV = [
   { href: "/", label: "홈", en: "Heritage" },
@@ -40,6 +41,7 @@ export default function Header() {
           ))}
           <Link
             href="/#consultation"
+            onClick={() => gaEvent("consult_anchor_click", { position: "header" })}
             className="rounded-sm border border-[var(--color-forest)] px-5 py-2 text-sm font-semibold text-[var(--color-forest)] transition-colors duration-300 hover:bg-[var(--color-forest)] hover:text-[var(--color-ink)]"
           >
             상담 예약
@@ -86,7 +88,10 @@ export default function Header() {
               ))}
               <Link
                 href="/#consultation"
-                onClick={() => setOpen(false)}
+                onClick={() => {
+                  gaEvent("consult_anchor_click", { position: "header_mobile" });
+                  setOpen(false);
+                }}
                 className="mt-4 rounded-sm bg-[var(--color-forest)] py-3 text-center text-sm font-semibold text-[var(--color-ink)]"
               >
                 상담 예약
