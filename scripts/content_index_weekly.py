@@ -376,15 +376,16 @@ def ga4_landing(ros, start, end):
         n = int(r["metricValues"][0]["value"])
         out[slug]["sessions"] += n
         out[slug]["by_source"][source_bucket(src)] += n
+    # 🔴 FN1 — 전환도 내부 유입원을 뺀다(10/19주 「전환 4」 = 10/20 localhost:8765 시험 클릭 kakao 2 · tel 2)
     ev = svc.properties().runReport(property=prop, body={
-        "dateRanges": rng, "dimensions": [{"name": "landingPage"}, {"name": "eventName"}],
+        "dateRanges": rng, "dimensions": [{"name": "landingPage"}, {"name": "eventName"}, {"name": "sessionSource"}],
         "metrics": [{"name": "eventCount"}], "limit": 5000,
         "dimensionFilter": {"andGroup": {"expressions": [
             flt, {"filter": {"fieldName": "eventName", "inListFilter": {"values": list(CONV_EVENTS)}}}]}}}).execute().get("rows", [])
     for r in ev:
-        path, name = (d["value"] for d in r["dimensionValues"])
+        path, name, src = (d["value"] for d in r["dimensionValues"])
         slug = slug_of(path)
-        if slug:
+        if slug and not is_internal_source(src):
             out[slug]["conv"][name] += int(r["metricValues"][0]["value"])
     return {k: {"sessions": v["sessions"], "by_source": dict(v["by_source"]), "conv": dict(v["conv"])} for k, v in out.items()}
 
