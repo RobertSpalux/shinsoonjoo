@@ -8,6 +8,15 @@
     python scripts/content_index_weekly.py --install          # 작업 스케줄러: 매주 월 08:00 --save --send
     python scripts/content_index_weekly.py --week-of 2026-10-12   # 그 주(월요일) 기준
     python scripts/content_index_weekly.py --only naver       # naver | main (한쪽만)
+    python scripts/content_index_weekly.py --no-catch-up      # 빠진 주 소급 없이 지난주만
+
+🔴 FN1(2026-11-05) — 11/2 08:00 작업 스케줄러 실행이 종료코드 1로 끝나 10/26주 행이 0이었다. pythonw 라 출력이
+   어디에도 남지 않아 원인을 알 수 없었다(같은 코드를 손으로 돌리면 정상). 그래서:
+  · 실행·실패를 %LOCALAPPDATA%\\SHIN\\content_index_weekly.log 에 남기고, 실패하면 텔레그램 1통(조용한 실패 금지)
+  · Supabase 조회·저장은 연결 오류·5xx 에 재시도(기상 직후 네트워크)
+  · 소급(catch-up): 지난주까지 최근 4주 중 행이 없는 주를 같이 잰다(첫 측정 주 FIRST_WEEK 이전은 제외).
+    소급 주는 GA4·GSC 를 그 주 날짜로 재고, 네이버 순위는 「측정한 순간」 값이라 비운다(errors.naver 에 사유).
+  · --install 은 「놓친 실행은 켜지는 대로」(StartWhenAvailable) 를 같이 켠다.
 
 측정(전부 읽기 전용 — 쓰는 곳은 content_index_weekly 하나, sql/009):
   ① 네이버(insightlab-daily): 글마다 핵심 검색어(premium_articles.main_keyword, 비면 제목 앞 3어절 = auto)로
@@ -32,6 +41,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 import urllib.parse
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta, timezone
@@ -60,6 +70,11 @@ UA = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.3
 V_REFRESH, V_BOOST, V_SNIPPET = "갱신 대상", "보강 대상", "제목·설명 개선 대상"
 GA4_SCOPE = ["https://www.googleapis.com/auth/analytics.readonly"]
 GSC_SCOPE = ["https://www.googleapis.com/auth/webmasters.readonly"]
+FIRST_WEEK = date(2026, 10, 12)   # content_index_weekly 첫 측정 주 — 이보다 앞은 소급하지 않는다
+LOOKBACK_WEEKS = 4
+NAVER_BACKFILL_NOTE = "소급 측정 — 네이버 순위는 측정한 순간 값이라 지난 주 것은 잴 수 없어 비움"
+LOG_PATH = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "SHIN", "content_index_weekly.log")
+RETRY_WAITS = (20, 60)   # 재시도 전 대기(초) — 3회 시도
 
 
 # ── 순수 ─────────────────────────────────────────────────────
@@ -164,6 +179,43 @@ def gsc_window(today):
     return end - timedelta(days=6), end
 
 
+def gsc_range_for(week, today):
+    """정기 측정(지난주) = 실행일 −3일까지의 7일. 소급 주는 GSC 가 이미 찼으면 그 주 날짜 그대로."""
+    if week[1] <= today - timedelta(days=3):
+        return week
+    return gsc_window(today)
+
+
+def weeks_to_measure(have, last_mon, lookback=LOOKBACK_WEEKS, first=FIRST_WEEK):
+    """→ 잴 주(월요일) 목록, 오래된 순. 지난주는 항상 넣고, 그 앞 lookback−1 주 중 행이 없는 주를 소급으로 넣는다."""
+    out = []
+    for i in range(lookback - 1, 0, -1):
+        mon = last_mon - timedelta(days=7 * i)
+        if mon >= first and mon not in have:
+            out.append(mon)
+    return out + [last_mon]
+
+
+def transient(exc):
+    """재시도할 만한 실패인가 — 연결·시간초과·5xx."""
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    resp = getattr(exc, "response", None)
+    return resp is not None and resp.status_code >= 500
+
+
+def retry(fn, waits=RETRY_WAITS, sleep=time.sleep, log=lambda m: None):
+    """fn() — transient 실패면 waits 만큼 쉬고 다시. 마지막 실패나 transient 아닌 실패는 그대로 올린다."""
+    for i in range(len(waits) + 1):
+        try:
+            return fn()
+        except Exception as e:
+            if i == len(waits) or not transient(e):
+                raise
+            log(f"재시도 {i + 1}/{len(waits)} — {type(e).__name__}: {str(e)[:120]}")
+            sleep(waits[i])
+
+
 def compose(week, rows, prev, labels):
     """텔레그램 요약 1통."""
     s, e = week
@@ -210,14 +262,28 @@ def _rest_table(env, table):
     return url.rsplit("/", 1)[0] + "/" + table, h
 
 
-def fetch_articles(env):
+def fetch_articles(env, log=lambda m: None):
     url, h = kit._rest(env)
     base = "id,slug,title,naver_title,is_main_published,is_naver_published"
-    r = requests.get(url, params={"select": base + ",main_keyword", "order": "created_at.desc"}, headers=h, timeout=30)
-    if r.status_code == 400 and "main_keyword" in r.text:   # sql/009 적용 전 — 전부 auto
-        r = requests.get(url, params={"select": base, "order": "created_at.desc"}, headers=h, timeout=30)
-    r.raise_for_status()
-    return [a for a in r.json() if a.get("is_main_published") or a.get("is_naver_published")]
+
+    def get():
+        r = requests.get(url, params={"select": base + ",main_keyword", "order": "created_at.desc"}, headers=h, timeout=30)
+        if r.status_code == 400 and "main_keyword" in r.text:   # sql/009 적용 전 — 전부 auto
+            r = requests.get(url, params={"select": base, "order": "created_at.desc"}, headers=h, timeout=30)
+        r.raise_for_status()
+        return r.json()
+    return [a for a in retry(get, log=log) if a.get("is_main_published") or a.get("is_naver_published")]
+
+
+def fetch_have_weeks(env, since):
+    """content_index_weekly 에 행이 있는 week_start(date) 집합 — since 이후."""
+    url, h = _rest_table(env, "content_index_weekly")
+
+    def get():
+        r = requests.get(url, params={"select": "week_start", "week_start": f"gte.{since}"}, headers=h, timeout=30)
+        r.raise_for_status()
+        return r.json()
+    return {date.fromisoformat(x["week_start"]) for x in retry(get)}
 
 
 def fetch_naver_urls(env):
@@ -310,27 +376,33 @@ def ga4_landing(ros, start, end):
         n = int(r["metricValues"][0]["value"])
         out[slug]["sessions"] += n
         out[slug]["by_source"][source_bucket(src)] += n
+    # 🔴 FN1 — 전환도 내부 유입원을 뺀다(10/19주 「전환 4」 = 10/20 localhost:8765 시험 클릭 kakao 2 · tel 2)
     ev = svc.properties().runReport(property=prop, body={
-        "dateRanges": rng, "dimensions": [{"name": "landingPage"}, {"name": "eventName"}],
+        "dateRanges": rng, "dimensions": [{"name": "landingPage"}, {"name": "eventName"}, {"name": "sessionSource"}],
         "metrics": [{"name": "eventCount"}], "limit": 5000,
         "dimensionFilter": {"andGroup": {"expressions": [
             flt, {"filter": {"fieldName": "eventName", "inListFilter": {"values": list(CONV_EVENTS)}}}]}}}).execute().get("rows", [])
     for r in ev:
-        path, name = (d["value"] for d in r["dimensionValues"])
+        path, name, src = (d["value"] for d in r["dimensionValues"])
         slug = slug_of(path)
-        if slug:
+        if slug and not is_internal_source(src):
             out[slug]["conv"][name] += int(r["metricValues"][0]["value"])
     return {k: {"sessions": v["sessions"], "by_source": dict(v["by_source"]), "conv": dict(v["conv"])} for k, v in out.items()}
 
 
-def measure(env, ros, week, today, only=None, log=print, naver=naver_measure):
-    articles = fetch_articles(env)
+def measure(env, ros, week, today, only=None, log=print, naver=naver_measure, backfill=False, articles=None):
+    """backfill=True(소급 주) — 네이버 순위는 재지 않고(그 주 값이 아니다) GSC 는 그 주 날짜로 잰다."""
+    if articles is None:
+        articles = fetch_articles(env, log=log)
     errors_all = {}
+    if backfill:
+        errors_all["naver"] = NAVER_BACKFILL_NOTE
+        only = "main"
     try:
         log_nos = fetch_naver_urls(env)
     except Exception as e:
         log_nos, errors_all["naver_url"] = {}, f"{type(e).__name__}: {str(e)[:120]}"
-    gs, ge = gsc_window(today)
+    gs, ge = gsc_range_for(week, today) if backfill else gsc_window(today)
     gsc = ga = None
     if only != "naver":
         try:
@@ -384,12 +456,18 @@ def db_row(row):
     return out
 
 
-def save(env, rows):
+def save(env, rows, log=lambda m: None):
     url, h = _rest_table(env, "content_index_weekly")
-    r = requests.post(url, params={"on_conflict": "week_start,slug"}, json=[db_row(x) for x in rows],
-                      headers={**h, "Prefer": "resolution=merge-duplicates,return=minimal"}, timeout=60)
-    if r.status_code >= 300:
-        raise RuntimeError(f"content_index_weekly 저장 실패 {r.status_code}: {r.text[:200]}")
+    body = [db_row(x) for x in rows]
+
+    def post():
+        r = requests.post(url, params={"on_conflict": "week_start,slug"}, json=body,
+                          headers={**h, "Prefer": "resolution=merge-duplicates,return=minimal"}, timeout=60)
+        if r.status_code >= 500:
+            r.raise_for_status()   # transient → 재시도
+        if r.status_code >= 300:
+            raise RuntimeError(f"content_index_weekly 저장 실패 {r.status_code}: {r.text[:200]}")
+    retry(post, log=log)
 
 
 def send(env, text):
@@ -405,15 +483,64 @@ def install():
     r = subprocess.run(["schtasks", "/Create", "/TN", TASK_NAME, "/SC", "WEEKLY", "/D", "MON", "/ST", "08:00",
                         "/TR", tr, "/F"], capture_output=True, text=True)
     print(r.stdout or r.stderr)
-    return r.returncode
+    if r.returncode:
+        return r.returncode
+    # 월 08:00 에 PC 가 꺼져/잠들어 있으면 그 주를 건너뛴다 — 켜지는 대로 돌게(소급과 같이 이중 안전장치)
+    s = subprocess.run(["powershell", "-NoProfile", "-Command",
+                        f"Set-ScheduledTask -TaskName {TASK_NAME} -Settings (New-ScheduledTaskSettingsSet -StartWhenAvailable)"],
+                       capture_output=True, text=True)
+    print("StartWhenAvailable:", "켬" if s.returncode == 0 else (s.stderr or s.stdout)[:200])
+    return s.returncode
+
+
+def log_line(msg, path=LOG_PATH):
+    """pythonw(작업 스케줄러)는 출력이 사라진다 — 실행 기록을 파일에 남긴다. 기록 실패는 무시."""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a", encoding="utf-8") as fp:
+            fp.write(f"{datetime.now(KST):%Y-%m-%d %H:%M:%S} {msg}\n")
+    except Exception:
+        pass
+
+
+def say(msg):
+    print(msg)
+    log_line(msg)
+
+
+def run(a, env, ros, today):
+    if a.week_of:
+        weeks = [(date.fromisoformat(a.week_of), False)]
+    else:
+        last_mon = last_week(today)[0][0]
+        todo = [last_mon]
+        if a.catch_up:
+            todo = weeks_to_measure(fetch_have_weeks(env, last_mon - timedelta(days=7 * LOOKBACK_WEEKS)), last_mon)
+        weeks = [(m, m != last_mon) for m in todo]
+    articles = fetch_articles(env, log=say)
+    labels = kit_labels(env)
+    for mon, backfill in weeks:
+        week = (mon, mon + timedelta(days=6))
+        say(f"── {week[0]}~{week[1]}" + (" (소급)" if backfill else ""))
+        rows = measure(env, ros, week, today, only=a.only, backfill=backfill, articles=articles)
+        text = compose(week, rows, fetch_prev(env, week[0]), labels)
+        if backfill:
+            text = text.replace("[유입 지수 주간]", "[유입 지수 주간 · 소급]", 1)
+        print("\n" + text)
+        if a.save:
+            save(env, rows, log=say)
+            say(f"저장: {len(rows)}행 (week_start={week[0]})")
+        if a.send:
+            say("발송: " + ("완료" if send(env, text) else "실패"))
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--save", action="store_true", help="content_index_weekly 에 upsert")
-    ap.add_argument("--send", action="store_true", help="텔레그램 요약 1통")
+    ap.add_argument("--send", action="store_true", help="텔레그램 요약 1통(소급 주가 있으면 주마다 1통)")
     ap.add_argument("--install", action="store_true")
-    ap.add_argument("--week-of", help="그 주 월요일(YYYY-MM-DD). 기본 = 지난주")
+    ap.add_argument("--week-of", help="그 주 월요일(YYYY-MM-DD) 하나만. 기본 = 지난주 + 빠진 주 소급")
+    ap.add_argument("--no-catch-up", dest="catch_up", action="store_false", help="빠진 주 소급 없이 지난주만")
     ap.add_argument("--only", choices=("naver", "main"))
     ap.add_argument("--env-file", help="SHIN .env.local 경로(기본 = 저장소 루트). 워크트리에서 돌릴 때")
     a = ap.parse_args()
@@ -423,21 +550,19 @@ def main():
     if a.env_file:
         env = {**load_ros_env(a.env_file), **env}
     today = datetime.now(KST).date()
-    if a.week_of:
-        mon = date.fromisoformat(a.week_of)
-        week = (mon, mon + timedelta(days=6))
-    else:
-        week, _ = last_week(today)
-    rows = measure(env, ros, week, today, only=a.only)
-    prev = fetch_prev(env, week[0])
-    labels = kit_labels(env)
-    text = compose(week, rows, prev, labels)
-    print("\n" + text)
-    if a.save:
-        save(env, rows)
-        print(f"저장: {len(rows)}행 (week_start={week[0]})")
-    if a.send:
-        print("발송:", "완료" if send(env, text) else "실패")
+    log_line(f"시작 {' '.join(sys.argv[1:])}")
+    try:
+        run(a, env, ros, today)
+    except Exception as e:
+        # 🔴 조용한 실패 금지(FN1) — 로그에 전체 추적, 텔레그램에 한 줄
+        log_line("실패\n" + traceback.format_exc())
+        if a.send:
+            try:
+                send(env, f"[유입 지수 주간] 실패 — {type(e).__name__}: {str(e)[:300]}\n로그: {LOG_PATH}")
+            except Exception:
+                pass
+        raise
+    log_line("끝")
 
 
 def kit_labels(env):

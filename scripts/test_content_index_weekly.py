@@ -111,10 +111,94 @@ class Bits(unittest.TestCase):
         self.assertIn("■ 갱신 대상 1편", t)
         self.assertIn("※ 조회 실패: gsc", t)
 
+    def test_gsc_range_backfill(self):
+        # 11/9 실행: 10/26주는 GSC 가 찼다 → 그 주 그대로 / 11/2주(지난주)는 −3일까지 7일
+        self.assertEqual(c.gsc_range_for((date(2026, 10, 26), date(2026, 11, 1)), date(2026, 11, 9)),
+                         (date(2026, 10, 26), date(2026, 11, 1)))
+        self.assertEqual(c.gsc_range_for((date(2026, 11, 2), date(2026, 11, 8)), date(2026, 11, 9)),
+                         (date(2026, 10, 31), date(2026, 11, 6)))
+
     def test_db_row_has_no_internal_keys(self):
         r = c.db_row({"slug": "a", "naver_measured": True, "verdicts": []})
         self.assertNotIn("naver_measured", r)
         self.assertIsNone(r["errors"])
+
+
+class CatchUp(unittest.TestCase):
+    """FN1 — 11/2 실행 실패로 10/26주가 빠졌다. 다음 실행이 빠진 주를 같이 잰다."""
+    def test_missing_week_is_backfilled(self):
+        have = {date(2026, 10, 12), date(2026, 10, 19)}
+        self.assertEqual(c.weeks_to_measure(have, date(2026, 11, 2)), [date(2026, 10, 26), date(2026, 11, 2)])
+
+    def test_nothing_missing(self):
+        have = {date(2026, 10, 12), date(2026, 10, 19), date(2026, 10, 26)}
+        self.assertEqual(c.weeks_to_measure(have, date(2026, 11, 2)), [date(2026, 11, 2)])
+
+    def test_last_week_always_measured_even_if_present(self):
+        have = {date(2026, 10, 12), date(2026, 10, 19), date(2026, 10, 26), date(2026, 11, 2)}
+        self.assertEqual(c.weeks_to_measure(have, date(2026, 11, 2)), [date(2026, 11, 2)])
+
+    def test_lookback_limit(self):
+        # 4주 넘게 빈 주는 소급하지 않는다(지난주 포함 4주)
+        self.assertEqual(c.weeks_to_measure(set(), date(2026, 11, 30)),
+                         [date(2026, 11, 9), date(2026, 11, 16), date(2026, 11, 23), date(2026, 11, 30)])
+
+    def test_not_before_first_week(self):
+        self.assertEqual(c.weeks_to_measure(set(), date(2026, 10, 19)), [date(2026, 10, 12), date(2026, 10, 19)])
+
+    def test_backfill_skips_naver(self):
+        calls = []
+        orig = (c.fetch_naver_urls, c.gsc_pages, c.ga4_landing)
+        c.fetch_naver_urls = lambda env: {}
+        c.gsc_pages = lambda ros, s, e: calls.append((s, e)) or {}
+        c.ga4_landing = lambda ros, s, e: {}
+        try:
+            arts = [{"id": "1", "slug": "a", "title": "실비 청구 기간", "is_main_published": True, "is_naver_published": True}]
+            rows = c.measure({}, {}, (date(2026, 10, 26), date(2026, 11, 1)), date(2026, 11, 9), log=lambda m: None,
+                             naver=lambda *a: self.fail("소급 주에 네이버를 재면 안 된다"), backfill=True, articles=arts)
+        finally:
+            c.fetch_naver_urls, c.gsc_pages, c.ga4_landing = orig
+        self.assertEqual(calls, [(date(2026, 10, 26), date(2026, 11, 1))])
+        self.assertEqual(rows[0]["errors"]["naver"], c.NAVER_BACKFILL_NOTE)
+        self.assertEqual(rows[0]["verdicts"], [])
+        self.assertEqual(rows[0]["ga_sessions"], 0)
+
+
+class Retry(unittest.TestCase):
+    def test_transient_then_ok(self):
+        n = {"i": 0}
+
+        def fn():
+            n["i"] += 1
+            if n["i"] < 3:
+                raise c.requests.ConnectionError("down")
+            return "ok"
+        self.assertEqual(c.retry(fn, sleep=lambda s: None), "ok")
+        self.assertEqual(n["i"], 3)
+
+    def test_gives_up(self):
+        def fn():
+            raise c.requests.Timeout("t")
+        with self.assertRaises(c.requests.Timeout):
+            c.retry(fn, sleep=lambda s: None)
+
+    def test_non_transient_not_retried(self):
+        n = {"i": 0}
+
+        def fn():
+            n["i"] += 1
+            raise RuntimeError("저장 실패 409")
+        with self.assertRaises(RuntimeError):
+            c.retry(fn, sleep=lambda s: None)
+        self.assertEqual(n["i"], 1)
+
+    def test_log_file(self):
+        import tempfile
+        p = os.path.join(tempfile.mkdtemp(), "x", "l.log")
+        c.log_line("시작", path=p)
+        c.log_line("끝", path=p)
+        with open(p, encoding="utf-8") as fp:
+            self.assertEqual(len(fp.read().splitlines()), 2)
 
 
 if __name__ == "__main__":
