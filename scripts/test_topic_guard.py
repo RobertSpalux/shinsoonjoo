@@ -148,6 +148,30 @@ class Rules(unittest.TestCase):
         left = g.check(cand, ARTS, bank, allow)
         self.assertFalse(any("기존 글" in x for x in left))
 
+    def test_allowlist_is_bidirectional(self):
+        # 2026-11-05 13호 네이버가 막힌 사고 — 짝이 (new=신규, existing=기존) 한 방향으로만 적혀 있었다
+        allow = [{"new": "group-personal-silson-suspend-resume", "existing": "silson-conversion-withdrawal-6month", "reason": "t"}]
+        title = "실손보험 갈아탔는데 후회된다 되돌릴 수 있는 기간"
+        cand = {"slug": "silson-conversion-withdrawal-6month", "title": title}
+        arts = [{"id": "x", "slug": "group-personal-silson-suspend-resume", "title": title}]
+        self.assertTrue(g.check(cand, arts, []))
+        self.assertEqual(g.check(cand, arts, [], allow), [])
+        self.assertTrue(g.check({"slug": "unrelated-new", "title": title}, arts, [], allow))   # 무관한 짝은 그대로 막힌다
+
+    def test_naver_kit_skips_when_main_approved(self):
+        seen = []
+        orig = g.guard
+        g.guard = lambda env, cand, skip_bank=False: seen.append(1)
+        try:
+            art = {"id": "1", "slug": "s", "title": "t", "ad_reviews": [{"channel": "main", "status": "approved"}]}
+            g.guard_article({}, art, "naver")
+            self.assertEqual(seen, [])
+            g.guard_article({}, art, "main")
+            g.guard_article({}, {"id": "1", "slug": "s", "title": "t", "ad_reviews": [{"channel": "main", "status": "submitted"}]}, "naver")
+            self.assertEqual(len(seen), 2)
+        finally:
+            g.guard = orig
+
     def test_slug_overlap(self):
         self.assertTrue(g.compare({"slug": "exclusion-release-5year", "title": "전혀 다른 제목"},
                                   {"slug": "exclusion-release-5year-treatment-record", "title": "무관"})[0])
@@ -188,7 +212,7 @@ class Hooks(unittest.TestCase):
         here = os.path.dirname(os.path.abspath(__file__))
         k = open(os.path.join(here, "pams_kit.py"), encoding="utf-8").read()
         i = k.index("def build_kit(")
-        self.assertIn("topic_guard.guard_article(env, article)", k[i:i + 700])
+        self.assertIn("topic_guard.guard_article(env, article, channel)", k[i:i + 700])
         d = open(os.path.join(here, "draft_insert.py"), encoding="utf-8").read()
         self.assertLess(d.index("topic_guard.guard("), d.index("requests.post("))   # 저장보다 검사가 먼저
 

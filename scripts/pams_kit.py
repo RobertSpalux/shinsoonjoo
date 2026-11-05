@@ -488,7 +488,7 @@ def build_kit(env, article, channel, capture=None, server=None, out_dir=KIT_DIR,
     slug = article["slug"]
     # 🔴 주제 중복 검사(2026-09-30) — 이미 있는 글·TOPIC-BANK ✅ 와 겹치면 키트를 만들지 않는다(관제탑 지시라도).
     import topic_guard
-    topic_guard.guard_article(env, article)
+    topic_guard.guard_article(env, article, channel)
     if channel == "naver" and not capture:
         raise KitError("네이버 키트는 캡처 파일이 필요합니다")
     if capture and not os.path.exists(capture):
