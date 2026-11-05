@@ -150,6 +150,15 @@ export interface NaverRichOptions {
   ctaUrl?: string;
 }
 
+/**
+ * FN2 — 진단 카드 링크에 유입 글 꼬리표(?ref=<slug>&utm_…). 새 원고(config `cta_ref: true`)만 호출한다.
+ * 진단 페이지 주소가 아니거나 이미 쿼리가 있으면 그대로 돌려준다(승인된 글의 링크 불변).
+ */
+export function trackedCtaUrl(url: string, slug: string): string {
+  if (!/goodfinance\.kr\/diagnosis\/?$/.test(url)) return url;
+  return `${url}?${NAVER_FORMAT.cta_url_query.replace("{slug}", encodeURIComponent(slug))}`;
+}
+
 /** KC1 — 새 원고의 CTA 링크. 단일 출처 BRAND.social.kakao. */
 export const NAVER_KAKAO_CTA_URL = BRAND.social.kakaoChat;
 

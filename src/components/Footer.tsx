@@ -1,5 +1,6 @@
 import Link from "next/link";
 import TrackedLink from "@/components/TrackedLink";
+import TrackedNavLink from "@/components/TrackedNavLink";
 import {
   BRAND,
   getCareer,
@@ -158,7 +159,7 @@ export default function Footer() {
                 <li><Link href="/news" className="transition-colors hover:text-[var(--color-gold-light)]">금융소식</Link></li>
                 <li><Link href="/diagnosis" className="transition-colors hover:text-[var(--color-gold-light)]">자산진단</Link></li>
                 <li><Link href="/recruit" className="transition-colors hover:text-[var(--color-gold-light)]">인재채용</Link></li>
-                <li><Link href="/#consultation" className="transition-colors hover:text-[var(--color-gold-light)]">상담 예약</Link></li>
+                <li><TrackedNavLink href="/#consultation" event="consult_anchor_click" position="footer" className="transition-colors hover:text-[var(--color-gold-light)]">상담 예약</TrackedNavLink></li>
                 <li><Link href="/privacy" className="transition-colors hover:text-[var(--color-gold-light)]">개인정보 처리방침</Link></li>
               </ul>
             </div>

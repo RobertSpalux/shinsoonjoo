@@ -350,9 +350,22 @@ def cta_url_for(slug, config_dir=None):
     return KAKAO_CHANNEL_URL if "pf.kakao.com" in url else None
 
 
-def rich_html(text_path, images, cta_url=None):
+def track_slug_for(slug, config_dir=None):
+    """FN2 — 진단 카드 링크에 ?ref=<slug>&utm_… 를 붙일 글인가. config 에 `cta_ref: true` 가 있는 새 원고만.
+    승인·게시된 옛 글(필드 없음)은 None → 링크 불변."""
+    p = os.path.join(config_dir or os.path.join(kit.ROOT, "configs"), f"{slug}.json")
+    try:
+        cfg = json.load(open(p, encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return slug if cfg.get("cta_ref") is True and "goodfinance.kr/diagnosis" in (cfg.get("cta_url") or "") else None
+
+
+def rich_html(text_path, images, cta_url=None, track_slug=None):
     """네이버 서식 HTML(configs/naver-format.json 규격) — 어드민 [게시용 복사]와 같은 toNaverRichHtml."""
     extra = [f"--cta-url={cta_url}"] if cta_url else []
+    if track_slug:
+        extra.append(f"--track-slug={track_slug}")
     r = subprocess.run(["npx", "tsx", "scripts/naver_rich.mts", text_path, *images, *extra], cwd=kit.ROOT,
                        capture_output=True, text=True, encoding="utf-8", shell=(os.name == "nt"))
     if r.returncode != 0 or not r.stdout.strip():
@@ -378,7 +391,7 @@ def naver_kit(server, env, item, live, out_dir=NAVER_OUT, now=None):
     imgs = copy_images(a["slug"], out_dir, base)
     body_path = os.path.join(out_dir, base + "_본문.txt")
     open(body_path, "w", encoding="utf-8", newline="\n").write(body["text"])
-    html = rich_html(body_path, imgs, cta_url_for(a["slug"]))
+    html = rich_html(body_path, imgs, cta_url_for(a["slug"]), track_slug_for(a["slug"]))
     open(txt[:-4] + ".html", "w", encoding="utf-8").write(
         f"<!doctype html><meta charset='utf-8'><title>{htmllib.escape(body['title'])}</title>"
         f"<body style='max-width:860px;margin:24px auto;padding:0 16px'>"

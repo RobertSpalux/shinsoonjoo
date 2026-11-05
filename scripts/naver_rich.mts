@@ -8,15 +8,20 @@
  * 서식 규격: configs/naver-format.json (src/lib/naver-rich.ts 가 읽는다).
  */
 import { readFileSync } from "node:fs";
-import { toNaverRichHtml } from "../src/lib/naver-rich";
+import { toNaverRichHtml, trackedCtaUrl } from "../src/lib/naver-rich";
+import NAVER_FORMAT from "../configs/naver-format.json";
 
 // KC1 — --cta-url=<주소>: 마지막 사진(CTA 카드) 링크. 없으면 종전(진단 페이지) 그대로.
+// FN2 — --track-slug=<slug>: 진단 링크에 ?ref=<slug>&utm_… 를 붙인다(새 원고만).
 const argv = process.argv.slice(2);
 const ctaArg = argv.find((a) => a.startsWith("--cta-url="));
-const [file, ...images] = argv.filter((a) => a !== ctaArg);
+const trackArg = argv.find((a) => a.startsWith("--track-slug="));
+const [file, ...images] = argv.filter((a) => a !== ctaArg && a !== trackArg);
 if (!file) {
   console.error("사용법: npx tsx scripts/naver_rich.mts <본문.txt> [사진…] [--cta-url=<주소>]");
   process.exit(2);
 }
 const text = readFileSync(file, "utf-8");
-process.stdout.write(toNaverRichHtml(text, { images, ctaUrl: ctaArg?.slice("--cta-url=".length) }));
+let ctaUrl = ctaArg?.slice("--cta-url=".length);
+if (trackArg) ctaUrl = trackedCtaUrl(ctaUrl ?? NAVER_FORMAT.cta_url, trackArg.slice("--track-slug=".length));
+process.stdout.write(toNaverRichHtml(text, { images, ctaUrl }));

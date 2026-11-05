@@ -11,7 +11,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { toNaverRichHtml, naverHeadings } from "./naver-rich";
+import { toNaverRichHtml, naverHeadings, trackedCtaUrl } from "./naver-rich";
 import NAVER_FORMAT from "../../configs/naver-format.json";
 
 const FIX = join(dirname(fileURLToPath(import.meta.url)), "__fixtures__", "naver-rich");
@@ -102,6 +102,16 @@ console.log("\n[24호] 소제목 · 표 · 링크");
   ok("CTA 사진에 진단 링크", html.includes(`<a href="${NAVER_FORMAT.cta_url}" target="_blank"><img src="img5.png"`));
   ok("URL 줄이 따로 남지 않음", !/<p style="font-size:15px;">https?:/.test(html));
   ok("글자 diff 0", JSON.stringify(textWords(text)) === JSON.stringify(htmlWords(html)), firstDiff(textWords(text), htmlWords(html)));
+}
+
+console.log("\nFN2 — 진단 링크 꼬리표");
+{
+  const url = NAVER_FORMAT.cta_url;
+  const t = trackedCtaUrl(url, "my-slug");
+  ok("ref·utm 이 붙는다", t === `${url}?ref=my-slug&utm_source=naver_blog&utm_medium=referral`, t);
+  ok("진단 주소가 아니면 그대로(카톡 채널)", trackedCtaUrl("http://pf.kakao.com/_xoxdBwX/chat", "s") === "http://pf.kakao.com/_xoxdBwX/chat");
+  ok("이미 쿼리가 있으면 그대로", trackedCtaUrl(`${url}?x=1`, "s") === `${url}?x=1`);
+  ok("기본 CTA 링크(승인된 글)는 불변", !NAVER_FORMAT.cta_url.includes("?"));
 }
 
 console.log(`\n${pass} 통과 · ${fail} 실패`);

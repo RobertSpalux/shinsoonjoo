@@ -34,5 +34,6 @@
   },
   "notice_rule": "─────────────",
   "advice_mark": "한 줄 조언",
-  "cta_url": "https://goodfinance.kr/diagnosis"
+  "cta_url": "https://goodfinance.kr/diagnosis",
+  "cta_url_query": "ref={slug}&utm_source=naver_blog&utm_medium=referral"
 }
