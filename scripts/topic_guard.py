@@ -158,7 +158,10 @@ def bank_done_rows(md_text):
 def check(cand, articles, bank_rows, allow=None):
     """→ [충돌 설명]. 비어 있으면 통과. 자기 자신(slug·id 같음)과 allow 에 적힌 짝은 뺀다."""
     allow = allow or []
-    ok_pairs = {(a.get("new"), a.get("existing")) for a in allow}
+    ok_pairs = set()
+    for a in allow:   # 방향 무관 — (new, existing) 로 적었어도 기존 글 쪽이 후보일 때 같은 짝이다
+        ok_pairs.add((a.get("new"), a.get("existing")))
+        ok_pairs.add((a.get("existing"), a.get("new")))
     hits = []
     others = [o for o in articles
               if not ((cand.get("id") and o.get("id") == cand.get("id")) or (cand.get("slug") and o.get("slug") == cand.get("slug")))]
@@ -213,8 +216,12 @@ def guard(env, cand, skip_bank=False):
                            gate=True)   # gate=True → pams_auto 가 같은 원고로 10분마다 다시 시도·알림하지 않는다
 
 
-def guard_article(env, article):
-    """키트 생성용 — DB 행 그대로 받아 검사한다."""
+def guard_article(env, article, channel=None):
+    """키트 생성용 — DB 행 그대로 받아 검사한다.
+    네이버 키트인데 같은 글의 본진이 이미 approved 면 건너뛴다 — 같은 원고의 채널 변형이라 새 주제가 아니다."""
+    if channel == "naver" and any(r.get("channel") == "main" and r.get("status") == "approved"
+                                  for r in (article.get("ad_reviews") or [])):
+        return
     established = any(r.get("status") in ("submitted", "under_review", "approved") for r in (article.get("ad_reviews") or []))
     guard(env, {"id": article.get("id"), "slug": article.get("slug"), "title": article.get("title"),
                 "naver_title": article.get("naver_title")}, skip_bank=established)
