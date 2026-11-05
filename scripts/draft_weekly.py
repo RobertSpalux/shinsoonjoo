@@ -575,6 +575,8 @@ def image_config(raw, slug):
     cfg = {"slug": slug}
     cfg.update({k: raw.get(k) for k in IMAGE_KEYS})
     cfg["cta_line"], cfg["cta_sub"], cfg["cta_url"] = CTA_LINE, CTA_SUB, CTA_URL
+    if "goodfinance.kr/diagnosis" in CTA_URL:   # FN3 — 진단 링크가 있는 새 원고만 ref/utm 꼬리표(publish_approved.track_slug_for)
+        cfg["cta_ref"] = True
     return cfg
 
 
