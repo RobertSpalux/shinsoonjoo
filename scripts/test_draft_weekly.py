@@ -11,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -246,6 +247,12 @@ class ImageConfigTest(unittest.TestCase):
         self.assertIn("pf.kakao.com/_xoxdBwX", c["cta_url"])
         self.assertNotIn("무료", c["cta_line"] + c["cta_sub"])
         self.assertEqual(dw.image_issues(c), [])
+
+    def test_cta_ref_only_with_diagnosis_link(self):
+        """FN3 — 진단 링크가 있는 새 원고만 cta_ref. 카톡 CTA(현행)는 필드 없음."""
+        self.assertNotIn("cta_ref", dw.image_config(self.RAW, "x"))
+        with mock.patch.object(dw, "CTA_URL", "goodfinance.kr/diagnosis"):
+            self.assertIs(dw.image_config(self.RAW, "x")["cta_ref"], True)
 
     def test_blocks_money_banned_and_missing(self):
         c = dw.image_config({**self.RAW, "subtitle": "사망보험금 1억원 기준"}, "x")
