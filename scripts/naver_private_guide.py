@@ -248,6 +248,21 @@ def image_gap(text, n_images):
     return None
 
 
+IMG_SRC = re.compile(r"""<img\b[^>]*?\bsrc\s*=\s*["']([^"']+)["']""", re.I)
+
+
+def dangling_images(html_text, folder):
+    """NI38 — html 이 가리키는 로컬 사진(상대 경로) 중 폴더에 없는 이름. 순수 함수(테스트 대상).
+    26호 html 이 KB0 에서 빠진 카톡 배너를 계속 가리켰고, 배너 파일이 치워지자 사진이 깨졌다."""
+    out = []
+    for src in IMG_SRC.findall(html_text or ""):
+        if re.match(r"^(https?:|data:|//)", src, re.I):
+            continue
+        if not os.path.isfile(os.path.join(folder, src)):
+            out.append(src)
+    return out
+
+
 def build(env, article, server, out_dir=OUT_DIR, now=None, force=False, allow_no_images=False):
     slug = article["slug"]
     issue = kit.issue_label(slug)
@@ -296,6 +311,15 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False, allow_no
             except OSError:
                 pass
         raise
+    # 🔴 html 이 가리키는 사진이 폴더에 다 있어야 한다(NI38) — 없으면 틀린 파일을 남기지 않는다
+    dangling = dangling_images(rich, out_dir)
+    if dangling:
+        for p in [body_path, *(os.path.join(out_dir, n) for n in imgs)]:
+            try:
+                os.remove(p)
+            except OSError:
+                pass
+        raise kit.KitError(f"네이버 html 이 폴더에 없는 사진을 가리킵니다 — {', '.join(dangling[:4])} (산출물을 만들지 않았습니다)")
     html_path = os.path.join(out_dir, base + ".html")
     title = check_title(body["title"])
     category = blog_category(title, naver_rules.keyword_for(slug) or "", body["text"], article.get("category"))

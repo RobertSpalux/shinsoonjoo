@@ -267,6 +267,16 @@ class Steps(unittest.TestCase):
         finally:
             g.kit.check_naver_basis, g.pa.copy_images = old_basis, old_copy
 
+    def test_dangling_images(self):
+        """NI38 — 26호 html 이 폴더에 없는 카톡배너.png 를 가리켰다."""
+        import tempfile
+        d = tempfile.mkdtemp()
+        open(os.path.join(d, "a_이미지1.png"), "w").write("x")
+        h = '<img src="a_이미지1.png" width="800"><img src="a_카톡배너.png"><img src="https://x.kr/b.png">'
+        self.assertEqual(g.dangling_images(h, d), ["a_카톡배너.png"])
+        self.assertEqual(g.dangling_images('<img src="a_이미지1.png">', d), [])
+        self.assertEqual(g.dangling_images(None, d), [])
+
     def test_format_line(self):
         self.assertIn("configs/naver-format.json", g.format_line())
         self.assertNotIn("읽기 실패", g.format_line())
