@@ -40,6 +40,11 @@ class PureTest(unittest.TestCase):
         self.assertNotIn("분류:", m)
         self.assertIn("제목입니다 · 분류: 보험 리모델링 · 네이버 파일:", dd.message(True, "제목입니다", "b", 5, category="보험 리모델링"))
         self.assertIn("(사진 없음)", dd.message(True, "제목", "b", 0))
+        # NI37 — 사진 0장 사유가 있으면 조용히 넘기지 않고 경고로 적는다
+        m0 = dd.message(True, "제목", None, 0, image_why="사진 설정 없음")
+        self.assertIn("⚠ 사진 0장(사진 설정 없음)", m0)
+        self.assertIn("네이버 파일 생성 실패", m0)
+        self.assertNotIn("사진 0장", dd.message(True, "제목", "b", 5, image_why=""))
         self.assertTrue(dd.message(False, reasons=["a 반려", "b 반려"]).startswith("오늘 원고 없음 — a 반려 / b 반려"))
 
     def test_self_flagged(self):

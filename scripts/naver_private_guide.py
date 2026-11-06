@@ -16,6 +16,7 @@
 본문은 어드민 compose(mode=submission) — 심의 제출용 조립본(심의필 줄은 공란 예시). 조립 기록(naver_composed_hash)도
     남는다(= 어드민 복사 버튼 1회, preflight 「네이버 osmu」 근거).
 🔴 게이트: compose 가 서버 컴플라이언스(level=clean)를 다시 본다 — 확인이 안 끝난 글은 만들지 않는다.
+🔴 사진 게이트(NI37): 원고에 [이미지] 자리가 있는데 사진이 0장이면 compose 전에 멈춘다(사진 없이 만들려면 --no-images).
 """
 import argparse
 import re
@@ -233,7 +234,21 @@ def existing_outputs(out_dir, base):
     return sorted(names)
 
 
-def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
+IMAGE_SLOT = re.compile(r"\[이미지[^\]\n]*\]")
+
+
+def image_gap(text, n_images):
+    """NI37 — 원고에 [이미지N] 자리가 있는데 사진이 0장이면 막는 사유(문자열), 아니면 None. 순수 함수(테스트 대상).
+    37호(2026-11-05)가 사진 설정(configs/<slug>.json) 없이 「사진 0장」 패키지로 조용히 나갔다."""
+    slots = len(IMAGE_SLOT.findall(text or ""))
+    if slots and not n_images:
+        return (f"네이버 사진 0장 — 원고에 [이미지] 자리 {slots}곳이 있는데 assets/naver/<slug>/ 에 사진이 없습니다. "
+                "configs/<slug>.json 을 만들고 scripts/naver_images_more.py 로 5장을 렌더한 뒤 다시 만드세요"
+                "(사진 없이 만들려면 --no-images)")
+    return None
+
+
+def build(env, article, server, out_dir=OUT_DIR, now=None, force=False, allow_no_images=False):
     slug = article["slug"]
     issue = kit.issue_label(slug)
     base = kit.kit_basename(slug, "naver", now).replace("_네이버", "_네이버비공개")
@@ -250,10 +265,23 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False):
                                   article.get("raw_source_name") or "")
     if fails:
         raise kit.KitError("네이버 근거 문장 게이트 — 산출물을 만들지 않았습니다:\n  · " + "\n  · ".join(fails))
-    body = pa.admin_post(server, env, "/api/admin/compose",
-                         {"articleId": article["id"], "channel": "naver", "mode": "submission"})
-    os.makedirs(inner_dir, exist_ok=True)
+    # 🔴 사진 게이트(NI37) — 사진부터 복사해 장수를 본다. 0장이면 compose(조립 기록) 전에 멈춘다
+    os.makedirs(out_dir, exist_ok=True)
     imgs = pa.copy_images(slug, out_dir, base)
+    gap = None if allow_no_images else image_gap(article.get("naver_blog_content"), len(imgs))
+    if gap:
+        raise kit.KitError(gap)
+    try:
+        body = pa.admin_post(server, env, "/api/admin/compose",
+                             {"articleId": article["id"], "channel": "naver", "mode": "submission"})
+    except Exception:
+        for n in imgs:   # 복사한 사진이 남으면 다음 실행이 「같은 이름 파일」로 멈춘다
+            try:
+                os.remove(os.path.join(out_dir, n))
+            except OSError:
+                pass
+        raise
+    os.makedirs(inner_dir, exist_ok=True)
     # 조립 본문은 로버트가 열지 않는다(html 이 본문) — 내부 하위 폴더에만 둔다(NP1)
     body_path = os.path.join(inner_dir, base + "_본문.txt")
     open(body_path, "w", encoding="utf-8", newline="\n").write(body["text"])
@@ -314,12 +342,13 @@ def main():
     ap.add_argument("--send", action="store_true", help="안내 한 장을 텔레그램으로 보낸다(기본은 준비만)")
     ap.add_argument("--base-url")
     ap.add_argument("--force", action="store_true", help="같은 이름 산출물이 있어도 덮어쓴다(기본은 멈춤)")
+    ap.add_argument("--no-images", action="store_true", help="원고에 [이미지] 자리가 있어도 사진 0장으로 만든다(기본은 멈춤)")
     a = ap.parse_args()
     env = kit.load_env()
     art = kit.fetch_article(env, a.slug)
     try:
         with kit.LocalServer(base_url=a.base_url, port=3944) as srv:
-            res = build(env, art, srv, force=a.force)
+            res = build(env, art, srv, force=a.force, allow_no_images=a.no_images)
     except kit.KitError as e:
         print(str(e))
         sys.exit(1)

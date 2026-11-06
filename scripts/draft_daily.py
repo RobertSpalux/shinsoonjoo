@@ -17,6 +17,7 @@
   ④ 통과 → draft_insert 와 같은 검사(네이버 규칙 10 · topic_guard) 뒤 premium_articles 에 초안 저장(needs_human_review=true)
   ⑤ 사진 5장: 원고의 naver_images 설정 → 초안 폴더 images\\ 에 렌더(금액·금소법 표현·칸 넘침이면 사진 없이 진행)
   ⑥ 네이버 비공개 파일: naver_private_guide.build — Downloads\\PAMS접수\\_네이버비공개\\ (로버트 규칙: 이 폴더 외 안내 금지)
+     사진 0장이면 build 의 사진 게이트가 파일을 만들지 않고, ⑦ 알림에 「⚠ 사진 0장(사유)」를 적는다(NI37)
   ⑦ Soonjoo_PB(TELEGRAM_CHAT_ID) 1줄: 「오늘 원고: 제목 · 네이버 파일 위치」
 
 🔴 저장소(main 작업 트리)의 추적 파일을 고치지 않는다 — 크론이 main 트리에서 돈다.
@@ -83,10 +84,12 @@ def next_topics(cfg, used, tries=TRIES):
     return dw.pick_topics(cfg, used, tries)
 
 
-def message(ok, title=None, base=None, n_images=0, reasons=(), category=None):
+def message(ok, title=None, base=None, n_images=0, reasons=(), category=None, image_why=""):
     if ok:
         where = f"Downloads\\PAMS접수\\_네이버비공개\\{base}.txt" if base else "네이버 파일 생성 실패 — 로그 확인"
-        tail = "" if n_images else " (사진 없음)"
+        # NI37 — 사진 0장은 조용히 넘기지 않는다: 사유를 적고, 비공개 파일은 사진 게이트가 막는다
+        tail = "" if n_images else (f" ⚠ 사진 0장({image_why[:120]}) — 사진 렌더 후 naver_private_guide 다시"
+                                    if image_why else " (사진 없음)")
         cat = f" · 분류: {category}" if category else ""
         return f"오늘 원고: {title}{cat} · 네이버 파일: {where}{tail} — ⚠ 근거 원문 대조 전(게시 전 대조)"
     return "오늘 원고 없음 — " + " / ".join(reasons)[:600]
@@ -235,7 +238,8 @@ def run(out_dir=dw.OUT_DIR, do_send=True):
             log(out_dir, f"  → 네이버 파일 {res['txt']}")
         except Exception as e:   # 네이버 파일이 막혀도 투입은 끝났다 — 알림에 적는다
             log(out_dir, f"  → 네이버 파일 실패: {type(e).__name__}: {str(e)[:200]}")
-        msg = message(True, row.get("naver_title") or row.get("title"), base, n, category=category)
+        msg = message(True, row.get("naver_title") or row.get("title"), base, n, category=category,
+                      image_why=why or ("사진 설정 없음" if not n else ""))
         log(out_dir, msg)
         if do_send:
             log(out_dir, "  발송 " + ("완료" if send(env, msg) else "실패"))
