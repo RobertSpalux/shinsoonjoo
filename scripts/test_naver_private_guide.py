@@ -227,6 +227,46 @@ class Steps(unittest.TestCase):
         self.assertIn("근거 문장 게이트", str(cm.exception))
         self.assertEqual(os.listdir(d), [], "아무 파일도 남기지 않는다")
 
+    def test_image_gap(self):
+        """NI37 — 37호가 [이미지①~⑤] 자리를 둔 채 「사진 0장」 패키지로 조용히 나갔다."""
+        text = "도입.\n\n[이미지①]\n본문.\n\n[이미지②]\n끝."
+        self.assertIn("사진 0장", g.image_gap(text, 0))
+        self.assertIn("2곳", g.image_gap(text, 0))
+        self.assertIsNone(g.image_gap(text, 5))
+        self.assertIsNone(g.image_gap("자리 없는 본문.", 0))   # 사진 자리가 없는 원고는 그대로
+        self.assertIsNone(g.image_gap(None, 0))
+
+    def test_build_refuses_zero_images_before_compose(self):
+        import tempfile
+
+        class Boom:
+            def __getattr__(self, k):
+                raise AssertionError("compose 서버를 부르면 안 된다")
+        d = tempfile.mkdtemp()
+        art = {"slug": "insurance-remodeling-coverage-sum-by-rider", "id": "x",
+               "naver_blog_content": "도입.\n\n[이미지①]\n본문.", "main_website_markdown": "본진."}
+        old_basis, old_copy = g.kit.check_naver_basis, g.pa.copy_images
+        g.kit.check_naver_basis = lambda *a, **k: []
+        g.pa.copy_images = lambda slug, out_dir, base: []
+        try:
+            with self.assertRaises(kit.KitError) as cm:
+                g.build({}, art, Boom(), out_dir=d)
+            self.assertIn("사진 0장", str(cm.exception))
+            self.assertEqual(os.listdir(d), [], "아무 파일도 남기지 않는다")
+
+            # --no-images 면 사진 게이트를 지나 compose 로 간다(여기선 Boom). 복사한 사진은 거둔다
+            def one(slug, out_dir, base):
+                open(os.path.join(out_dir, base + "_이미지1.png"), "w").write("x")
+                return [base + "_이미지1.png"]
+            with self.assertRaises(AssertionError):
+                g.build({}, art, Boom(), out_dir=d, allow_no_images=True)
+            g.pa.copy_images = one
+            with self.assertRaises(AssertionError):
+                g.build({}, art, Boom(), out_dir=d)
+            self.assertEqual(os.listdir(d), [], "compose 실패 시 복사한 사진을 거둔다")
+        finally:
+            g.kit.check_naver_basis, g.pa.copy_images = old_basis, old_copy
+
     def test_format_line(self):
         self.assertIn("configs/naver-format.json", g.format_line())
         self.assertNotIn("읽기 실패", g.format_line())
