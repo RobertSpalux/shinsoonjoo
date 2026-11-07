@@ -79,6 +79,11 @@
       "why": "[2026-10-29 PAIR1] 27호 교통사고 경상환자 8주 본진"
     },
     {
+      "slug": "death-benefit-liquidation-remaining-coverage",
+      "channel": "main",
+      "why": "[GF38 2026-11-07] 38호 사망보험금 유동화 본진 — 종신 확충. 37호 본진 다음 칸. 키트는 12.23 증빙 PDF 추가·gate_key 수정 머지 뒤 pams_auto 가 만든다"
+    },
+    {
       "slug": "ltc-grade-home-care-rider-check",
       "channel": "threads",
       "why": "폼 직접입력 · 통상 5분 승인 — 칸을 오래 막지 않음. 본진 승인 뒤면 첫 댓글 링크가 붙는다"
@@ -162,6 +167,11 @@
       "slug": "car-accident-minor-injury-8week-future-treatment",
       "channel": "naver",
       "why": "[PAIR1] 본진 승인·게시 뒤 재조립(1028_27호 비공개 파일은 링크 없음 = 보류)"
+    },
+    {
+      "slug": "death-benefit-liquidation-remaining-coverage",
+      "channel": "naver",
+      "why": "[PAIR1] 38호 네이버 — 사진 5장(configs/death-benefit-liquidation-remaining-coverage.json). 본진 승인·게시 뒤 재조립 → 비공개 게시 → 캡처"
     }
   ]
 }

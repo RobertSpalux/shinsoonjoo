@@ -123,6 +123,25 @@ class MainKitTest(unittest.TestCase):
         need, _ = auto.needs_main_kit(art(acks=[{"field": "x", "term": "15%", "offset": 1}]), h.state)
         self.assertTrue(need, "확인 이력이 바뀌면 다시 시도한다")
 
+    def test_gate_blocked_retries_when_topic_allow_changes(self):
+        """GF38 — 주제 중복으로 막힌 뒤 topic_guard_allow.json 에 짝을 넣으면 다음 바퀴에 다시 시도한다
+        (38호 본진이 11/5 막힌 뒤 #128 짝 추가에도 이틀 동안 「게이트 막힘」으로 건너뛰었다)."""
+        d = tempfile.mkdtemp()
+        allow = os.path.join(d, "topic_guard_allow.json")
+        open(allow, "w", encoding="utf-8").write('{"allow": []}')
+        saved = auto.TOPIC_ALLOW_JSON
+        auto.TOPIC_ALLOW_JSON = allow
+        try:
+            h = Harness(main=[art()], gate_blocked={"ltc-grade-home-care-rider-check"})
+            h.run()
+            need, _ = auto.needs_main_kit(art(), h.state)
+            self.assertFalse(need, "예외 목록이 그대로면 다시 시도하지 않는다")
+            open(allow, "w", encoding="utf-8").write('{"allow": [{"new": "ltc-grade-home-care-rider-check"}]}')
+            need, _ = auto.needs_main_kit(art(), h.state)
+            self.assertTrue(need, "예외 목록이 바뀌면 다시 시도한다")
+        finally:
+            auto.TOPIC_ALLOW_JSON = saved
+
     def test_same_non_gate_failure_alerts_once_and_retries_when_sources_change(self):
         """SK1 — 자료명 못 찾음 같은 게이트 아닌 실패가 10분마다 같은 알림을 보냈다(2026-10-20 법인편)."""
         d = tempfile.mkdtemp()
