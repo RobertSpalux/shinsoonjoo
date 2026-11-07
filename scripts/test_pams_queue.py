@@ -249,12 +249,12 @@ class Config(unittest.TestCase):
 
     def test_config_main_order_and_exception(self):
         """2026-10-01 23:00 관제탑 — 본진 7→8→9→10→11→13→12→14→15→16 · 예외는 7호 네이버 하나.
-        2026-10-29 PAIR1 — 본진 짝 없던 25·21·26·27호 본진을 16호 뒤에."""
+        2026-10-29 PAIR1 — 본진 짝 없던 25·21·26·27호 본진을 16호 뒤에. 2026-11-07 GF38 — 38호 본진을 27호 뒤에."""
         import pams_kit as kit
         _, order = q.load_queue()
         mains = [kit.issue_label(o["slug"]) for o in order if o["channel"] == "main"]
         self.assertEqual(mains, ["7호", "8호", "9호", "10호", "11호", "13호", "12호", "14호", "15호", "16호",
-                                 "25호", "21호", "26호", "27호"])
+                                 "25호", "21호", "26호", "27호", "38호"])
         ex = [(kit.issue_label(o["slug"]), o["channel"]) for o in order if o.get("before_main_ok")]
         self.assertEqual(ex, [("7호", "naver")])
         self.assertEqual(len({(o["slug"], o["channel"]) for o in order}), len(order), "중복 항목 없음")

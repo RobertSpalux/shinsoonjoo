@@ -51,6 +51,7 @@ TASK_NAME = "SHIN_PAMS_KIT"
 CAPTURE_EXT = (".pdf",)
 PROOF_EXT = kit.PROOF_EXT
 DONE_DIR_NAME = "캡처_처리됨"
+TOPIC_ALLOW_JSON = os.path.join(kit.ROOT, "configs", "topic_guard_allow.json")
 
 
 # ── 공통 ────────────────────────────────────────────────────
@@ -116,9 +117,16 @@ def alert_once(env, state, key, text, notify=None):
 
 
 def gate_key(article, channel):
-    """게이트 재시도 판정 키 — 원고 해시 + 확인 이력. 둘 다 같으면 결과도 같다."""
+    """게이트 재시도 판정 키 — 원고 해시 + 확인 이력 + 주제 중복 예외 목록. 셋 다 같으면 결과도 같다.
+    🔴 예외 목록(topic_guard_allow.json)이 빠져 있으면 주제 중복으로 막힌 뒤 짝을 적어도 다시 시도하지 않는다
+       (GF38 2026-11-07 — 38호 본진이 11/5 19:29 막힌 뒤 #128 이 짝을 넣었는데 이틀째 「게이트 막힘」)."""
     acks = json.dumps(article.get("compliance_acks") or [], ensure_ascii=False, sort_keys=True)
-    return kit.content_hash(article, channel) + ":" + hashlib.sha256(acks.encode("utf-8")).hexdigest()[:16]
+    try:
+        allow = open(TOPIC_ALLOW_JSON, "rb").read()
+    except OSError:
+        allow = b"-"
+    return (kit.content_hash(article, channel) + ":" + hashlib.sha256(acks.encode("utf-8")).hexdigest()[:16]
+            + ":" + hashlib.sha256(allow).hexdigest()[:16])
 
 
 def fail_key(article, channel):
