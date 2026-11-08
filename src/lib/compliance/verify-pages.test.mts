@@ -28,6 +28,14 @@ ok("발표일만 있으면 쪽수 아님", !hasPageRef(SRC));
 ok("연도만 있으면 쪽수 아님", !hasPageRef("금융감독원 보도자료 2025"));
 ok("빈 값", !hasPageRef("") && !hasPageRef(null) && !hasPageRef(undefined));
 
+console.log("\n[1-2] 법령 조문 표기 인식");
+const LAW = "소득세법, 소득세법(법률 제20000호), 2024";
+ok("「제16조」", hasPageRef(`${LAW} 제16조`));
+ok("「제16조 제1항 제9호 조문 원문」", hasPageRef("소득세법 제16조 제1항 제9호 조문 원문"));
+ok("「제16조의2」", hasPageRef(`${LAW} 제16조의2`));
+ok("출처명만 있는 법령은 불통과", !hasPageRef(LAW));
+ok("항·호만 단독은 불통과", !hasPageRef("소득세법 제1항 제9호"));
+
 console.log("\n[2] 전 항목 판정");
 const good = [
   { claim: "a", basis: `${SRC} 4쪽` },
@@ -37,6 +45,7 @@ ok("전 항목 쪽수 있음 → 활성", allClaimsHavePages(good));
 ok("한 항목 누락 → 비활성", !allClaimsHavePages([...good, { claim: "c", basis: SRC }]));
 ok("누락 개수 1", claimsMissingPages([...good, { claim: "c", basis: SRC }]) === 1);
 ok("빈 배열 → 비활성(근거 없는 일괄 확인 금지)", !allClaimsHavePages([]));
+ok("쪽수+조문 혼합 → 활성", allClaimsHavePages([...good, { claim: "d", basis: "소득세법 제16조 제1항 제9호 조문 원문" }]));
 ok("null → 비활성", !allClaimsHavePages(null));
 ok("basis 없음 → 비활성", !allClaimsHavePages([{ claim: "x" }]));
 
