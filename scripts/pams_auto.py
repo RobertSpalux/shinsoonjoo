@@ -384,6 +384,9 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
         need, why = needs_main_kit(a, state, file_exists)
         if need and not name_taken(a, "main", state, kit_dir, file_exists):
             jobs.append((a, "main", None, why))
+        elif not need and why.startswith(("게이트 막힘", "같은 실패")):
+            # 「작업 0건」만으로는 왜 안 만드는지 알 수 없다(GF38k, 2026-11-07 — 38호 본진이 6시간 조용히 대기)
+            log(f"  건너뜀(본진 {kit.issue_label(a['slug'])}): {why}")
 
     naver_waiting = [a for a in fetch_drafts("naver") if not kit.channel_locked(a, "naver")]
     for cap in list_captures(kit_dir, state):
@@ -410,6 +413,7 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
             state["captures"][fn] = {"status": "asked", "asked": why, "asked_day": today, "sig": sig}
             continue
         if state["gate_blocked"].get(f"{art['slug']}|naver") == gate_key(art, "naver") and rec.get("slug") == art["slug"]:
+            log(f"  건너뜀(네이버 {kit.issue_label(art['slug'])} · {fn}): 게이트 막힘(원고·확인 이력 그대로)")
             continue  # 확인 미완료 그대로 — 서버를 다시 띄우지 않는다
         taken = name_taken(art, "naver", state, kit_dir, file_exists)
         if taken:
