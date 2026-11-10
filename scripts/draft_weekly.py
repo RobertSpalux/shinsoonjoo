@@ -45,6 +45,7 @@ try:
 except Exception:
     pass
 
+import consult_line as consult  # noqa: E402
 import naver_rules  # noqa: E402
 import pams_kit as kit  # noqa: E402
 import preflight  # noqa: E402
@@ -165,13 +166,21 @@ def placeholders(text):
     return sorted(set(CHECK_MARK.findall(text or "")))
 
 
-def finance_gate(draft, topic, notices, exempt=()):
+def finance_gate(draft, topic, notices, exempt=(), consult_slug=None):
     """→ 이슈 목록 [{stage, reason, sentence}]. 비면 통과. 유의문구 원문은 표현 검사에서 빼고, 포함 여부는 따로 본다.
-    exempt: 표현 검사에서만 빼는 다른 정본 문구(필수 유의문구 2종 — 「이익 또는 손실」이 저축성 표현에 걸리지 않게)."""
+    exempt: 표현 검사에서만 빼는 다른 정본 문구(필수 유의문구 2종 — 「이익 또는 손실」이 저축성 표현에 걸리지 않게).
+    상담 안내 정본 줄(consult_line — 코드가 붙인 한 줄)은 「상담 유인」 검사에서 빼고 따로 잰다.
+    consult_slug 를 주면 원고가 있는 칸(본진·네이버)마다 상담 안내가 정확히 1줄 있어야 한다(LK1 — 새 원고)."""
     required, notices = notices, list(notices) + [s for s in exempt if s not in notices]
     issues = []
     title_fields = {"제목": draft.get("title", ""), "네이버 제목": draft.get("naver_title", "")}
     bodies = {"네이버": draft.get("naver", ""), "본진": draft.get("main", "")}
+    for label, text in bodies.items():
+        lines = consult.find_lines(text)
+        notices += [s for s in lines if s not in notices]
+        if consult_slug is not None and (text or "").strip():
+            for why in consult.issues(text, "naver" if label == "네이버" else "main", consult_slug):
+                issues.append({"stage": "상담 안내", "reason": f"{why}({label})", "sentence": " / ".join(lines)})
     cat = topic["category"]
 
     def scan(label, text, rx_list, stage):
@@ -250,6 +259,8 @@ def canonical_lines(text):
     out = list(naver_rules.INTERNAL_URL.findall(text or ""))
     # ③ 한 줄 출처 — 2026-10-20 SUP1: 같은 자료를 인용한 「출처: …」 줄만으로 반려됐다(본문 겹침 0)
     out += [ln for ln in rows if SOURCE_LINE.match(ln)]
+    # ④ 상담 안내 정본 줄과 그 URL — 꼬리(채널 이름·「문의하실 수 있습니다」)가 글마다 같다(LK1)
+    out += consult.find_lines(text) + [ln for ln in rows if ln.startswith("https://goodfinance.kr/go/kakao?ref=")]
     for i, ln in enumerate(rows):
         if SOURCE_HEAD.match(ln):
             out += [r for r in rows[i + 1:] if r]
@@ -349,7 +360,7 @@ def build_prompt(topic, cfg, rules_text):
 - 경어체(~습니다/~입니다). 담담하게. 감정어·과장 금지.
 - 각도는 「이미 가입한 계약의 점검·제도 설명」이다. 해지·가입·유지를 권하지 않는다. 리모델링은 갈아타기가 아니다.
 - 글의 역할은 「판단에 무엇이 걸려 있는지」 알려 주는 것이다. 독자가 혼자 증권을 꺼내 표를 만들게 하는 단계별 따라하기·「이것만 확인하면 된다」 식 셀프체크로 쓰지 않는다
-  (전 계약을 담보 단위로 펼쳐 판단하는 일은 전문가의 몫이라는 점이 문장에 드러나야 한다. 단 상담·문의를 권하는 유인 문장은 쓰지 않는다).
+  (전 계약을 담보 단위로 펼쳐 판단하는 일은 전문가의 몫이라는 점이 문장에 드러나야 한다. 본문에 상담·문의 문장을 직접 쓰지 않는다 — 아래 consult_intent 로만).
 - 확인하지 못한 일반화(「~인 경우가 많아서」로 제도를 단정)를 쓰지 않는다. 약관마다 다르면 다르다고만 쓴다.
 - 특정 날짜·특정 고객 일화를 지어내지 않는다. 「상담하다 보면 ~하시는 분이 많습니다」처럼 반복되는 패턴으로만 쓴다.
 - 금액(원·만원·억)과 수익률·이율·환급률·공제율 숫자를 쓰지 않는다. 꼭 필요한데 근거 원문을 확인하지 못한 숫자는 [확인: 무엇] 으로 남긴다.
@@ -372,6 +383,13 @@ def build_prompt(topic, cfg, rules_text):
 # 본진판(main)
 - 같은 내용을 마크다운(## 소제목)으로 2,000~3,000자. 네이버판 문장을 그대로 복사하지 말고 다시 쓴다.
 
+# 상담 안내(consult_intent) — 코드가 문장으로 만들어 「한 줄 조언」 바로 뒤에 넣는다(본진·네이버 둘 다, 심의 원고에 포함)
+- 이 글을 검색한 사람이 자기 계약에서 알고 싶어 할 것을 한 구절로. 10~70자, 반드시 「…싶으시면」으로 끝낸다.
+- 코드가 뒤에 「, 카카오톡 채널 「{consult.CHANNEL_NAME}」으로 문의하실 수 있습니다.」와 링크를 붙인다. 이 꼬리를 직접 쓰지 않는다.
+- 금지: 무료, 단정(가능합니다·받으실 수 있습니다·됩니다), 약속(해 드립니다·찾아 드립니다), 비교·추천, 다급함(지금·바로·당장), 보험료 절감.
+- 예시(주제 → 구절):
+{chr(10).join(f'  {k} → {v}' for k, v in consult.INTENT_EXAMPLES)}
+
 # 근거(verify_claims)
 - 본문에서 제도·법령을 설명한 문장마다 하나. basis 는 「작성기관명, 자료명(원문 제목 그대로), 기준년도, 발표·개정연도」를 모두 적는다(예: 국가법령정보센터, 소득세법 제59조의4(특별세액공제), 2025.12.23 개정).
 - 기사·지식백과·블로그는 근거가 아니다. 원문을 모르면 그 문장을 본문에서 빼거나 [확인: ___] 로 남긴다.
@@ -391,7 +409,7 @@ def build_prompt(topic, cfg, rules_text):
 # 출력
 JSON 객체 하나만 출력한다(코드펜스·설명 금지). 키:
 {{"title": 본진 제목, "naver_title": 네이버 제목, "summary": 2문장, "tags": [5개], "key_points": [정확히 3개 — 본진 머리가 「핵심만 3줄」로 고정이다], "faq_json": [{{"question","answer"}} 3개],
-  "verify_claims": [{{"claim","basis","confidence"}}], "naver": 네이버판 본문, "main": 본진판 마크다운,
+  "verify_claims": [{{"claim","basis","confidence"}}], "naver": 네이버판 본문, "main": 본진판 마크다운, "consult_intent": 상담 안내 의도 구절,
   "naver_images": {{{", ".join(f'"{k}"' for k in IMAGE_KEYS)}}}}}
 """
 
@@ -432,10 +450,23 @@ def parse_draft(text):
     if s < 0 or e <= s:
         raise kit.KitError("생성 결과에 JSON 이 없다")
     d = json.loads(text[s:e + 1])
-    miss = [k for k in ("title", "naver_title", "summary", "tags", "key_points", "faq_json", "verify_claims", "naver", "main") if not d.get(k)]
+    miss = [k for k in ("title", "naver_title", "summary", "tags", "key_points", "faq_json", "verify_claims", "naver", "main",
+                        "consult_intent") if not d.get(k)]
     if miss:
         raise kit.KitError("생성 결과에 빠진 값: " + ", ".join(miss))
     return d
+
+
+def add_consult(draft, slug):
+    """LK1 — consult_intent 로 상담 안내 줄을 본진·네이버 「한 줄 조언」 뒤에 넣는다(이미 있으면 그대로). 순수 함수.
+    한 줄 조언이 없으면 넣지 않는다 — 금소법 게이트 「상담 안내 0개」로 반려된다."""
+    out = dict(draft)
+    for key, channel in (("naver", "naver"), ("main", "main")):
+        try:
+            out[key] = consult.insert(out[key], out["consult_intent"], channel, slug)
+        except ValueError:
+            pass
+    return out
 
 
 # ── 게이트 묶음 ──────────────────────────────────────────────
@@ -478,7 +509,7 @@ def judge(draft, topic, cfg, corpus, env=None, use_ts=True, tmp_dir=None, today=
     required = preflight.parse_required_notices()
     stages = []
 
-    fin = finance_gate(draft, topic, notices, required)
+    fin = finance_gate(draft, topic, notices, required, consult_slug=topic["slug"])
     stages.append({"name": "금소법 게이트(rules_finance_gate)", "pass": not fin, "issues": fin})
 
     art = {"title": draft["title"], "naver_title": draft["naver_title"],
@@ -617,6 +648,7 @@ def generate_one(t, cfg, out_dir, env, rules_text, use_ts=True, from_json=None, 
             t0 = time.time()
             draft = parse_draft(run_claude(build_prompt(t, cfg, rules_text), os.path.join(work, "cli"), t["slug"]))
             print(f"  생성 {t['slug']} {time.time() - t0:.0f}초")
+        draft = add_consult(draft, t["slug"])
         docs = local_docs(out_dir, skip_slug=t["slug"]) + ([] if env is None else db_docs(env))
         result = judge(draft, t, cfg, build_corpus(docs), env, use_ts, os.path.join(work, t["slug"]), today)
     except (kit.KitError, json.JSONDecodeError, subprocess.TimeoutExpired) as e:

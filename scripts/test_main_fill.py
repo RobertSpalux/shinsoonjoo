@@ -21,6 +21,9 @@ CFG = dw.load_topics()
 TAX = CFG["notices"]["taxAdvice"][0] + "."
 TAX_FREE = CFG["notices"]["taxFree"][0]
 BODY = "연금저축보험을 중도해지하면 연금 외 수령으로 분류되어 세금이 달라집니다. 비과세 연금보험은 요건을 유지해야 합니다."
+# LK1 — 새 본진판은 한 줄 조언 바로 뒤에 상담 안내 1줄이 있어야 한다
+ADVICE = ("> <!-- advice -->\n> **신순주 지사장의 한 줄 조언**\n>\n> 해지 전에 세금이 어떻게 달라지는지부터 보셔야 합니다.\n\n"
+          + mf.dw.consult.main_line("해지하기 전에 내 연금 계약의 세금 처리를 증권 기준으로 함께 보고 싶으시면"))
 
 
 def fin(main, category="연금·노후·세테크"):
@@ -31,8 +34,13 @@ def fin(main, category="연금·노후·세테크"):
 
 class FinanceGate(unittest.TestCase):
     def test_annuity_with_notices_passes(self):
-        ok, d = fin("\n\n".join([BODY, TAX, TAX_FREE]))
+        ok, d = fin("\n\n".join([BODY, ADVICE, TAX, TAX_FREE]))
         self.assertTrue(ok, d)
+
+    def test_missing_consult_line_fails(self):
+        ok, d = fin("\n\n".join([BODY, TAX, TAX_FREE]))
+        self.assertFalse(ok)
+        self.assertIn("상담 안내 줄 0개", d)
 
     def test_annuity_tax_without_notice_fails(self):
         # 세무사 문구 검사는 비과세 문구(「세무사 등 전문가」 포함)로도 충족된다 — draft_weekly.finance_gate 와 같은 규칙
