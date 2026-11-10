@@ -340,10 +340,11 @@ def build(env, article, server, out_dir=OUT_DIR, now=None, force=False, allow_no
             "slug": slug, "category": category}
 
 
-def send(env, res):
-    token, chat = env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID")
-    if not token or not chat:
-        raise kit.KitError("텔레그램 설정 없음")
+CAPTION_LIMIT = 1000
+
+
+def build_caption(res, revision=None):
+    """텔레그램 캡션. revision 을 주면 맨 첫 줄에 「🔁 수정본 — … 대신 이것으로」. 반환 (캡션, 경고 or None)."""
     kw = keyword_of(res["title"])
     # 캡션엔 머리말 표기만(제목 전체를 쓰면 「제목 (7호)」를 통째로 복사할 수 있다) — 제목은 사진 속 상자 하나뿐
     cap = (f"[네이버 비공개 게시 요청] {kit.title_label(res['title'], res.get('slug', ''))}\n"
@@ -353,8 +354,23 @@ def send(env, res):
            f"{ROBERT_TODO}\n"
            f"▶ 비공개 글 PDF 를 Downloads\\PAMS접수\\ 에 「{kw}.pdf」(또는 「{res['issue']}.pdf」)로, 글 상단 캡처를 「{kw}_상단.png」로 저장하면 "
            "zip 은 10분 안에 자동 생성 — 압축 불필요.")
+    if not revision:
+        return cap[:CAPTION_LIMIT], None
+    head = f"🔁 수정본 — {revision} 대신 이것으로\n"
+    room = CAPTION_LIMIT - len(head)
+    warn = f"캡션이 {CAPTION_LIMIT}자를 넘어 본문 끝 {len(cap) - room}자를 잘랐습니다(머리말은 유지)." if len(cap) > room else None
+    return (head + cap[:max(room, 0)])[:CAPTION_LIMIT], warn
+
+
+def send(env, res, revision=None):
+    token, chat = env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        raise kit.KitError("텔레그램 설정 없음")
+    cap, warn = build_caption(res, revision)
+    if warn:
+        print("경고: " + warn)
     with open(res["png"], "rb") as fp:
-        r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", data={"chat_id": chat, "caption": cap[:1000]},
+        r = requests.post(f"https://api.telegram.org/bot{token}/sendPhoto", data={"chat_id": chat, "caption": cap},
                           files={"photo": fp}, timeout=60)
     if not (r.ok and r.json().get("ok")):
         raise kit.KitError(f"텔레그램 발송 실패 — {r.text[:200]}")
@@ -367,6 +383,7 @@ def main():
     ap.add_argument("--base-url")
     ap.add_argument("--force", action="store_true", help="같은 이름 산출물이 있어도 덮어쓴다(기본은 멈춤)")
     ap.add_argument("--no-images", action="store_true", help="원고에 [이미지] 자리가 있어도 사진 0장으로 만든다(기본은 멈춤)")
+    ap.add_argument("--revision", metavar="설명", help="재발송용 — 캡션 첫 줄에 「🔁 수정본 — <설명> 대신 이것으로」를 붙인다(--send 와 함께)")
     a = ap.parse_args()
     env = kit.load_env()
     art = kit.fetch_article(env, a.slug)
@@ -378,7 +395,7 @@ def main():
         sys.exit(1)
     print(json.dumps(res, ensure_ascii=False, indent=1))
     if a.send:
-        send(env, res)
+        send(env, res, a.revision)
         print("텔레그램 발송 완료")
     kit.tidy(env)
 

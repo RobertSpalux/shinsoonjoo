@@ -277,6 +277,31 @@ class Steps(unittest.TestCase):
         self.assertEqual(g.dangling_images('<img src="a_이미지1.png">', d), [])
         self.assertEqual(g.dangling_images(None, d), [])
 
+    def test_caption_revision_header(self):
+        """NV2 — 재발송 때 옛 안내와 헷갈리지 않게 --revision 머리말. 옵션 없으면 기존 캡션과 바이트 동일."""
+        res = {"title": "연금보험 수익자", "slug": "some-slug", "category": "보험 리모델링", "txt": "a.txt",
+               "images": ["x"], "issue": "33호"}
+        base, warn = g.build_caption(res)
+        self.assertIsNone(warn)
+        self.assertTrue(base.startswith("[네이버 비공개 게시 요청]"))
+        self.assertEqual(g.build_caption(res, None), (base, None))
+        self.assertEqual(g.build_caption(res, ""), (base, None))
+        cap, warn = g.build_caption(res, "16:09 안내")
+        self.assertIsNone(warn)
+        self.assertEqual(cap.split("\n")[0], "🔁 수정본 — 16:09 안내 대신 이것으로")
+        self.assertEqual(cap.split("\n", 1)[1], base)
+
+    def test_caption_revision_over_limit(self):
+        res = {"title": "연금보험 수익자", "slug": "some-slug", "category": "보험 리모델링", "txt": "가" * 1200,
+               "images": [], "issue": "33호"}
+        cap, warn = g.build_caption(res, "16:09 안내")
+        self.assertEqual(len(cap), g.CAPTION_LIMIT)
+        self.assertTrue(cap.startswith("🔁 수정본 — 16:09 안내 대신 이것으로\n"))
+        self.assertIn("넘어", warn)
+        plain, w2 = g.build_caption(res)
+        self.assertEqual(len(plain), g.CAPTION_LIMIT)
+        self.assertIsNone(w2)                                  # 옵션 없음은 기존대로 조용히 자름
+
     def test_format_line(self):
         self.assertIn("configs/naver-format.json", g.format_line())
         self.assertNotIn("읽기 실패", g.format_line())
