@@ -40,6 +40,8 @@ import pams_kit as kit  # noqa: E402
 
 NOTE_RX = re.compile(r"원고해시\s*sha256\s*([0-9a-f]{64})")
 TXT_RX = re.compile(r"^원고해시:\s*sha256\s*([0-9a-f]{64})", re.M)
+RESUBMIT_RX = re.compile(r"PAMS 실제 접수 [^\n]*재접수")
+RESUBMIT_GRACE = 600   # 재접수 시각 뒤 이 초 안에 만든 키트까지 그 접수분으로 본다
 LOCKED = ("submitted", "under_review", "approved")
 CHANNELS = ("main", "naver")
 
@@ -58,6 +60,18 @@ def noted_hash(notes):
     """notes 에 적힌 해시 — 여러 번 적혔으면 **마지막**(가장 최근 접수분)."""
     m = NOTE_RX.findall(notes or "")
     return m[-1] if m else None
+
+
+def resubmitted_after_hash(notes):
+    """마지막 원고해시 줄 **뒤에** 감시기의 「재접수」 줄이 있는가.
+    반송 → 보완 재접수(pams_wheel 재접수_칸)는 notes 에 줄만 더하고 해시는 옛 접수분이 남는다.
+    그대로 두면 재접수 원고와 옛 해시를 비교해 「원안 변경」 오탐이 난다(실측 2026-11-10 38호 본진 693015)."""
+    notes = notes or ""
+    hashes = list(NOTE_RX.finditer(notes))
+    if not hashes:
+        return False
+    last = hashes[-1].start()
+    return any(m.start() > last for m in RESUBMIT_RX.finditer(notes))
 
 
 def txt_hash(text):
@@ -89,36 +103,63 @@ def message(title_label, channel, state, noted, current):
 
 
 # ── 키트 해시 찾기 · 기록 ─────────────────────────────────────
-def kit_hash(slug, channel, kit_dir=kit.KIT_DIR, state=None):
-    """그 글·채널의 가장 최근 키트 해시 → (해시, 키트이름). 키트 .txt 의 줄이 먼저, 없으면 pams_auto 상태."""
-    pat = os.path.join(kit_dir, f"*_{kit.issue_label(slug)}_{kit.CH_LABEL[channel]}.txt")
-    for p in sorted(glob.glob(pat), key=os.path.getmtime, reverse=True):
+def kit_hash(slug, channel, kit_dir=kit.KIT_DIR, state=None, before=None):
+    """그 글·채널의 가장 최근 키트 해시 → (해시, 키트이름). 키트 .txt 의 줄이 먼저, 없으면 pams_auto 상태.
+    before(epoch 초)를 주면 재접수 기록용 — 그 시각(+RESUBMIT_GRACE) 전에 만든 키트만 본다.
+    보완 키트(*_보완.txt)와 승인 뒤 옮겨진 _접수완료\\<채널>\\ 도 찾는다. 이때 상태 기록으로는 물러서지 않는다."""
+    base = f"*_{kit.issue_label(slug)}_{kit.CH_LABEL[channel]}"
+    pats = [os.path.join(kit_dir, base + ".txt")]
+    if before is not None:
+        done_dir = os.path.join(kit_dir, "_접수완료", kit.CH_LABEL[channel])
+        pats += [os.path.join(kit_dir, base + "_보완.txt"),
+                 os.path.join(done_dir, base + ".txt"), os.path.join(done_dir, base + "_보완.txt")]
+    paths = [p for pat in pats for p in glob.glob(pat)]
+    if before is not None:
+        paths = [p for p in paths if os.path.getmtime(p) <= before + RESUBMIT_GRACE]
+    for p in sorted(paths, key=os.path.getmtime, reverse=True):
         h = txt_hash(open(p, encoding="utf-8").read())
         if h:
             return h, os.path.basename(p)[:-4] + ".zip"
+    if before is not None:
+        return None, None
     rec = ((state or {}).get("kits") or {}).get(f"{slug}|{channel}")
     if rec and rec.get("hash"):
         return rec["hash"], os.path.basename(rec.get("zip") or "") or "pams_auto 상태"
     return None, None
 
 
+def _epoch(ts):
+    """ad_reviews.submitted_at(ISO) → epoch 초. 못 읽으면 None."""
+    try:
+        return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).timestamp() if ts else None
+    except ValueError:
+        return None
+
+
 def fetch_locked_rows(env):
     url, h = kit._rest(env)
     rv = url.rsplit("/", 1)[0] + "/ad_reviews"
-    return requests.get(rv, params={"select": "id,channel,status,notes,premium_articles(slug,title)",
+    return requests.get(rv, params={"select": "id,channel,status,notes,submitted_at,premium_articles(slug,title)",
                                     "channel": "in.(main,naver)", "status": "in.(submitted,under_review,approved)"},
                         headers=h, timeout=30).json()
 
 
 def stamp(env, state=None, log=print, kit_dir=kit.KIT_DIR, patch=None, rows=None, only_unpublished=True):
     """해시 기록이 없는 접수·승인 행에 키트 해시를 적는다. 적은 (slug, channel) 목록.
+    재접수 줄이 마지막 해시 뒤에 있으면 재접수 시각 전에 만든 가장 최근 키트 해시를 한 줄 더 적는다.
     이미 공개된 글(옛 승인분)은 건드리지 않는다 — 대조할 게시가 남아 있지 않다."""
     url, h = kit._rest(env)
     rv = url.rsplit("/", 1)[0] + "/ad_reviews"
     done = []
     for r in (rows if rows is not None else fetch_locked_rows(env)):
+        before = None
         if noted_hash(r.get("notes")):
-            continue
+            if not resubmitted_after_hash(r.get("notes")):
+                continue
+            before = _epoch(r.get("submitted_at"))
+            if before is None:
+                log(f"재접수 원고해시 기록 못 함 — submitted_at 없음 ({r.get('id')})")
+                continue
         slug = (r.get("premium_articles") or {}).get("slug")
         if not slug:
             continue
@@ -127,9 +168,11 @@ def stamp(env, state=None, log=print, kit_dir=kit.KIT_DIR, patch=None, rows=None
             flag = "is_main_published" if r["channel"] == "main" else "is_naver_published"
             if art.get(flag):
                 continue
-        hh, name = kit_hash(slug, r["channel"], kit_dir, state)
+        hh, name = kit_hash(slug, r["channel"], kit_dir, state, before=before)
         if not hh:
             continue
+        if before is not None and hh == noted_hash(r.get("notes")):
+            continue   # 재접수 키트 = 옛 해시 — 기준값이 이미 맞다
         head = (r.get("notes") or "").rstrip()
         notes = (head + "\n" if head else "") + note_line(hh, name, f"{datetime.now(kit.KST):%m-%d %H:%M}")
         if patch:
