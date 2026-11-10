@@ -11,7 +11,8 @@ meta_main.json: slug · title(본진 제목) · summary · key_points[] · faq_j
 쓰는 칸(ALLOWED)만 쓴다: title · summary · key_points · faq_json · main_website_markdown · verify_claims(덧붙임만).
   naver_title · naver_blog_content · raw_source_name(네이버 키트 해시 재료)·발행 플래그는 쓰지 않는다.
 막는 경우: 본진이 이미 접수·승인·발행됨 · 본진 원고가 이미 있음 · 네이버 원고와 겹치는 문장 · 게이트 실패
-  (금소법 rules_finance_gate · 금지어 A · WRITING-SPEC · 분량 · 제목 각도 · 실손 자기부담금 문구).
+  (금소법 rules_finance_gate · 금지어 A · WRITING-SPEC · 분량 · 제목 각도 · 실손 자기부담금 문구 ·
+   상담 안내 1줄(consult_line — 한 줄 조언 바로 뒤, LK1)).
 쓰고 나서 네이버 키트 해시(pams_kit.content_hash naver)가 그대로인지 다시 읽어 확인한다.
 
 왜: draft_insert.py 는 새 행만 넣는다. 네이버 단독 글의 본진판은 같은 행(같은 slug·같은 본진 URL)에 채운다(관제탑 MN1b).
@@ -103,7 +104,8 @@ def gates(article, patch):
             notices.append(s)
     cat = "연금" if not silson and "연금" in (article.get("category") or "") else "실손"
     fin = dw.finance_gate({"title": merged["title"], "naver_title": "", "main": merged["main_website_markdown"],
-                           "naver": ""}, {"category": cat}, notices, preflight.parse_required_notices())
+                           "naver": ""}, {"category": cat}, notices, preflight.parse_required_notices(),
+                          consult_slug=merged.get("slug") or "")   # LK1 — 새 본진판은 상담 안내 1줄 필수
     fin = [i for i in fin if "(네이버)" not in i["reason"] and not i["reason"].startswith("네이버 ")]
     out.append(("금소법 게이트(rules_finance_gate)", not fin, " / ".join(f"{i['reason']} → {i['sentence'][:40]}" for i in fin) or "통과"))
     ok, d = preflight.check_banned({"title": merged["title"], "main_website_markdown": merged["main_website_markdown"]})

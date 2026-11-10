@@ -47,5 +47,15 @@ ok("24px 은 소제목 하나뿐", html.split("font-size:24px").length - 1 === 1
 console.log("\n[3] 글자는 그대로(서식만)");
 ok("첫 줄 글자 보존", html.includes("등급 나왔으니까 보험에서도 뭐가 나오겠지."));
 
+// LK1 — 상담 안내(scripts/consult_line.py): 문장 + 다음 줄 /go/kakao URL → 문장 전체에 링크, URL 줄은 따로 안 나간다
+console.log("\n[4] 상담 안내 줄");
+const CONSULT =
+  "내 실손의 보험료 갱신 주기와 다음 재가입 시점을 증권 기준으로 함께 보고 싶으시면, 카카오톡 채널 「신순주의선한금융」으로 문의하실 수 있습니다.";
+const GO = "https://goodfinance.kr/go/kakao?ref=silson-nonrenewal-premium-rejoin-cycle";
+const ch = toNaverRichHtml(["▶ 신순주 지사장의 한 줄 조언", "조언입니다.", "", CONSULT, GO].join("\n"));
+ok("상담 문장에 /go/kakao 링크", ch.includes(`href="${GO}"`) && ch.includes("카카오톡 채널 「신순주의선한금융」으로 문의하실 수 있습니다."));
+ok("URL 줄은 글자로 따로 나가지 않음", ch.split(GO).length === 2);
+ok("상담 문장은 소제목 아님", !naverHeadings(["", CONSULT, GO].join("\n")).includes(CONSULT));
+
 console.log(`\n${pass} 통과 · ${fail} 실패`);
 if (fail) process.exit(1);

@@ -33,15 +33,22 @@ def naver_body(extra="", notices=WL_NOTICES):
     lines.append("사망보장은 원인별로 나누어 합산해야 실제 합계가 보입니다. " * 60)
     if extra:
         lines.append(extra)
+    lines += ["", "▶ 신순주 지사장의 한 줄 조언", "원인별로 나누어 합산한 표를 먼저 보셔야 합니다.", ""]
     lines += ["자주 묻는 질문 3가지"] + sum(([f"Q. 질문 {i}인가요", "A. 답입니다."] for i in range(1, 4)), [])
     lines += ["핵심 요약", "1. 하나", "2. 둘", "3. 셋"] + list(notices) + ["관련 글"] + LINKS
     return "\n".join(lines)
 
 
+MAIN_ADVICE = "> <!-- advice -->\n> **신순주 지사장의 한 줄 조언**\n>\n> 원인별 합계를 먼저 보셔야 합니다.\n"
+INTENT = "내 계약들의 사망보장을 원인별로 합친 표를 함께 보고 싶으시면"
+
+
 def draft(extra="", title="종신보험 사망보험금 원인별로 나눠 합산해야 보이는 공백", notices=WL_NOTICES):
-    return {"title": "종신보험 사망보험금, 원인별 합산", "naver_title": title, "summary": "요약입니다.",
-            "tags": ["종신보험"], "key_points": ["하나"], "faq_json": [{"question": "q", "answer": "a"}], "verify_claims": [],
-            "naver": naver_body(extra, notices), "main": "## 원인별 합산\n" + "\n".join(notices)}
+    d = {"title": "종신보험 사망보험금, 원인별 합산", "naver_title": title, "summary": "요약입니다.",
+         "tags": ["종신보험"], "key_points": ["하나"], "faq_json": [{"question": "q", "answer": "a"}], "verify_claims": [],
+         "naver": naver_body(extra, notices), "main": "## 원인별 합산\n\n" + MAIN_ADVICE + "\n" + "\n".join(notices),
+         "consult_intent": INTENT}
+    return dw.add_consult(d, WL["slug"])
 
 
 def reasons(issues):
