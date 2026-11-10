@@ -5,6 +5,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
@@ -99,6 +100,59 @@ class Stamp(unittest.TestCase):
             self.assertEqual(list(got), ["r1"])                      # 이미 적힌 행은 다시 안 적는다
             self.assertTrue(got["r1"].startswith("메모\n"))           # 기존 메모 보존
             self.assertEqual(L.noted_hash(got["r1"]), H)
+
+
+class Resubmit(unittest.TestCase):
+    """반송 → 보완 재접수: 감시기가 notes 에 「재접수」 줄만 더하면 옛 해시가 기준으로 남는다(2026-11-10 38호 본진)."""
+    OLD = "c" * 64
+    RE = "PAMS 실제 접수 2026-11-10 12:45(PAMS seq 693015 · 감시기 재접수 갱신)"
+
+    def test_detects_resubmit_after_last_hash(self):
+        n = L.note_line(self.OLD, "1109_38호_본진.zip", "11-09 22:59")
+        self.assertFalse(L.resubmitted_after_hash(n))
+        self.assertTrue(L.resubmitted_after_hash(n + "\n반송 사유(이전): …\n" + self.RE))
+        self.assertFalse(L.resubmitted_after_hash(self.RE + "\n" + n))       # 재접수 뒤 이미 다시 적음
+        self.assertFalse(L.resubmitted_after_hash(self.RE))                  # 해시 없음은 기존 경로
+
+    def _run(self, d, notes, submitted_at):
+        rows = [{"id": "r1", "channel": "main", "status": "approved", "notes": notes, "submitted_at": submitted_at,
+                 "premium_articles": {"slug": ART["slug"], "title": "t"}}]
+        got = {}
+        orig = kit._rest
+        kit._rest = lambda env: ("http://x/rest/v1/premium_articles", {})
+        try:
+            L.stamp({}, {}, log=lambda *_: None, kit_dir=d, rows=rows, only_unpublished=False,
+                    patch=lambda rid, n: got.update({rid: n}))
+        finally:
+            kit._rest = orig
+        return got
+
+    def test_restamps_with_kit_made_before_resubmit(self):
+        lbl = kit.issue_label(ART["slug"])
+        with tempfile.TemporaryDirectory() as d:
+            done = os.path.join(d, "_접수완료", "본진")
+            os.makedirs(done)
+            p = os.path.join(done, f"1110_{lbl}_본진_보완.txt")        # 승인 뒤 옮겨진 보완 키트
+            open(p, "w", encoding="utf-8").write(L.txt_line(H) + "\n")
+            os.utime(p, (1_000_000, 1_000_000))
+            late = os.path.join(d, f"1111_{lbl}_본진.txt")             # 재접수 뒤에 만든 키트 — 심의본 아님
+            open(late, "w", encoding="utf-8").write(L.txt_line("d" * 64) + "\n")
+            os.utime(late, (1_000_000 + 7200, 1_000_000 + 7200))
+            notes = L.note_line(self.OLD, "1109.zip", "11-09 22:59") + "\n" + self.RE
+            sub = datetime.fromtimestamp(1_000_000 + 60, timezone.utc).isoformat()
+            got = self._run(d, notes, sub)
+            self.assertEqual(L.noted_hash(got["r1"]), H)             # 재접수 키트가 새 기준
+            self.assertTrue(got["r1"].startswith(notes))             # 옛 기록 보존
+            self.assertFalse(L.resubmitted_after_hash(got["r1"]))    # 다음 바퀴엔 다시 안 적는다
+
+    def test_no_kit_before_resubmit_leaves_row(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, f"1111_{kit.issue_label(ART['slug'])}_본진.txt")
+            open(p, "w", encoding="utf-8").write(L.txt_line(H) + "\n")
+            os.utime(p, (1_000_000 + 7200, 1_000_000 + 7200))
+            notes = L.note_line(self.OLD, "1109.zip", "t") + "\n" + self.RE
+            sub = datetime.fromtimestamp(1_000_000, timezone.utc).isoformat()
+            self.assertEqual(self._run(d, notes, sub), {})            # 상태 기록으로도 물러서지 않는다 → 막힘 유지
 
 
 class Hooks(unittest.TestCase):
