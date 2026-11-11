@@ -55,5 +55,26 @@ class StemVariants(unittest.TestCase):
         self.assertIn("stem_variants(flat,", s[i:i + 2500])
 
 
+class ConsultLineIsNotASource(unittest.TestCase):
+    """2026-11-11 GFS39 — 상담 안내 정본 줄(LK1)의 채널 이름 「신순주의선한금융」이 「대장에 없는 자료명」으로 잡혔다."""
+
+    def _art(self, body):
+        return {"naver_blog_content": body, "ad_reviews": []}
+
+    def test_consult_line_channel_name_is_skipped(self):
+        import consult_line as c
+        line, url = c.naver_block("내 계약의 세대와 청구 기록을 증권 기준으로 함께 보고 싶으시면", "x")
+        ok, det = p.check_source_titles(self._art(f"본문입니다.\n\n{line}\n{url}\n"))
+        self.assertTrue(ok, det)
+
+    def test_other_unknown_quote_still_caught(self):
+        import consult_line as c
+        line, url = c.naver_block("내 계약의 세대와 청구 기록을 증권 기준으로 함께 보고 싶으시면", "x")
+        ok, det = p.check_source_titles(self._art(f"「없는 자료 이름입니다」를 봤습니다.\n\n{line}\n{url}\n"))
+        self.assertFalse(ok)
+        self.assertIn("없는 자료 이름입니다", det)
+        self.assertNotIn(c.CHANNEL_NAME, det)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

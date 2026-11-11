@@ -24,7 +24,10 @@
     "exclusion-release-coverage-after-release": "부담보 해제",
     "neuroplasty-silson-outpatient-inpatient-limit": "신경성형술 실비",
     "insurance-remodeling-coverage-sum-by-rider": "보험 리모델링",
-    "death-benefit-liquidation-remaining-coverage": "사망보험금 유동화"
+    "death-benefit-liquidation-remaining-coverage": "사망보험금 유동화",
+    "silson-4th-gen-conversion-claim-history-check": "4세대 실손 전환",
+    "protection-premium-tax-credit-requirements": "보장성보험료 세액공제",
+    "pension-deduction-three-names-check": "연금보험소득공제"
   },
   "plan": [
     {"no": 1, "keyword": "건강검진 재검 고지", "title": "건강검진 재검 고지, 재검 결과가 정상이면 보험 가입 때 알려야 하나요"},
