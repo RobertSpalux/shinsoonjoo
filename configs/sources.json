@@ -614,6 +614,97 @@
       "title_verified_at": "2026-11-02",
       "title_verified_by": "국가법령정보센터 조문 화면 그대로 — [시행 2025. 10. 1.] [법률 제21065호, 2025. 10. 1., 타법개정]. published 는 공포(개정)일, 기준년도는 시행 연도",
       "note": "34호(GFS34) 근거. ① 보험금 수령인과 보험료 납부자가 다른 경우 · ② 상속재산으로 보는 경우 제외"
+    },
+    {
+      "key": "law-sodeuk-59-4",
+      "org": "국가법령정보센터",
+      "prefix": "",
+      "title": "소득세법 제59조의4(특별세액공제)",
+      "published": "2025.12.23",
+      "source_url": "https://www.law.go.kr/LSW//lsSideInfoP.do?lsiSeq=280405&joNo=0059&joBrNo=04&docCls=jo&urlMode=lsScJoRltInfoR",
+      "original_filename": "(국가법령정보센터 조문 화면 인쇄)",
+      "evidence_file": "국가법령정보센터, 소득세법 제59조의4(특별세액공제), 2026, 2025.12.23.pdf",
+      "title_verified_at": "2026-11-11",
+      "title_verified_by": "국가법령정보센터 소득세법 조문 화면 그대로 — [시행 2026. 1. 1.] [법률 제21221호, 2025. 12. 23., 일부개정]. published 는 공포(개정)일, 기준년도는 시행 연도. 긴 조문은 화면 인쇄가 1쪽에서 잘려, 같은 조문 화면 HTML 의 높이 제한만 풀어 인쇄했다(본문 글자는 화면 그대로)",
+      "note": "GFS39 근거"
+    },
+    {
+      "key": "law-sodeuk-enf-118-4",
+      "org": "국가법령정보센터",
+      "prefix": "",
+      "title": "소득세법 시행령 제118조의4(보험료세액공제)",
+      "published": "2026.9.30",
+      "source_url": "https://www.law.go.kr/LSW//lsSideInfoP.do?lsiSeq=290841&joNo=0118&joBrNo=04&docCls=jo&urlMode=lsScJoRltInfoR",
+      "original_filename": "(국가법령정보센터 조문 화면 인쇄)",
+      "evidence_file": "국가법령정보센터, 소득세법 시행령 제118조의4(보험료세액공제), 2026, 2026.9.30.pdf",
+      "title_verified_at": "2026-11-11",
+      "title_verified_by": "국가법령정보센터 소득세법 시행령 조문 화면 그대로 — [시행 2026. 10. 1.] [대통령령 제36737호, 2026. 9. 30., 일부개정]. published 는 공포(개정)일, 기준년도는 시행 연도. 긴 조문은 화면 인쇄가 1쪽에서 잘려, 같은 조문 화면 HTML 의 높이 제한만 풀어 인쇄했다(본문 글자는 화면 그대로)",
+      "note": "GFS39 근거"
+    },
+    {
+      "key": "law-sodeuk-50",
+      "org": "국가법령정보센터",
+      "prefix": "",
+      "title": "소득세법 제50조(기본공제)",
+      "published": "2025.12.23",
+      "source_url": "https://www.law.go.kr/LSW//lsSideInfoP.do?lsiSeq=280405&joNo=0050&joBrNo=00&docCls=jo&urlMode=lsScJoRltInfoR",
+      "original_filename": "(국가법령정보센터 조문 화면 인쇄)",
+      "evidence_file": "국가법령정보센터, 소득세법 제50조(기본공제), 2026, 2025.12.23.pdf",
+      "title_verified_at": "2026-11-11",
+      "title_verified_by": "국가법령정보센터 소득세법 조문 화면 그대로 — [시행 2026. 1. 1.] [법률 제21221호, 2025. 12. 23., 일부개정]. published 는 공포(개정)일, 기준년도는 시행 연도. 긴 조문은 화면 인쇄가 1쪽에서 잘려, 같은 조문 화면 HTML 의 높이 제한만 풀어 인쇄했다(본문 글자는 화면 그대로)",
+      "note": "GFS39 근거"
+    },
+    {
+      "key": "law-sodeuk-51-3",
+      "org": "국가법령정보센터",
+      "prefix": "",
+      "title": "소득세법 제51조의3(연금보험료공제)",
+      "published": "2025.12.23",
+      "source_url": "https://www.law.go.kr/LSW//lsSideInfoP.do?lsiSeq=280405&joNo=0051&joBrNo=03&docCls=jo&urlMode=lsScJoRltInfoR",
+      "original_filename": "(국가법령정보센터 조문 화면 인쇄)",
+      "evidence_file": "국가법령정보센터, 소득세법 제51조의3(연금보험료공제), 2026, 2025.12.23.pdf",
+      "title_verified_at": "2026-11-11",
+      "title_verified_by": "국가법령정보센터 소득세법 조문 화면 그대로 — [시행 2026. 1. 1.] [법률 제21221호, 2025. 12. 23., 일부개정]. published 는 공포(개정)일, 기준년도는 시행 연도. 긴 조문은 화면 인쇄가 1쪽에서 잘려, 같은 조문 화면 HTML 의 높이 제한만 풀어 인쇄했다(본문 글자는 화면 그대로)",
+      "note": "GFS39 근거"
+    },
+    {
+      "key": "law-sodeuk-59-3",
+      "org": "국가법령정보센터",
+      "prefix": "",
+      "title": "소득세법 제59조의3(연금계좌세액공제)",
+      "published": "2025.12.23",
+      "source_url": "https://www.law.go.kr/LSW//lsSideInfoP.do?lsiSeq=280405&joNo=0059&joBrNo=03&docCls=jo&urlMode=lsScJoRltInfoR",
+      "original_filename": "(국가법령정보센터 조문 화면 인쇄)",
+      "evidence_file": "국가법령정보센터, 소득세법 제59조의3(연금계좌세액공제), 2026, 2025.12.23.pdf",
+      "title_verified_at": "2026-11-11",
+      "title_verified_by": "국가법령정보센터 소득세법 조문 화면 그대로 — [시행 2026. 1. 1.] [법률 제21221호, 2025. 12. 23., 일부개정]. published 는 공포(개정)일, 기준년도는 시행 연도. 긴 조문은 화면 인쇄가 1쪽에서 잘려, 같은 조문 화면 HTML 의 높이 제한만 풀어 인쇄했다(본문 글자는 화면 그대로)",
+      "note": "GFS39 근거"
+    },
+    {
+      "key": "law-sodeuk-47-2",
+      "org": "국가법령정보센터",
+      "prefix": "",
+      "title": "소득세법 제47조의2(연금소득공제)",
+      "published": "2025.12.23",
+      "source_url": "https://www.law.go.kr/LSW//lsSideInfoP.do?lsiSeq=280405&joNo=0047&joBrNo=02&docCls=jo&urlMode=lsScJoRltInfoR",
+      "original_filename": "(국가법령정보센터 조문 화면 인쇄)",
+      "evidence_file": "국가법령정보센터, 소득세법 제47조의2(연금소득공제), 2026, 2025.12.23.pdf",
+      "title_verified_at": "2026-11-11",
+      "title_verified_by": "국가법령정보센터 소득세법 조문 화면 그대로 — [시행 2026. 1. 1.] [법률 제21221호, 2025. 12. 23., 일부개정]. published 는 공포(개정)일, 기준년도는 시행 연도. 긴 조문은 화면 인쇄가 1쪽에서 잘려, 같은 조문 화면 HTML 의 높이 제한만 풀어 인쇄했다(본문 글자는 화면 그대로)",
+      "note": "GFS39 근거"
+    },
+    {
+      "key": "law-sodeuk-20-3",
+      "org": "국가법령정보센터",
+      "prefix": "",
+      "title": "소득세법 제20조의3(연금소득)",
+      "published": "2025.12.23",
+      "source_url": "https://www.law.go.kr/LSW//lsSideInfoP.do?lsiSeq=280405&joNo=0020&joBrNo=03&docCls=jo&urlMode=lsScJoRltInfoR",
+      "original_filename": "(국가법령정보센터 조문 화면 인쇄)",
+      "evidence_file": "국가법령정보센터, 소득세법 제20조의3(연금소득), 2026, 2025.12.23.pdf",
+      "title_verified_at": "2026-11-11",
+      "title_verified_by": "국가법령정보센터 소득세법 조문 화면 그대로 — [시행 2026. 1. 1.] [법률 제21221호, 2025. 12. 23., 일부개정]. published 는 공포(개정)일, 기준년도는 시행 연도. 긴 조문은 화면 인쇄가 1쪽에서 잘려, 같은 조문 화면 HTML 의 높이 제한만 풀어 인쇄했다(본문 글자는 화면 그대로)",
+      "note": "GFS39 근거"
     }
   ]
 }

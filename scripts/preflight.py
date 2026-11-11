@@ -36,6 +36,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ga_master  # noqa: E402  — GA 명장 정본 자구(brand.ts GA_MASTER_LABEL)
 import cert_years  # noqa: E402  — 우수인증 8년 연속 정본 자구(brand.ts CERT_8Y_LABEL)
 import naver_rules  # noqa: E402  — 네이버 규칙 10(WRITING-SPEC §4-4)
+import consult_line  # noqa: E402  — 상담 안내 정본 줄(LK1) — 채널 이름 「」은 자료명이 아니다
 
 # Windows 콘솔(CP949)에서도 한글·기호 출력이 깨지지 않게 UTF-8 강제.
 try:
@@ -385,6 +386,10 @@ def check_source_titles(article):
     if article.get("raw_source_name"):
         scopes.append(("출처줄", article["raw_source_name"]))
     for label, text in scopes:
+        # [2026-11-11 GFS39] 상담 안내 정본 줄(consult_line, LK1)의 「신순주의선한금융」은 카카오 채널 이름이다.
+        #   자료명 검사에서 그 줄만 뺀다(본문 다른 줄의 「」은 그대로 잰다). LK1 이후 새 원고 전부가 여기서 걸렸다.
+        for ln in consult_line.find_lines(text):
+            text = text.replace(ln, " ")
         for m in QUOTED_TITLE.finditer(text):
             got = m.group(1).strip()
             if got not in titles:
