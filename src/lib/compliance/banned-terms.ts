@@ -85,6 +85,8 @@ const RULE = {
   slander: "§6.10 비방 프레이밍 금지(보험사·설계사·영업채널)",
   adverse: "§6.10 역선택 조장 금지(보험료 대 보험금 손익 비교)",
   taxFree: "§6.10 비과세 표기 — '관련 세법 요건 충족시' 병기 필수",
+  taxTitle: "§6.10 제목 세제혜택 표기 — 제목에 '관련 세법 요건 충족 시' 병기 필수(40호 네이버 보완 2026-11-12)",
+  taxNotice: "§6.10 본문 세제혜택 유의문구 — '…세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다' 필수(40호 네이버 보완 2026-11-12)",
   insurer: "§6.10 보험회사명·상품명 노출 금지",
   stat: "§6.10 통계치 — 증빙(원출처) 없으면 사용 불가",
   titleMoney: "§6.10 제목·대표이미지 금액/화폐기호 노출 금지",
@@ -209,6 +211,42 @@ const TITLE_MONEY: { term: string; re: RegExp }[] = [
 
 const TITLE_FIELDS = new Set(["title", "naver_title", "blogspot_title"]);
 
+/**
+ * 세제 혜택 표기 [A] — PAMS 40호 네이버 보완(seq 695568, 2026-11-12).
+ *  ① 제목에 세제 혜택 말이 있으면 제목에 「관련 세법 요건 충족 시」를 함께 쓴다(1p 제목 포함).
+ *  ② 본문에 같은 말이 있으면 본문에 「…세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다」 유의문구를 둔다.
+ *     「세금 관련 자세한 사항은 세무사 등 전문가와 상의 바랍니다」(taxAdvice)만으로는 부족했다(40호 반송).
+ * 🔴 preflight.py check_tax_benefit 이 아래 세 상수를 이 파일에서 그대로 읽는다 — 이름·한 줄 형식을 바꾸지 말 것.
+ */
+export const TAX_BENEFIT_RE = /세액\s*공제|소득\s*공제|세제\s*혜택|비과세|절세/;
+export const TAX_TITLE_RE = /관련\s*세법\s*요건\s*충족\s*시/;
+export const TAX_NOTICE_TAIL = "세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다";
+/** ②를 보는 칸 — 채널 본문(긴 글). 요약·FAQ 조각은 본진 본문과 한 화면이라 본문 쪽에서 본다. */
+const TAX_NOTICE_FIELDS = new Set(["main_website_markdown", "naver_blog_content", "blogspot_content"]);
+
+/** 세제 혜택 표기 위반 — 순수 함수(테스트 대상). 칸 이름이 제목류면 ①, 본문류면 ②. */
+export function taxBenefitIssue(field: string, text: string): Finding | null {
+  const m = TAX_BENEFIT_RE.exec(text);
+  if (!m) return null;
+  if (TITLE_FIELDS.has(field)) {
+    if (TAX_TITLE_RE.test(text)) return null;
+    return {
+      field, term: m[0], grade: "A", offset: m.index, length: m[0].length,
+      reason: RULE.taxTitle,
+      guidance: "제목 끝에 「(관련 세법 요건 충족 시)」를 붙인다 — 예: …기준(관련 세법 요건 충족 시)",
+    };
+  }
+  if (TAX_NOTICE_FIELDS.has(field)) {
+    if (text.includes(TAX_NOTICE_TAIL)) return null;
+    return {
+      field, term: m[0], grade: "A", offset: m.index, length: m[0].length,
+      reason: RULE.taxNotice,
+      guidance: "유의사항 블록에 「세액공제 혜택은 관련 세법 요건 충족 시 적용되며 자세한 사항은 세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다.」 한 줄(소재에 맞게 「세액공제」 자리만)",
+    };
+  }
+  return null;
+}
+
 /** 아티클을 (field, text, isTitle) 평문 단위로 펼친다. */
 function fieldTexts(a: CheckableArticle): { field: string; text: string; isTitle: boolean }[] {
   const out: { field: string; text: string; isTitle: boolean }[] = [];
@@ -279,6 +317,9 @@ export function checkBannedTerms(a: CheckableArticle, acks: ComplianceAck[] = []
   const findings: Finding[] = [];
   const fields = fieldTexts(a);
   const vtext = verifyText(a);
+  const mainOpen =
+    !!(a.main_website_markdown ?? "").trim() &&
+    !(a.ad_reviews ?? []).some((r) => r.channel === "main" && (r.status === "submitted" || r.status === "approved"));
 
   for (const { field, text, isTitle } of fields) {
     // A등급 단어
@@ -326,6 +367,11 @@ export function checkBannedTerms(a: CheckableArticle, acks: ComplianceAck[] = []
         guidance: "'비과세' 옆에 '관련 세법 요건 충족시' 병기(미표기 시 반려)",
       });
     }
+    // 세제 혜택 표기 [A] — 제목 병기 / 본문 유의문구(40호 보완)
+    //   본진 제목(title)은 본진판이 있고 아직 안 낸 글에서만 본다 — 네이버 단독 글의 본진 제목은 나중에 본진판과 함께
+    //   채우는 자리이고(그때 다시 걸린다), 승인된 본진은 원안이라 못 고친다. 안 보면 네이버 키트까지 막힌다(40·41호).
+    const tax = field === "title" && !mainOpen ? null : taxBenefitIssue(field, text);
+    if (tax) findings.push(tax);
     // 보험사명 [B] — 명시 목록 + 패턴
     for (const name of INSURERS) {
       const idx = text.indexOf(name);

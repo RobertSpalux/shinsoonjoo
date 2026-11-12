@@ -204,9 +204,12 @@ def finance_gate(draft, topic, notices, exempt=(), consult_slug=None):
             if PERCENT.search(s) and RATE_WORD.search(s):
                 issues.append({"stage": "2단 수익률", "reason": f"수익률·이율 수치 단정({label}) — [확인: ___] 로", "sentence": s})
 
+    tax_word, tax_title, tax_tail = preflight.parse_tax_benefit()   # banned-terms.ts 단일 출처(40호 보완 2026-11-12)
     for label, t in title_fields.items():
         if TAX_FREE.search(t) and TITLE_TAX_FREE_SUFFIX not in t:
             issues.append({"stage": "2단 세금", "reason": f"{label}에 비과세 — 「{TITLE_TAX_FREE_SUFFIX}」 병기 필요", "sentence": t})
+        elif tax_word.search(t or "") and not tax_title.search(t):
+            issues.append({"stage": "2단 세금", "reason": f"{label}에 「{tax_word.search(t).group(0)}」 — 「관련 세법 요건 충족 시」 병기 필요", "sentence": t})
 
     for label, text in bodies.items():
         miss = [s for s in required if s not in text]
@@ -217,6 +220,8 @@ def finance_gate(draft, topic, notices, exempt=(), consult_slug=None):
             issues.append({"stage": "유의문구", "reason": f"{label} 세금 언급 — 세무사 상의 유의문구 필요(장부 notices 에 taxAdvice·taxFree 추가)", "sentence": TAX_WORDS.search(body).group(0)})
         if TAX_FREE.search(body) and not any("비과세 혜택은 관련 세법 요건 충족 시" in s for s in required if s in text):
             issues.append({"stage": "유의문구", "reason": f"{label} 비과세 언급 — 「비과세 혜택은 관련 세법 요건 충족 시…」 원문 필요", "sentence": "비과세"})
+        elif tax_word.search(body) and tax_tail not in text:
+            issues.append({"stage": "유의문구", "reason": f"{label} 「{tax_word.search(body).group(0)}」 언급 — 「…{tax_tail}」 유의문구 필요(40호 보완 문구 — rules_finance_gate.md 에 원문 등록 후 장부 notices 에 추가)", "sentence": tax_word.search(body).group(0)})
         initials = re.findall(r"(?<![A-Za-z])([A-Z])사(?=[가-힣\s,·.)]|$)", body)
         if initials:
             seen = list(dict.fromkeys(initials))
