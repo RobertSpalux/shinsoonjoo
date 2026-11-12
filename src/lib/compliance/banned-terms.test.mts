@@ -2,6 +2,7 @@
  * banned-terms 단위 테스트 — `npx tsx src/lib/compliance/banned-terms.test.mts`
  * 오탐(최대한·치명적 질병·무조건 해지 부정문)과 A등급 적발·통계 승격을 고정한다.
  */
+import { readFileSync } from "node:fs";
 import { checkBannedTerms, type CheckableArticle, type ComplianceAck } from "./banned-terms";
 
 let pass = 0, fail = 0;
@@ -24,7 +25,8 @@ ok("무료 진단 → block", levelOf({ main_website_markdown: "무료 진단을
 ok("제목 5,000만원 → block", levelOf({ title: "내 암보험금, 5,000만원 맞을까?" }) === "block");
 ok("본문 5,000만원 → block 아님(가정형)", levelOf({ main_website_markdown: "담보를 합산하면 5,000만원이 보입니다." }) === "clean");
 ok("비과세 단독 → block", levelOf({ main_website_markdown: "이 상품은 비과세 혜택이 있습니다." }) === "block");
-ok("비과세 + 요건 병기 → clean", levelOf({ main_website_markdown: "비과세(관련 세법 요건 충족시) 혜택." }) === "clean");
+ok("비과세 + 요건 병기 + 세법 유의문구 → clean",
+  levelOf({ main_website_markdown: "비과세(관련 세법 요건 충족시) 혜택.\n비과세 혜택은 관련 세법 요건 충족 시 적용되며 자세한 사항은 세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다." }) === "clean");
 ok("당장 가입하세요 → block", levelOf({ main_website_markdown: "당장 가입하세요." }) === "block");
 ok("당장 필요하지 않은 → clean", levelOf({ main_website_markdown: "당장 필요하지 않은 보장은 줄입니다." }) === "clean");
 ok("설계사는 안 알려주는 → block", levelOf({ main_website_markdown: "설계사는 안 알려주는 사실이 있습니다." }) === "block");
@@ -102,6 +104,40 @@ console.log("[잠긴 채널 칸 — 접수·승인분은 판정 밖(MN8)]");
     levelOf({ title: "무료 진단", ad_reviews: [{ channel: "main", status: "approved" }] }) === "block");
   ok("승인 스레드 칸 A → clean",
     levelOf({ threads_json: [{ body: "무료 상담" }], ad_reviews: [{ channel: "threads", status: "approved" }] }) === "clean");
+}
+
+console.log("[세제 혜택 표기 — 40호 네이버 보완(2026-11-12)]");
+{
+  const NOTE = "세액공제 혜택은 관련 세법 요건 충족 시 적용되며 자세한 사항은 세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다.";
+  const ADVICE = "세금 관련 자세한 사항은 세무사 등 전문가와 상의 바랍니다.";
+  const fx = JSON.parse(readFileSync(new URL("../../../scripts/fixtures/rv40_naver_40ho_original.json", import.meta.url), "utf-8"));
+  const original = { title: fx.title, naver_title: fx.naver_title, naver_blog_content: fx.naver_blog_content };
+  const revised = {
+    ...original,
+    naver_title: fx.naver_title + "(관련 세법 요건 충족 시)",
+    naver_blog_content: fx.naver_blog_content.replace(ADVICE + "\n", ADVICE + "\n" + NOTE + "\n"),
+  };
+  const taxOf = (o: Partial<CheckableArticle>) =>
+    checkBannedTerms(art(o)).findings.filter((f) => f.reason.includes("세제혜택") || f.reason.includes("세제 혜택"));
+  ok("40호 원본 → block", levelOf(original) === "block");
+  ok("40호 원본 — 제목·본문 둘 다 적발",
+    taxOf(original).some((f) => f.field === "naver_title") && taxOf(original).some((f) => f.field === "naver_blog_content"));
+  ok("40호 수정본 → 세제 혜택 적발 0", taxOf(revised).length === 0);
+  ok("40호 수정본 → block 아님", levelOf(revised) !== "block");
+  ok("수정본 문구가 실제로 1줄 들어감", revised.naver_blog_content.length === original.naver_blog_content.length + NOTE.length + 1);
+  ok("taxAdvice 만 → block", levelOf({ naver_blog_content: "연말정산 세액공제를 봅니다.\n" + ADVICE }) === "block");
+  ok("소득공제 제목 병기 없음 → block", levelOf({ naver_title: "연금보험소득공제 되나요" }) === "block");
+  ok("절세 제목 병기(공백 없음 충족시) → clean", levelOf({ naver_title: "절세 계약 점검(관련 세법 요건 충족시)" }) === "clean");
+  ok("세제 혜택 말 없음 → clean", levelOf({ naver_title: "연금보험 수익자 점검", naver_blog_content: "수익자 칸을 봅니다." }) === "clean");
+  ok("네이버 단독 글의 본진 제목은 보지 않음(본진판 없음)", levelOf({ title: "보장성보험료 세액공제는 왜" }) === "clean");
+  ok("본진판 있는 미접수 글의 본진 제목 → block",
+    levelOf({ title: "보장성보험료 세액공제는 왜", main_website_markdown: "본문. " + NOTE }) === "block");
+  ok("본진 승인 글의 본진 제목은 보지 않음",
+    levelOf({ title: "보장성보험료 세액공제는 왜", main_website_markdown: "본문. " + NOTE,
+      ad_reviews: [{ channel: "main", status: "approved" }] }) === "clean");
+  ok("접수 네이버 칸은 보지 않음(심사중 41호)",
+    levelOf({ naver_title: "연금보험소득공제 되나요", naver_blog_content: "소득공제를 봅니다.",
+      ad_reviews: [{ channel: "naver", status: "submitted" }] }) === "clean");
 }
 
 console.log(`\n결과: ${pass} pass / ${fail} fail`);

@@ -241,6 +241,47 @@ def check_banned(article):
     return ok, detail
 
 
+def parse_tax_benefit():
+    """banned-terms.ts 의 세제 혜택 상수 3개(단일 출처) → (말 정규식, 제목 병기 정규식, 본문 유의문구 꼬리)."""
+    with open(BANNED_TS, encoding="utf-8") as fp:
+        ts = fp.read()
+    word = re.search(r"export const TAX_BENEFIT_RE = /(.+?)/;", ts)
+    title = re.search(r"export const TAX_TITLE_RE = /(.+?)/;", ts)
+    tail = re.search(r'export const TAX_NOTICE_TAIL = "([^"]+)";', ts)
+    if not (word and title and tail):
+        sys.exit("[파서 오류] banned-terms.ts TAX_BENEFIT_RE · TAX_TITLE_RE · TAX_NOTICE_TAIL 를 찾지 못했습니다.")
+    return re.compile(word.group(1)), re.compile(title.group(1)), tail.group(1)
+
+
+def check_tax_benefit(article):
+    """세제 혜택 표기 — PAMS 40호 네이버 보완(seq 695568, 2026-11-12).
+    ① 제목(본진 title·naver_title)에 세액공제·소득공제·세제 혜택·비과세·절세가 있으면 제목에 「관련 세법 요건 충족 시」.
+    ② 본문에 같은 말이 있으면 본문에 「…세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다」.
+    접수·승인 채널(frozen)은 원안이라 보지 않고, 승인 게시분은 경고로 낮춘다(check_ga_master 와 같은 범위 규칙).
+    본진 제목은 본진판이 있을 때만 본다 — 네이버 단독 글의 본진 제목은 본진판을 채울 때 다시 걸린다(banned-terms.ts 와 같은 규칙)."""
+    word, title_rx, tail = parse_tax_benefit()
+    skip = frozen_channels(article) | DORMANT_CHANNELS
+    if not (article.get("main_website_markdown") or "").strip():
+        skip = skip | {"main"}
+    fails = []
+    for field, ch in TITLE_CHANNEL.items():
+        t = article.get(field) or ""
+        if ch in skip:
+            continue
+        m = word.search(t)
+        if m and not title_rx.search(t):
+            fails.append(f"{field}: 「{m.group(0)}」 제목인데 「관련 세법 요건 충족 시」 병기 없음")
+    for label, text in pending_bodies(article):
+        m = word.search(text)
+        if m and tail not in text:
+            fails.append(f"{label}: 「{m.group(0)}」 언급인데 「…{tail}」 유의문구 없음")
+    if fails:
+        detail = (" / ".join(fails) + "  → 제목 끝 「(관련 세법 요건 충족 시)」 · 유의사항 블록에 「세액공제 혜택은 관련 세법 요건 충족 시 "
+                  "적용되며 자세한 사항은 세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다.」")
+        return soften_if_published(article, False, detail)
+    return True, "통과 — 세제 혜택 제목 병기·본문 유의문구 확인"
+
+
 def check_notice_wiring():
     """필수 유의문구 2종의 '딜리버리 경로'가 살아있는지 검사한다.
     ⚠️ 본문(stored content)을 스캔하지 않는다 — 유의문구는 원고에 저장되지 않고
@@ -937,6 +978,7 @@ def main():
         ("보험료 표기", *check_premium_notation(article)),
         ("변동 안내문구", *check_premium_variation(article)),
         ("유병자 안내문구", *check_simplified_issue(article)),
+        ("세제 혜택 표기", *check_tax_benefit(article)),
         ("필수 유의문구", *check_notice_wiring()),
         ("실손 자기부담금", *check_actual_loss_notice(article)),
         ("출처 4요소", *check_sources(article)),
