@@ -133,6 +133,22 @@ class Harvest(unittest.TestCase):
         self.assertEqual([c["title"] for c, _ in off], ["부동산 중개인 고지의무위반"])
         self.assertEqual(len(keep), 8)
 
+    def test_kn1_unregisterable_dir(self):
+        """KN1 — 치과 디렉터리(702*)는 승인돼도 답변 등록이 안 된다. 보험 분류의 같은 주제는 그대로 통과."""
+        self.assertEqual(kh.등록불가_디렉터리, ("702",))
+        title = "임플란트 뼈이식도 보험 되나요? 실비 청구도 가능한가요?"
+        for d in ("70202", "70204", "702"):
+            why = kh.scope_exclusion(title, title + " 보험 청구", d)
+            self.assertIn("등록불가", why)
+        self.assertIsNone(kh.scope_exclusion(title, title + " 보험 청구", "4010302"))
+        url = "https://kin.naver.com/qna/detail.naver?dirId={}&docId={}"
+        cands = [{"url": url.format(d, i), "title": title, "summary": "실손 보험 청구", "topic": "보장공백"}
+                 for i, d in enumerate(("70202", "4010302"))]
+        keep, off = kp.in_scope(cands)
+        self.assertEqual(len(keep), 1)
+        self.assertIn("dirId=4010302", keep[0]["url"])
+        self.assertEqual(len(off), 1)
+
     # KQ2 — kin_answers.question_body 에 들어간 남의 답변 조각(관제탑 10/19 대조, inbox 원문)
     KQ2_ANSWER_SNIPS = [
         "[ 핵심 결론 ] 질문자님의 2년 6개월 전 검진 결과는",
