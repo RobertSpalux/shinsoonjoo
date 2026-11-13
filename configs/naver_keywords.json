@@ -27,7 +27,10 @@
     "death-benefit-liquidation-remaining-coverage": "사망보험금 유동화",
     "silson-4th-gen-conversion-claim-history-check": "4세대 실손 전환",
     "protection-premium-tax-credit-requirements": "보장성보험료 세액공제",
-    "pension-deduction-three-names-check": "연금보험소득공제"
+    "pension-deduction-three-names-check": "연금보험소득공제",
+    "annuity-types-tax-accrual-payout-axes": "연금보험종류",
+    "annuity-insurance-definition-accumulate-payout-phases": "연금보험이란",
+    "medical-silson-claim-documents-silson24-lookup": "의료실손보험"
   },
   "plan": [
     {"no": 1, "keyword": "건강검진 재검 고지", "title": "건강검진 재검 고지, 재검 결과가 정상이면 보험 가입 때 알려야 하나요"},

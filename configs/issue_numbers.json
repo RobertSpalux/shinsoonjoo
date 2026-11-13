@@ -35,5 +35,8 @@
   "death-benefit-liquidation-remaining-coverage": 38,
   "silson-4th-gen-conversion-claim-history-check": 39,
   "protection-premium-tax-credit-requirements": 40,
-  "pension-deduction-three-names-check": 41
+  "pension-deduction-three-names-check": 41,
+  "annuity-types-tax-accrual-payout-axes": 43,
+  "annuity-insurance-definition-accumulate-payout-phases": 44,
+  "medical-silson-claim-documents-silson24-lookup": 45
 }
