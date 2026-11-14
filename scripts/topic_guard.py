@@ -64,11 +64,20 @@ JOSA = re.compile(r"(으로|에서|에게|까지|부터|이나|보다|처럼|은
 SLUG_GENERIC = {"insurance", "guide", "check", "2026", "by", "or", "vs", "and", "the", "silson", "rider", "benefit"}
 
 
+# 심의가 제목에 붙이라고 정한 문구 — 주제를 가르지 못한다(RV40 · banned-terms.ts TAX_TITLE_RE 와 같은 말).
+#   2026-11-14 GF46: 41호 본진 제목이 이 문구 하나로 40호와 「핵심어 6개 겹침」(관련·세법·요건·충족…) 판정을 받았다.
+MANDATED_TITLE = re.compile(r"\(?\s*관련\s*세법\s*요건\s*충족\s*시\s*\)?")
+
+
+def strip_mandated(text):
+    return MANDATED_TITLE.sub(" ", text or "")
+
+
 # ── 순수 판정 ────────────────────────────────────────────────
 def terms(text):
-    """핵심어 집합 — 한글·영숫자 낱말에서 조사와 흔한 말을 뺀다."""
+    """핵심어 집합 — 한글·영숫자 낱말에서 조사와 흔한 말을 뺀다. 심의 지정 문구(MANDATED_TITLE)는 먼저 지운다."""
     out = set()
-    for w in re.findall(r"[0-9A-Za-z가-힣]+", text or ""):
+    for w in re.findall(r"[0-9A-Za-z가-힣]+", strip_mandated(text)):
         if w in GENERIC:
             continue
         s = JOSA.sub("", w) if len(w) >= 3 else w
@@ -107,7 +116,7 @@ def shared_terms(a, b):
 
 
 def bigram_dice(a, b):
-    ca, cb = re.sub(r"[^0-9A-Za-z가-힣]", "", a or ""), re.sub(r"[^0-9A-Za-z가-힣]", "", b or "")
+    ca, cb = re.sub(r"[^0-9A-Za-z가-힣]", "", strip_mandated(a)), re.sub(r"[^0-9A-Za-z가-힣]", "", strip_mandated(b))
     A, B = {ca[i:i + 2] for i in range(len(ca) - 1)}, {cb[i:i + 2] for i in range(len(cb) - 1)}
     return 2 * len(A & B) / (len(A) + len(B)) if A and B else 0.0
 

@@ -266,6 +266,10 @@ def canonical_lines(text):
     out += [ln for ln in rows if SOURCE_LINE.match(ln)]
     # ④ 상담 안내 정본 줄과 그 URL — 꼬리(채널 이름·「문의하실 수 있습니다」)가 글마다 같다(LK1)
     out += consult.find_lines(text) + [ln for ln in rows if ln.startswith("https://goodfinance.kr/go/kakao?ref=")]
+    # ⑤ 세제 혜택 유의문구 정본 줄(banned-terms.ts TAX_NOTICE_TAIL 로 끝나는 줄 — PAMS 40호 보완 원문, RV40)
+    #   2026-11-14 GF46: 40호 본진판이 네이버판과 이 한 줄(1.0)로 겹침 반려 — 세금 글마다 같아야 하는 문장이다.
+    _, _, tax_tail = preflight.parse_tax_benefit()
+    out += [ln for ln in rows if ln.rstrip(".").endswith(tax_tail)]
     for i, ln in enumerate(rows):
         if SOURCE_HEAD.match(ln):
             out += [r for r in rows[i + 1:] if r]

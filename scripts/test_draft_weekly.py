@@ -211,6 +211,15 @@ class OverlapTest(unittest.TestCase):
         self.assertEqual(dw.overlap(new, c, exempt=dw.canonical_lines(new)), [])
         self.assertNotIn("새 글 본문입니다.", dw.canonical_lines(new))
 
+    def test_tax_notice_line_not_overlap(self):
+        """GF46 — PAMS 40호 보완 원문 「세액공제 혜택은 … 관련 법령을 확인하시기 바랍니다.」는 세금 글마다 같은 줄이다."""
+        tax = "세액공제 혜택은 관련 세법 요건 충족 시 적용되며 자세한 사항은 세무사 등 전문가 및 관련 법령을 확인하시기 바랍니다."
+        c = dw.build_corpus([("DB t naver", "앞 글 본문입니다.\n" + tax)])
+        new = "새 글 본문입니다.\n\n" + tax
+        self.assertTrue(dw.overlap(new, c))
+        self.assertEqual(dw.overlap(new, c, exempt=dw.canonical_lines(new)), [])
+        self.assertNotIn("새 글 본문입니다.", dw.canonical_lines(new))
+
     def test_body_copy_still_blocks_with_canonical_exempt(self):
         c = dw.build_corpus([("DB x naver", self.PUBLISHED)])
         new = "부담보 기간이 끝났는데도 해제 신청을 하지 않아 그대로 남아 있는 경우가 있습니다.\n\n출처\n1. 가, 나, 2026, 2026.1.1"

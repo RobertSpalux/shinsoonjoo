@@ -133,6 +133,28 @@ class MeasuresAreNotTopics(unittest.TestCase):
         self.assertEqual(hits("치아보험 면책기간 90일 — 언제부터 보장되나"), [])
 
 
+class MandatedTitleIsNotTopic(unittest.TestCase):
+    """2026-11-14 GF46 — 심의 지정 문구 「(관련 세법 요건 충족 시)」 하나로 세금 글끼리 겹침 판정을 받았다."""
+    A = {"slug": "protection-premium-tax-credit-requirements",
+         "title": "보장성보험료 세액공제는 왜 증권의 칸으로 정해질까 — 만기환급·피보험자·계약자 세 칸(관련 세법 요건 충족 시)"}
+    B = {"slug": "pension-deduction-three-names-check",
+         "title": "연금보험 소득공제는 왜 이름이 비슷해도 빼는 자리가 나뉠까 — 들어갈 때와 나올 때로 나뉜 세 공제(관련 세법 요건 충족 시)"}
+
+    def test_phrase_removed_from_terms(self):
+        t = g.terms(self.A["title"])
+        for w in ("관련", "세법", "요건", "충족"):
+            self.assertNotIn(w, t)
+        self.assertIn("보장성보험료", t)
+
+    def test_two_tax_titles_do_not_collide(self):
+        self.assertEqual(g.check(self.B, [self.A], []), [])
+        self.assertEqual(g.check(self.A, [self.B], []), [])
+
+    def test_same_topic_with_phrase_still_blocked(self):
+        c = {"slug": "x", "title": "보장성보험료 세액공제 피보험자 계약자 칸(관련 세법 요건 충족 시)"}
+        self.assertTrue(g.check(c, [self.A], []))
+
+
 class Rules(unittest.TestCase):
     def test_self_excluded(self):
         own = [r for r in g.bank_done_rows(BANK_MD) if "group-personal-silson-suspend-resume" in r["slugs"]]
