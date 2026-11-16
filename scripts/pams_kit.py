@@ -203,7 +203,10 @@ def sanitize_posting_title(t):
 
 
 def posting_title(article, channel):
-    rows = [r for r in (article.get("ad_reviews") or []) if r.get("channel") == channel and r.get("posting_title")]
+    # 반송(rejected) 행의 게시명은 쓰지 않는다 — 보완에서 제목을 고치면 옛 게시명이 키트·캡처 파일명에
+    # 남는다(RV42 2026-11-16 실측: seq 699198 반송 ① 제목 교체 후에도 「연금보험 소득공제는…」이 나옴).
+    rows = [r for r in (article.get("ad_reviews") or [])
+            if r.get("channel") == channel and r.get("posting_title") and r.get("status") != "rejected"]
     rows.sort(key=lambda r: r.get("created_at") or "", reverse=True)
     if rows:
         return rows[0]["posting_title"].strip(), "ad_reviews.posting_title"
