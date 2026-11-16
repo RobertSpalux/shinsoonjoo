@@ -96,6 +96,28 @@ class TitleLabel(unittest.TestCase):
         self.assertEqual(kit.kit_basename(SLUG, "main", datetime(2026, 9, 30, tzinfo=kit.KST)), "0930_8호_본진")
 
 
+class PostingTitleAfterReject(unittest.TestCase):
+    """RV42 — 반송 행의 옛 게시명이 보완 키트에 남지 않는다."""
+
+    def art(self, status):
+        return {"title": "연금 관련 공제는 왜 — 새 제목", "naver_title": "네이버 제목",
+                "ad_reviews": [{"channel": "main", "status": status, "posting_title": "연금보험 소득공제는 옛 제목",
+                                "created_at": "2026-11-14T00:00:00Z"}]}
+
+    def test_rejected_row_ignored(self):
+        t, src = kit.posting_title(self.art("rejected"), "main")
+        self.assertEqual(t, "연금 관련 공제는 왜 새 제목")
+        self.assertIn("title", src)
+
+    def test_submitted_row_kept(self):
+        self.assertEqual(kit.posting_title(self.art("submitted"), "main")[0], "연금보험 소득공제는 옛 제목")
+
+    def test_status_missing_kept(self):   # pams_submissions.fetch_articles 는 status 를 안 읽는다 — 기존 동작 유지
+        a = self.art("rejected")
+        a["ad_reviews"][0].pop("status")
+        self.assertEqual(kit.posting_title(a, "main")[0], "연금보험 소득공제는 옛 제목")
+
+
 @unittest.skipUnless(os.path.exists(ROBERT_OS_APPLY), "robert-os pams_apply.py 없음")
 class RobertOsParser(unittest.TestCase):
     """robert-os 파서(키트읽기)로 실제로 읽어 본다 — 줄 이름이 어긋나면 여기서 깨진다."""

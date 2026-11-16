@@ -80,6 +80,18 @@ FOOTER_COVERED = {"main"}
 MANWON     = re.compile(r"[0-9][0-9,]*\s*만\s*원")
 MANWON_DAE = re.compile(r"[0-9][0-9,]*\s*만\s*원\s*대")
 ANY_MONEY  = re.compile(r"[0-9][0-9,]*\s*(?:만\s*원|억|원)")
+# 법정 요건의 한도 금액(「월 보험료 150만원 이내」·「총 납입보험료 1억원 이하」) — 견적이 아니다.
+# RV42(2026-11-16) PAMS seq 699198 심사자가 이 자구를 그대로 쓰라고 지정했다.
+# 좁게 연다: 문장에 법령·요건 맥락어가 있고, 그 문장의 금액이 **전부** 한도 꼴일 때만 면제.
+STATUTORY_LIMIT = re.compile(r"[0-9][0-9,]*\s*(?:만\s*원|억\s*원|억)\s*(?:이하|이내|이상|초과|미만)")
+STATUTORY_CTX   = re.compile(r"요건|소득세법|시행령|세법")
+
+
+def is_statutory_limit(unit):
+    if not STATUTORY_CTX.search(unit):
+        return False
+    money = ANY_MONEY.findall(unit)
+    return bool(money) and len(STATUTORY_LIMIT.findall(unit)) >= len(money)
 
 
 # ────────────────────────────────────────────────
@@ -681,6 +693,8 @@ def check_premium_notation(article):
         for u in _units(text):
             if MANWON_DAE.search(u):
                 fails.append(f"{label}: 'N만원대' 표기 — {u[:40]}")
+                continue
+            if is_statutory_limit(u):
                 continue
             if "보험료" in u and MANWON.search(u):
                 fails.append(f"{label}: 보험료 만원 반올림 — {u[:50]}")
