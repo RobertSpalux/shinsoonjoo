@@ -15,6 +15,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kin_harvest as kh  # noqa: E402
 import kin_pipeline as kp  # noqa: E402
 
+_REAL_ENABLED = kp.answers_enabled
+kp.answers_enabled = lambda path=None: True   # KN0 — 실제 configs/kin_switch.json(꺼짐)과 무관하게 기존 동작을 시험한다
+
 KST = kh.KST
 BODY = ("고지의무 질문을 주시는 분이 많습니다. " * 30).strip()  # 길이만 맞춘 가짜 본문(게이트는 TS 쪽 시험)
 
@@ -1143,6 +1146,35 @@ class Kin1Cron(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertEqual(ran[0][-1], "sync-watcher")
         self.assertEqual(ran[1], ["run", "--n", "5"])
+
+
+class Kn0Switch(unittest.TestCase):
+    def test_off_runs_harvest_only_and_blocks_alt_send(self):
+        import kin_daily_cron as kc
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "s.json")
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump({"answers_enabled": False}, f)
+            self.assertFalse(_REAL_ENABLED(p))
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump({"answers_enabled": True}, f)
+            self.assertTrue(_REAL_ENABLED(p))
+            self.assertTrue(_REAL_ENABLED(os.path.join(d, "none.json")))   # 파일 없음 = 켜짐
+        # 실제 저장소 설정은 꺼짐(KN0)
+        self.assertFalse(_REAL_ENABLED())
+        old = kc.answers_enabled
+        kc.answers_enabled = lambda: False
+        try:
+            names = [n for n, _ in kc.steps()]
+        finally:
+            kc.answers_enabled = old
+        self.assertEqual(names, ["sync-watcher", "harvest"])
+        old = kp.answers_enabled
+        kp.answers_enabled = lambda path=None: False
+        try:
+            self.assertEqual(kp.cmd_alt_bundles({}, folder=tempfile.gettempdir(), notify=lambda t: self.fail("발송")), [])
+        finally:
+            kp.answers_enabled = old
 
 
 if __name__ == "__main__":
