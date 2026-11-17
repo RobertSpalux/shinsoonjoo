@@ -26,14 +26,17 @@ except Exception:
     pass
 
 from draft_daily_cron import SKIP, current_branch, notify  # noqa: E402
+from kin_pipeline import answers_enabled  # noqa: E402
 
 N = 5
 
 
 def steps(py=sys.executable):
     script = os.path.join(HERE, "kin_pipeline.py")
-    return [("sync-watcher", [py, "-X", "utf8", script, "sync-watcher"]),
-            ("run", [py, "-X", "utf8", script, "run", "--n", str(N)])]
+    first = ("sync-watcher", [py, "-X", "utf8", script, "sync-watcher"])
+    if not answers_enabled():   # KN0 — 소재 발굴 수집만(초안·키트·접수 대기 알림 없음)
+        return [first, ("harvest", [py, "-X", "utf8", os.path.join(HERE, "kin_harvest.py")])]
+    return [first, ("run", [py, "-X", "utf8", script, "run", "--n", str(N)])]
 
 
 def main(argv, run=subprocess.run, branch_fn=current_branch, notify_fn=notify):
@@ -54,7 +57,7 @@ def main(argv, run=subprocess.run, branch_fn=current_branch, notify_fn=notify):
         print(f"[{name}] exit={r.returncode}\n{(r.stdout or '')[-3000:]}", flush=True)
         if r.returncode != 0:
             print(f"[{name}] stderr: {(r.stderr or '')[-1500:]}", flush=True)
-            if name == "run":   # sync 실패는 run 을 막지 않는다
+            if name in ("run", "harvest"):   # sync 실패는 run 을 막지 않는다
                 rc = 1
     return rc
 

@@ -50,6 +50,16 @@ ROOT = kit.ROOT
 STATE_DIR = kin_harvest.STATE_DIR
 STATE_PATH = os.path.join(STATE_DIR, "kin_state.json")
 KIT_DIR = os.path.join(kit.KIT_DIR, "_지식인")
+SWITCH_PATH = os.path.join(ROOT, "configs", "kin_switch.json")
+
+
+def answers_enabled(path=SWITCH_PATH):
+    """KN0 — 답변 초안·키트·대체질문 발송 스위치. 파일이 없거나 깨지면 켜짐(기존 동작)."""
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            return bool(json.load(f).get("answers_enabled", True))
+    except Exception:
+        return True
 WATCHER_JSON = os.environ.get("KIN_WATCHER", r"D:\robert-os\finance\state\pams_지식인행.json")
 APPROVALS_JSON = os.environ.get("KIN_APPROVALS", r"D:\robert-os\finance\state\pams_kin_승인.json")
 DAILY_MAX = 5
@@ -1300,6 +1310,8 @@ def cmd_alt_bundles(env, folder=ALT_DIR, state_path=STATE_PATH, notify=None, dry
     다 보낸 파일은 「.보냄.txt」로 이름을 바꾼다. 보낸 칸의 심의필 → 질문 링크는 alt_posts 에 남겨
     cmd_sync_watcher 가 게시위치 등록 때 원래 키트 질문 대신 이 URL 을 posted_url 로 쓴다.
     send=False: 텔레그램 없이 alt_posts·보냄 표시만(로버트가 이미 손으로 게시한 묶음)."""
+    if send and not answers_enabled():   # KN0 — 텔레그램 발송만 멈춘다(--no-send 기록은 유지)
+        return []
     if not os.path.isdir(folder):
         return []
     names = sorted(n for n in os.listdir(folder) if n.endswith(".txt") and not n.endswith(ALT_SENT_SUFFIX))
@@ -1388,7 +1400,9 @@ def main():
     args = ap.parse_args()
     env = kit.load_env()
     try:
-        if args.cmd == "run":
+        if args.cmd == "run" and not answers_enabled():   # KN0 — 소재 발굴(kin_harvest.py)만, 초안·키트 없음
+            print("지식인 답변 생산 중단(configs/kin_switch.json answers_enabled=false) — 초안·키트 생략")
+        elif args.cmd == "run":
             lines, _ = cmd_run(env, args.n, args.dry_run)
             print("\n".join(lines))
         elif args.cmd == "approve":
