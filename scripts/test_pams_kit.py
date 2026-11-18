@@ -205,7 +205,7 @@ class PrivateProof(unittest.TestCase):
         spec.loader.exec_module(pa)
         files = [f"{self.TITLE}.pdf", kit.proof_name(self.TITLE)]
         ls = kit.kit_lines("annuity-start-age-payout-type-check", "naver", self.TITLE, "naver_title", SRC, files)
-        self.assertEqual(pa.zip목록("\n".join(ls) + "\n"), files)
+        self.assertEqual(pa.zip안파일("\n".join(ls) + "\n")[0], files)
 
     def test_copy_proof_png_and_jpg(self):
         from PIL import Image
