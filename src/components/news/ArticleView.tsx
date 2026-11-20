@@ -16,6 +16,7 @@ import ReadingProgress from "@/components/news/ReadingProgress";
 import ArticleCard from "@/components/news/ArticleCard";
 import ArticleCtaInline from "@/components/news/ArticleCtaInline";
 import ArticleCtaEnd from "@/components/news/ArticleCtaEnd";
+import ArticleScrollDepth from "@/components/news/ArticleScrollDepth";
 import MandatoryNotice from "@/components/news/MandatoryNotice";
 import ArticleNotice from "@/components/news/ArticleNotice";
 
@@ -133,6 +134,7 @@ export default function ArticleView({
       )}
 
       <article className="mx-auto max-w-3xl px-6 py-14 md:py-20">
+        <ArticleScrollDepth slug={article.slug} />
         {/* 브레드크럼 */}
         <nav className="mb-8 flex items-center gap-2 text-xs text-[var(--color-text-muted)]" aria-label="breadcrumb">
           <Link href="/news" className="transition-colors hover:text-[var(--color-text-body)]">금융소식</Link>
