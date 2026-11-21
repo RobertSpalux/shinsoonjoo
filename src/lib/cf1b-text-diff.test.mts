@@ -25,16 +25,16 @@ function textOf(html: string): string {
     .join("\n");
 }
 
-const Diagnosis = (await import("../app/diagnosis/page.tsx")).default;
-const CtaEnd = (await import("../components/news/ArticleCtaEnd.tsx")).default;
-const CtaInline = (await import("../components/news/ArticleCtaInline.tsx")).default;
+const Diagnosis = (await import("../app/diagnosis/page")).default;
+const CtaEnd = (await import("../components/news/ArticleCtaEnd")).default;
+const CtaInline = (await import("../components/news/ArticleCtaInline")).default;
 
 const parts: string[] = [];
 parts.push("## /diagnosis\n" + textOf(renderToStaticMarkup(createElement(Diagnosis))));
 parts.push("## ArticleCtaEnd\n" + textOf(renderToStaticMarkup(createElement(CtaEnd, { slug: "x" }))));
 parts.push("## ArticleCtaInline\n" + textOf(renderToStaticMarkup(createElement(CtaInline, { slug: "x" }))));
 try {
-  const Depth = (await import("../components/news/ArticleScrollDepth.tsx")).default;
+  const Depth = (await import("../components/news/ArticleScrollDepth")).default;
   parts.push("## ArticleScrollDepth\n" + textOf(renderToStaticMarkup(createElement(Depth, { slug: "x" }))));
 } catch {
   parts.push("## ArticleScrollDepth\n");
@@ -58,5 +58,5 @@ if (process.argv.includes("--write")) {
     }
     process.exit(1);
   }
-  console.log("OK — 텍스트 노드 diff 0건 (" + a.length + "줄)");
+  console.log("OK — 텍스트 노드 diff 0건 (" + actual.split("\n").length + "줄)");
 }
