@@ -196,7 +196,7 @@ export default function DiagnosisQuiz() {
       {step < TOTAL_STEPS && (
         <section
           aria-label="인증 실적"
-          className="relative left-1/2 mb-12 w-screen -translate-x-1/2 bg-[var(--color-forest)] py-10 md:py-12"
+          className="relative left-1/2 mb-12 w-screen -translate-x-1/2 bg-[var(--color-forest)] py-10 max-sm:mb-4 max-sm:py-3 md:py-12"
         >
           <div className="mx-auto grid max-w-2xl grid-cols-3 divide-x divide-[var(--color-gold)] px-5">
             {TRUST.map(([big, small]) => (
@@ -215,7 +215,7 @@ export default function DiagnosisQuiz() {
 
       {/* 진행 바 — 각진 3px 트랙(반경 0), 라벨은 오버라인 스타일 (N9) */}
       {step < TOTAL_STEPS && (
-        <div className="mb-10">
+        <div className="mb-10 max-sm:mb-4">
           <div className="mb-2 flex justify-between text-xs font-semibold tracking-[0.08em] text-[var(--color-text-muted)]">
             <span>{`STEP ${step + 1} / ${TOTAL_STEPS}`}</span>
             <span className="tabular-nums">{pct}%</span>
@@ -244,7 +244,7 @@ export default function DiagnosisQuiz() {
             <h2 className="mb-2 font-serif text-xl font-semibold tracking-[-0.01em] text-[var(--color-text-strong)] md:text-2xl">
               {current.question}
             </h2>
-            <p className="mb-8 text-sm text-[var(--color-text-muted)]">{current.hint}</p>
+            <p className="mb-8 max-sm:mb-4 text-sm text-[var(--color-text-muted)]">{current.hint}</p>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {current.options.map((opt) => {
