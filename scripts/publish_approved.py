@@ -104,13 +104,15 @@ def condition_remark(r):
     return None
 
 
-def plan(rows, articles, today):
+def plan(rows, articles, today, blocked=()):
     """ad_reviews 행 → 할 일 목록. rows: approved 이고 posted_url 비어 있는 main/naver 행."""
     todo = []
     for r in rows:
         a = articles.get(r["article_id"])
         if not a or r.get("channel") not in ("main", "naver") or (r.get("posted_url") and not needs_republish(r, a)):
             continue
+        if r["article_id"] in blocked and r.get("channel") == "main":
+            continue  # 🔴 본진 최근 행이 반송 — 옛 approved 행이 남아 있어도 다시 공개하지 않는다(CF1f)
         ok, why = review_ok(r, today)
         cond = condition_remark(r) if ok else None
         if cond:
@@ -142,6 +144,20 @@ def rejected_live(rows, articles):
         if a and r.get("status") == "rejected" and a.get("is_main_published"):
             out.append((a, r))
     return out
+
+
+def rejected_ids(rows):
+    """본진 최근 행이 반송(rejected)인 글의 article_id 집합 — 공개 여부와 무관.
+    plan() 이 이 글들을 재공개하지 않게 막는 가드(CF1f). 같은 글에 approved 옛 행이 남아 있어도
+    **가장 최근 행**이 반송이면 막는다. 반송 뒤 재접수·재승인되면 최근 행이 바뀌어 자연히 풀린다."""
+    latest = {}
+    for r in rows:
+        if r.get("channel") != "main":
+            continue
+        k = r["article_id"]
+        if k not in latest or (r.get("created_at") or "") > (latest[k].get("created_at") or ""):
+            latest[k] = r
+    return {k for k, r in latest.items() if r.get("status") == "rejected"}
 
 
 def expiring(rows, today, days=EXPIRY_DAYS):
@@ -481,11 +497,20 @@ def save_state(st):
 def run(env, notify, live=False, slug=None, base_url=None, today=None):
     today = today or datetime.now(KST).date().isoformat()
     rows, arts = fetch_rows(env)
+    # 반송·공개 대조 — 재공개 가드(plan blocked)와 반송 글 비공개 처리가 같은 읽기를 쓴다.
+    # 읽기에 실패하면 본진은 **하나도 공개하지 않는다**(반송 여부를 모르는 채 공개 금지, fail-closed).
+    out = []
+    try:
+        main_rows, live_arts = fetch_main_rows(env)
+        down = [x for x in rejected_live(main_rows, live_arts) if not slug or x[0]["slug"] == slug]
+        blocked = rejected_ids(main_rows)
+    except requests.RequestException as e:
+        down, blocked = [], {r["article_id"] for r in rows if r.get("channel") == "main"}
+        out.append(f"⚠️ 반송·공개 대조 읽기 실패 — 본진 공개 보류 — {e}")
     todo = [t for t in plan([r for r in rows if not r.get("posted_url")
-                             or needs_republish(r, arts.get(r["article_id"], {}))], arts, today)
+                             or needs_republish(r, arts.get(r["article_id"], {}))], arts, today, blocked)
             if not slug or t["article"]["slug"] == slug]
     st = load_state() if live else {}
-    out = []
 
     exp = expiring(rows, today)
     for r in exp:
@@ -555,13 +580,7 @@ def run(env, notify, live=False, slug=None, base_url=None, today=None):
                 notify(msg)
                 st[key] = datetime.now(KST).isoformat()
 
-    # 반송인데 본진이 공개돼 있다 → 즉시 비공개(심의필 줄이 남아 있으면 허위 심의필이 된다)
-    try:
-        main_rows, live_arts = fetch_main_rows(env)
-        down = [x for x in rejected_live(main_rows, live_arts) if not slug or x[0]["slug"] == slug]
-    except requests.RequestException as e:
-        down = []
-        out.append(f"⚠️ 반송·공개 대조 읽기 실패 — {e}")
+    # 반송인데 본진이 공개돼 있다 → 즉시 비공개(심의필 줄이 남아 있으면 허위 심의필이 된다) — down 은 위에서 읽었다
 
     flags = [f for f in plan_flags(rows, arts, today) if not slug or f[0]["slug"] == slug]
     # RSS 로 방금 URL 을 얻는 채널도 배포 체크 대상

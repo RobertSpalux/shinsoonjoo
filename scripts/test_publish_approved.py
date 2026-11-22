@@ -81,6 +81,26 @@ class Conditional(unittest.TestCase):
         self.assertEqual(got, [("s1", "x1")], "최근 본진 행이 반송이고 공개 중인 글만 — 재승인 글·이미 비공개 글 제외")
 
 
+class RejectedGuard(unittest.TestCase):
+    """CF1f — 본진 최근 행이 반송이면 옛 approved 행이 남아 있어도 다시 공개하지 않는다."""
+    def test_rejected_ids(self):
+        rows = [{"article_id": "a1", "channel": "main", "status": "approved", "created_at": "2026-09-01T09:00"},
+                {"article_id": "a1", "channel": "main", "status": "rejected", "created_at": "2026-10-01T09:00"},
+                {"article_id": "a2", "channel": "main", "status": "rejected", "created_at": "2026-09-01T09:00"},
+                {"article_id": "a2", "channel": "main", "status": "approved", "created_at": "2026-09-05T09:00"},
+                {"article_id": "a3", "channel": "naver", "status": "rejected", "created_at": "2026-10-01T09:00"}]
+        self.assertEqual(pa.rejected_ids(rows), {"a1"}, "최근 행이 반송인 글만 — 재승인 글·네이버 반송 제외")
+
+    def test_plan_blocks_republish(self):
+        r = {**ROW, "posted_url": "https://goodfinance.kr/news/s1"}
+        down = {"a1": {"id": "a1", "slug": "s1", "is_main_published": False}}
+        self.assertEqual([t["row"]["id"] for t in pa.plan([r], down, T)], ["r1"], "가드 없으면 재공개 대상")
+        self.assertEqual(pa.plan([r], down, T, {"a1"}), [], "최근 행이 반송이면 재공개 안 함")
+        self.assertEqual(pa.plan([ROW], down, T, {"a1"}), [], "최초 공개도 막는다")
+        nv = {**ROW, "id": "r2", "channel": "naver"}
+        self.assertEqual([t["row"]["id"] for t in pa.plan([nv], down, T, {"a1"})], ["r2"], "네이버 안내는 막지 않는다")
+
+
 class T2(unittest.TestCase):
     def test_review_line(self):
         self.assertEqual(pa.review_line({**ROW, "review_authority": "프라임에셋"}),
