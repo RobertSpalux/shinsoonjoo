@@ -1,3 +1,26 @@
+# 기본값: 텍스트는 저장소(인덱스)·워크트리 모두 LF — autocrlf 에 따라 줄끝이 갈리지 않게 한다
+* text=auto eol=lf
+
+# 바이너리 — 변환·diff 대상 아님
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.zip binary
+*.xlsx binary
+*.xls binary
+*.hwp binary
+*.hwpx binary
+*.docx binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp4 binary
+
 # 스레드 심의 원고는 바이트(sha256)가 심의본의 정체다 — git 자동 줄바꿈 변환(CRLF)을 막는다
 assets/threads/**/*.txt text eol=lf
 assets/kakao/**/*.txt text eol=lf
