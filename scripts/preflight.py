@@ -591,6 +591,25 @@ def check_ga_master(slug, article, renderers=None):
     return True, f"단독 표기 0건(정본 「{label}」)"
 
 
+CTA_MARKER = "<!--CTA-->"
+
+
+def check_cta_marker(article):
+    """본진 원고에 <!--CTA--> 마커 정확히 1개 (CF1d · 2026-11-24).
+
+    근거: CF1 진단 — 글→진단 전환 ~1%, 중간 CTA 보유 2/38편. 컴포넌트·문구는 불변, 마커만 필수화.
+    면제: 본진(main) 채널이 접수·승인된 글(frozen_channels). 마커 소급 삽입은 승인 캡처와
+    화면이 달라지는 원안 변경 소지(§6.11-9)라 PAMS 유권해석 전까지 건드리지 않는다.
+    반송(rejected) 글은 frozen 이 아니므로 검사 대상이다(재작업 때 넣는다).
+    """
+    if "main" in frozen_channels(article):
+        return True, "본진 접수·승인분 — 면제(원안 수정 불가)"
+    n = (article.get("main_website_markdown") or "").count(CTA_MARKER)
+    if n == 1:
+        return True, "마커 1개"
+    return False, f"<!--CTA--> 마커 1개 필요(담보 합산 표 직후) — 현재 {n}개"
+
+
 def check_cert_years(slug, article, renderers=None):
     """우수인증설계사 「8년 연속」 단독 표기 금지 — 새 원고는 CERT_8Y_LABEL(「… 8년 연속 [2018~2025]」)만 쓴다.
 
@@ -1007,6 +1026,7 @@ def main():
         ("이미지 config", *check_image_config(slug, article)),
         ("GA 명장 기간", *check_ga_master(slug, article)),
         ("우수인증 기간", *check_cert_years(slug, article)),
+        ("CTA 마커", *check_cta_marker(article)),
     ]
 
     print(f"\n── preflight: {slug} ──")
