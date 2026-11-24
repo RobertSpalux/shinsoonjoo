@@ -427,6 +427,25 @@ def visible_api_env():
     return [k for k in API_ENV_KEYS if os.environ.get(k)]
 
 
+# robert-os OA1(#363, content-factory/factory_alarm.py)와 같은 고정 문구
+LOGIN_NOTICE = "▶ 원인: Claude 로그인 만료 → PC 에서 `claude /login` 필요"
+_LOGIN_MARKS = ("oauth", "token expired", "/login", "401", "authentication")
+
+
+def login_expired(text):
+    s = (text or "").lower()
+    return any(k in s for k in _LOGIN_MARKS)
+
+
+def with_login_notice(msg, *sources):
+    """sources(result/stderr 등)에 로그인 만료 표지가 있으면 msg 앞에 안내 문구를 붙인다. 없으면 msg 그대로."""
+    if LOGIN_NOTICE in msg:
+        return msg
+    if any(login_expired(s) for s in sources) or login_expired(msg):
+        return f"{LOGIN_NOTICE} — {msg}"
+    return msg
+
+
 def run_claude(prompt, log_dir, label):
     """구독 실행. 환경에 API 키가 보이면 실행하지 않는다(값은 출력하지 않는다)."""
     seen = visible_api_env()
@@ -446,11 +465,11 @@ def run_claude(prompt, log_dir, label):
     try:
         j = json.loads(p.stdout)
         if j.get("is_error"):
-            raise kit.KitError(f"claude -p 실패: {str(j.get('result'))[:300]}")
+            raise kit.KitError(with_login_notice(f"claude -p 실패: {str(j.get('result'))[:300]}", str(j.get("result")), p.stderr))
         return str(j.get("result") or "")
     except json.JSONDecodeError:
         if p.returncode != 0:
-            raise kit.KitError(f"claude -p 실패 rc={p.returncode}: {(p.stderr or '')[:300]}")
+            raise kit.KitError(with_login_notice(f"claude -p 실패 rc={p.returncode}: {(p.stderr or '')[:300]}", p.stderr, p.stdout))
         return p.stdout
 
 

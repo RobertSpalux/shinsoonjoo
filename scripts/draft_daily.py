@@ -207,7 +207,7 @@ def run(out_dir=dw.OUT_DIR, do_send=True):
         log(out_dir, f"주제 {t['slug']} ({t['keyword']})")
         d, draft, result = dw.generate_one(t, cfg, out_dir, env, rules_text)
         if d is None:
-            reasons.append(f"{t['slug']} 생성 실패: {str(result)[:120]}")
+            reasons.append(f"{t['slug']} 생성 실패: {dw.with_login_notice(str(result))[:200]}")
             continue
         if not ready(result):
             bad = [s["name"] for s in result["stages"] if not s["pass"]]
