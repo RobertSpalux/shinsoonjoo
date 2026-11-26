@@ -369,6 +369,20 @@ def scan_zips(kit_dir, state, notify, now=None, days=3):
     return out
 
 
+def _today():
+    """KST 오늘 날짜(ISO). 테스트에서 바꿔 끼운다."""
+    return datetime.now(kit.KST).date().isoformat()
+
+
+def _days_waiting(cap, today):
+    """캡처 PDF 가 폴더에 놓인 지 며칠째인지(저장일=1일째). 파일 수정일 기준 — 상태 파일 스키마는 늘리지 않는다."""
+    try:
+        saved = datetime.fromtimestamp(os.path.getmtime(cap), kit.KST).date()
+        return max(1, (datetime.fromisoformat(today).date() - saved).days + 1)
+    except (OSError, ValueError):
+        return 1
+
+
 def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, server_factory=None,
              file_exists=os.path.exists, hold_alerts=False, issue_status=None):
     """테스트를 위해 DB·빌드·알림·서버를 주입받는다. 만든 키트 목록을 돌려준다.
@@ -422,12 +436,14 @@ def run_once(env, state, fetch_drafts, build, notify, kit_dir=kit.KIT_DIR, serve
             state["captures"][fn] = {"status": "bad", "slug": art["slug"], "sig": file_sig(cap), "why": f"{taken} 있음"}
             continue
         proof = find_proof(kit_dir, cap, art)
-        if not proof:   # 🔴 비공개 증빙 없이 내면 반송(10/25) — 만들지 않고, 같은 PDF 로는 한 번만 알린다
-            if not (rec.get("status") == "no_proof" and rec.get("sig") == file_sig(cap)):
-                notify(f"[PAMS 캡처] 비공개 표시가 보이게 글 상단 캡처(png)도 같은 폴더에 저장해 주세요 — "
+        if not proof:   # 🔴 비공개 증빙 없이 내면 반송(10/25) — 만들지 않고, 같은 PDF 여도 하루 한 번(KST) 다시 알린다(GFS46n: 1회성이라 46호 누락)
+            sig, today = file_sig(cap), _today()
+            if not (rec.get("status") == "no_proof" and rec.get("sig") == sig and rec.get("asked_day") == today):
+                days = _days_waiting(cap, today)
+                notify(f"({days}일째) [PAMS 캡처] 비공개 표시가 보이게 글 상단 캡처(png)도 같은 폴더에 저장해 주세요 — "
                        f"{art.get('naver_title') or art.get('title')}\n"
                        f"(파일 이름은 제목 또는 {os.path.splitext(fn)[0]} 로 시작 · 저장하면 10분 안에 키트를 만듭니다)")
-                state["captures"][fn] = {"status": "no_proof", "slug": art["slug"], "sig": file_sig(cap)}
+                state["captures"][fn] = {"status": "no_proof", "slug": art["slug"], "sig": sig, "asked_day": today}
             continue
         jobs.append((art, "naver", (cap, proof), why))
 
