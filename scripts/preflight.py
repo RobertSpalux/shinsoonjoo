@@ -50,7 +50,9 @@ BRAND_TS = os.path.join(ROOT, "src", "lib", "brand.ts")
 BANNED_TS = os.path.join(ROOT, "src", "lib", "compliance", "banned-terms.ts")
 CONFIGS_DIR = os.path.join(ROOT, "configs")
 SOURCES_JSON = os.path.join(CONFIGS_DIR, "sources.json")
-QUOTED_TITLE = re.compile(r"「([^」]+)」")
+# [2026-11-26 GFS46] 자료명 안에 「」가 한 겹 든 경우(금감원 「「보험점검센터」는 공공기관이 아닙니다 …」)를 통째로 잡는다.
+#   종전 「([^」]+)」 는 안쪽 」 에서 끊겨 「「보험점검센터」 를 자료명으로 읽었다.
+QUOTED_TITLE = re.compile(r"「((?:[^「」]|「[^「」]*」)+)」")
 
 # 인용 출처로 인정되는 공신력 기관 (§6.10 증빙 인정 기관). 금지어 목록이 아니므로 여기 소량 둔다.
 INSTITUTIONS = [
