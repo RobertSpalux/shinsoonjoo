@@ -31,7 +31,10 @@
     "overseas-stay-silson-resume-after-return": "해외 체류 실손보험 중지",
     "annuity-types-tax-accrual-payout-axes": "연금보험종류",
     "annuity-insurance-definition-accumulate-payout-phases": "연금보험이란",
-    "medical-silson-claim-documents-silson24-lookup": "의료실손보험"
+    "medical-silson-claim-documents-silson24-lookup": "의료실손보험",
+    "coverage-analysis-service-consent-rider-sum": "보장분석 서비스",
+    "lapse-revival-3year-coverage-restart": "보험 실효 부활",
+    "disclosure-breach-cancel-period-2year-3year-refund": "고지의무 위반"
   },
   "plan": [
     {"no": 1, "keyword": "건강검진 재검 고지", "title": "건강검진 재검 고지, 재검 결과가 정상이면 보험 가입 때 알려야 하나요"},

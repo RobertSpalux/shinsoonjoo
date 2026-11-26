@@ -76,5 +76,23 @@ class ConsultLineIsNotASource(unittest.TestCase):
         self.assertNotIn(c.CHANNEL_NAME, det)
 
 
+class NestedCornerBrackets(unittest.TestCase):
+    """2026-11-26 GFS46 — 금감원 게시판 제목 자체가 「보험점검센터」를 품는다. 바깥 「」 를 통째로 읽어야 한다."""
+    T = "「보험점검센터」는 공공기관이 아닙니다 개인정보 제공 동의 요청에 유의하세요."
+
+    def test_nested_title_read_whole(self):
+        got = [m.group(1) for m in p.QUOTED_TITLE.finditer(f"금융감독원 「{self.T}」(2026.7.1)에 따르면")]
+        self.assertEqual(got, [self.T])
+
+    def test_plain_titles_unchanged(self):
+        got = [m.group(1) for m in p.QUOTED_TITLE.finditer("「가 자료」와 「나 자료」")]
+        self.assertEqual(got, ["가 자료", "나 자료"])
+
+    def test_nested_title_in_ledger_passes(self):
+        self.assertIn(self.T, p.parse_source_titles())
+        ok, det = p.check_source_titles({"naver_blog_content": f"금융감독원 「{self.T}」(2026.7.1)", "ad_reviews": []})
+        self.assertTrue(ok, det)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
