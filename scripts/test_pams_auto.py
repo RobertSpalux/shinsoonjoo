@@ -446,6 +446,42 @@ class PrivateProofTest(unittest.TestCase):
         self.assertEqual(sorted(os.listdir(done)), sorted(["health-checkup-retest-recommendation-disclosure.pdf",
                                                            os.path.basename(png)]), "PDF·증빙 둘 다 처리됨으로")
 
+    def test_no_proof_reminds_once_per_kst_day_with_day_count(self):
+        """GFS46n — 같은 PDF·같은 sig 여도 하루 1통. 문구 첫머리에 (n일째)."""
+        h = self.h
+        p = self.put("health-checkup-retest-recommendation-disclosure.pdf")
+        d1 = datetime(2026, 11, 26, 12, 0, tzinfo=kit.KST)
+        os.utime(p, (d1.timestamp(), d1.timestamp()))
+        orig = auto._today
+        try:
+            auto._today = lambda: "2026-11-26"
+            h.run()
+            h.run()
+            self.assertEqual(len(h.notes), 1, "같은 날 두 바퀴 = 1통")
+            self.assertTrue(h.notes[0].startswith("(1일째) "))
+            auto._today = lambda: "2026-11-27"
+            h.run()
+            self.assertEqual(len(h.notes), 2, "다음 날 1통 더")
+            self.assertTrue(h.notes[1].startswith("(2일째) "))
+            h.run()
+            self.assertEqual(len(h.notes), 2)
+            self.assertEqual(h.state["captures"]["health-checkup-retest-recommendation-disclosure.pdf"]["asked_day"], "2026-11-27")
+            self.put("health-checkup-retest-recommendation-disclosure_상단.png")
+            n = len(h.notes)
+            self.assertEqual(len(h.run()), 1, "png 가 생기면 키트를 만든다")
+            self.assertEqual([x for x in h.notes[n:] if "일째)" in x], [], "증빙 요청 알림 0(키트 준비됨 알림만 남는다)")
+        finally:
+            auto._today = orig
+
+    def test_old_no_proof_record_without_asked_day_is_reminded(self):
+        """옛 기록(asked_day 없음 — 46호)도 다음 바퀴에 한 번 다시 알린다."""
+        h = self.h
+        p = self.put("health-checkup-retest-recommendation-disclosure.pdf")
+        h.state["captures"]["health-checkup-retest-recommendation-disclosure.pdf"] = {
+            "status": "no_proof", "slug": "health-checkup-retest-recommendation-disclosure", "sig": auto.file_sig(p)}
+        h.run()
+        self.assertEqual(len(h.notes), 1)
+
     def test_png_alone_is_not_a_capture(self):
         """10/26 실측 — 제목 이름 증빙 png 가 캡처로 잡혀 그림 하나로 키트를 만들려 했다."""
         h = self.h
