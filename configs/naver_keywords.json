@@ -34,7 +34,9 @@
     "medical-silson-claim-documents-silson24-lookup": "의료실손보험",
     "coverage-analysis-service-consent-rider-sum": "보장분석 서비스",
     "lapse-revival-3year-coverage-restart": "보험 실효 부활",
-    "disclosure-breach-cancel-period-2year-3year-refund": "고지의무 위반"
+    "disclosure-breach-cancel-period-2year-3year-refund": "고지의무 위반",
+    "silson-copay-rate-by-generation-1st-5th": "실비 자기부담금",
+    "policy-loan-limit-repay-unpaid-interest": "보험계약대출"
   },
   "plan": [
     {"no": 1, "keyword": "건강검진 재검 고지", "title": "건강검진 재검 고지, 재검 결과가 정상이면 보험 가입 때 알려야 하나요"},

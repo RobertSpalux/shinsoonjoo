@@ -42,5 +42,7 @@
   "medical-silson-claim-documents-silson24-lookup": 45,
   "coverage-analysis-service-consent-rider-sum": 46,
   "lapse-revival-3year-coverage-restart": 47,
-  "disclosure-breach-cancel-period-2year-3year-refund": 48
+  "disclosure-breach-cancel-period-2year-3year-refund": 48,
+  "silson-copay-rate-by-generation-1st-5th": 49,
+  "policy-loan-limit-repay-unpaid-interest": 50
 }
