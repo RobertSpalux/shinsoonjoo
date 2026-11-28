@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { gaEvent } from "@/lib/ga";
+import { useCtaView } from "@/lib/use-cta-view";
 
 /**
  * 글 끝 CTA 딥그린 밴드 (커밋 N5) — 모든 기사에 자동 삽입 (뉴스·상록수 공통).
@@ -12,8 +13,9 @@ import { gaEvent } from "@/lib/ga";
  * 실제로 주 1회 발송을 시작하면 그때 되살린다. 그때까지 CTA는 진단 하나에 집중(주 CTA 하나 원칙).
  */
 export default function ArticleCtaEnd({ slug }: { slug: string }) {
+  const ref = useCtaView<HTMLElement>("end", slug);
   return (
-    <aside className="mt-16 rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-8 text-center md:p-10">
+    <aside ref={ref} className="mt-16 rounded-[var(--radius-lg)] bg-[var(--color-forest)] p-8 text-center md:p-10">
       <span aria-hidden className="mx-auto mb-4 block h-px w-6 bg-[var(--color-gold)]" />
       <p className="font-serif text-lg font-semibold text-[var(--color-ink)] md:text-xl">
         이 글은 알려드리는 데까지입니다.

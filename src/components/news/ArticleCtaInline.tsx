@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { gaEvent } from "@/lib/ga";
+import { useCtaView } from "@/lib/use-cta-view";
 
 /**
  * 글 중간 진단 다리 (커밋 N5) — 담보 합산표 직후 "내 건 얼마지?"가 생기는 지점에 놓는다.
@@ -10,8 +11,10 @@ import { gaEvent } from "@/lib/ga";
  * 골드는 위아래 헤어라인(허용 용도)만.
  */
 export default function ArticleCtaInline({ slug }: { slug: string }) {
+  const ref = useCtaView<HTMLElement>("inline", slug);
   return (
     <aside
+      ref={ref}
       aria-label="보험 진단 안내"
       className="my-8 flex flex-col gap-3 border-y border-[var(--color-gold)] py-6 sm:flex-row sm:items-center sm:justify-between md:py-8"
     >
